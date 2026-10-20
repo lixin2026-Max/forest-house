@@ -1,0 +1,53 @@
+name: Deploy to GitHub Pages
+
+# 说明：本仓库的站点就是仓库根目录本身。
+# 这里先挑出「网站需要的文件」到 _site，再发布 —— 不把 test/、docs/ 一起挂到线上，
+# 也让 .git 不会被打进产物。
+#
+# configure-pages 带 enablement: true，目的是让工作流自己把 Pages 打开，
+# 省掉去 Settings → Pages 手动点一次。（如果仓库策略不允许，这一步会报错，
+# 那就手动开一次，之后每次 push 都会自动发布。）
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 检出
+        uses: actions/checkout@v4
+
+      - name: 组装站点
+        run: |
+          mkdir -p _site
+          cp -r index.html forest-house-single.html .nojekyll js _site/
+          ls -la _site
+
+      - name: 启用 / 配置 Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: 上传产物
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: 发布
+        id: deployment
+        uses: actions/deploy-pages@v4
