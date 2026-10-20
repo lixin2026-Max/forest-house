@@ -1,0 +1,30 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;background:#222}canvas{display:block}</style></head>
+<body><script src="../js/three.min.js"></script><script>
+const r=new THREE.WebGLRenderer({antialias:true});
+r.setSize(640,480); r.shadowMap.enabled=true; r.shadowMap.type=THREE.PCFSoftShadowMap;
+document.body.appendChild(r.domElement);
+const sc=new THREE.Scene(); sc.background=new THREE.Color(0x223344);
+const cam=new THREE.PerspectiveCamera(50,640/480,0.1,200);
+cam.position.set(6,6,8); cam.lookAt(0,1,0);
+const g=new THREE.Mesh(new THREE.PlaneGeometry(40,40), new THREE.MeshStandardMaterial({color:0x88aa66}));
+g.rotation.x=-Math.PI/2; g.receiveShadow=true; sc.add(g);
+const b=new THREE.Mesh(new THREE.BoxGeometry(2,2,2), new THREE.MeshStandardMaterial({color:0xcc6644}));
+b.position.y=1; b.castShadow=true; sc.add(b);
+sc.add(new THREE.AmbientLight(0xffffff,0.15));
+const d=new THREE.DirectionalLight(0xffffff,2.2);
+d.position.set(10,14,6); d.castShadow=true;
+d.shadow.mapSize.set(1024,1024);
+d.shadow.camera.near=1; d.shadow.camera.far=80;
+d.shadow.camera.left=-20; d.shadow.camera.right=20;
+d.shadow.camera.top=20; d.shadow.camera.bottom=-20;
+d.shadow.camera.updateProjectionMatrix();
+sc.add(d); sc.add(d.target);
+r.render(sc,cam);
+// 报告：把中心像素亮度写进 title，便于 --dump-dom 读取
+const gl=r.getContext();
+const px=new Uint8Array(4);
+gl.readPixels(320,200,1,1,gl.RGBA,gl.UNSIGNED_BYTE,px);
+const px2=new Uint8Array(4);
+gl.readPixels(320,120,1,1,gl.RGBA,gl.UNSIGNED_BYTE,px2);
+document.title='SHADOWTEST a='+px[0]+','+px[1]+','+px[2]+' b='+px2[0]+','+px2[1]+','+px2[2];
+</script></body></html>

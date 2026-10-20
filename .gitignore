@@ -1,0 +1,16 @@
+# 依赖
+node_modules/
+
+# 运行产物
+feedback.jsonl
+*.log
+
+# 临时预览页（由 test/make-*.js 生成）
+_fbtmp.html
+_fbsubmit.html
+
+# 编辑器/系统
+.DS_Store
+Thumbs.db
+.vscode/
+*.bak
