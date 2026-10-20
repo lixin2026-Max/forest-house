@@ -1,12 +1,12 @@
-# 森林小屋 Three.js 场景 — 修复与优化报告
+# 楚门的2.0世界 — 修复与优化报告
 
 > 状态：**已可正常启动** ｜ verify 38/38 + smoke 全通过 + security 55/55 + feedback-e2e 17/17 + subpath 4/4 ｜ 五种天气 + 手机竖屏/横屏已逐张实机渲染验证 ｜ 意见邮件通道已激活并实测到达
 
 ## 交付物
 ```
-forest-house-scene/
+楚门的2.0世界/
 ├── index.html            主场景（需 http(s) 打开，见 手机上打开.md）
-├── forest-house-single.html  单文件版（three.js 已内联，655KB）
+├── 楚门的2.0世界.html  单文件版（three.js 已内联，655KB）
 ├── js/three.min.js       本地 three.js r128（离线可用）
 ├── serve.js              本地静态服务器 + /api/feedback 收件接口
 ├── tunnel.js             一条命令：起服务 + 公网隧道，打印当前 https 地址
@@ -168,7 +168,7 @@ msedge --headless=new --enable-unsafe-swiftshader --use-gl=angle --use-angle=swi
 | 文件 | 作用 |
 |---|---|
 | `serve.js` | 零依赖 Node 静态服务器，启动即打印手机可访问的局域网地址 |
-| `build-single.js` | 把 `index.html` + `three.min.js` 打成 **单文件** `forest-house-single.html`（655KB，无任何外链） |
+| `build-single.js` | 把 `index.html` + `three.min.js` 打成 **单文件** `楚门的2.0世界.html`（655KB，无任何外链） |
 | `tunnel.js` | 一条命令：本地服务 + 公网 https 隧道，打印当前地址并写入 `tunnel-url.txt` |
 | `deploy.js` | 一键推送到 GitHub Pages（等仓库建好后运行） |
 | `手机上打开.md` | 各方式的完整说明（局域网 / 隧道 / GitHub Pages） |
@@ -176,12 +176,12 @@ msedge --headless=new --enable-unsafe-swiftshader --use-gl=angle --use-angle=swi
 ```bash
 node serve.js                 # → 手机同 WiFi 打开 http://<局域网IP>:8000/
 node tunnel.js                # → 打印一个 https 公网地址，任何人可开
-node build-single.js          # → forest-house-single.html，可拖到 Netlify Drop
+node build-single.js          # → 楚门的2.0世界.html，可拖到 Netlify Drop
 node deploy.js                # → 推到 GitHub Pages，拿永久地址
 ```
 
 `verify.js` 的静态检查已确认单文件 **无残留 `<script src=>` 外链**，并且无头 Edge 用 `file://`
-直接渲染 `forest-house-single.html` 截图正常 —— 单文件本身是自包含的。
+直接渲染 `楚门的2.0世界.html` 截图正常 —— 单文件本身是自包含的。
 
 > ⚠ **隧道地址每次重连都会变**（localhost.run 免费策略），且绑在当前这台电脑的进程上。
 > 长期给别人用必须走 GitHub Pages。注意 `-R 80:127.0.0.1:8000` 里不能写 `localhost`

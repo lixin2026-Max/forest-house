@@ -259,7 +259,7 @@ function handleFeedback(req, res) {
 server.listen(PORT, HOST, () => {
     const ips = lanAddresses();
     console.log('');
-    console.log('  森林小屋 · 手机预览服务器已启动');
+    console.log('  楚门的2.0世界 · 手机预览服务器已启动');
     console.log('  ────────────────────────────────────────────');
     console.log('  电脑本机：  http://localhost:' + PORT + '/');
     if (LOCAL_ONLY) {

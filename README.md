@@ -1,8 +1,15 @@
-# 森林小屋 · Three.js 场景
+# 楚门的2.0世界
 
-一个可交互的森林小屋 3D 场景：小屋、树上松鼠与小鸟、满场向日葵与杂草、蝴蝶蜜蜂萤火虫、
+一个可交互的「楚门的 2.0 世界」3D 场景：小屋、树上松鼠与小鸟、满场向日葵与杂草、蝴蝶蜜蜂萤火虫、
 水塘石板路，五种天气（晴天 / 雾天 / 夜间 / 雨天 / 黄金时刻）可切换。
 电脑和手机都能操作，竖屏会自动转成横屏布局。
+
+**线上地址（永久）**：https://lixin2026-max.github.io/forest-house/
+
+> 项目名叫「楚门的2.0世界」，但 GitHub 仓库名保留 `forest-house`。
+> 原因：意见回传靠 FormSubmit，它登记的**表单来源就是这个 Pages 地址**；
+> 改仓库名 → Pages 地址跟着变 → 意见会因来源不匹配被拒收。
+> 要改仓库名，必须重新走一遍 FormSubmit 激活。
 
 ![晴天](docs/screenshots/weather-sunny.png)
 
@@ -67,7 +74,7 @@ cp test/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
 
 ```
 index.html              主场景（改这个）
-forest-house-single.html 单文件版，由 build-single.js 生成，不要手改
+楚门的2.0世界.html 单文件版，由 build-single.js 生成，不要手改
 js/three.min.js         three.js r128，本地文件
 serve.js                本地静态服务器 + /api/feedback 收件接口
 tunnel.js               起服务 + 公网隧道，打印当前 https 地址

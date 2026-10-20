@@ -9,7 +9,7 @@ const PATH = '/ajax/' + encodeURIComponent(EMAIL);
 function post(headers) {
     return new Promise((resolve) => {
         const body = JSON.stringify({
-            _subject: '【森林小屋】优化意见（对接测试）',
+            _subject: '【楚门2.0】优化意见（对接测试）',
             _captcha: 'false',
             _template: 'table',
             内容: '对接测试：收到这封就说明通道通了。',

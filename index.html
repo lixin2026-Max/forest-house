@@ -6,7 +6,7 @@
 <!-- 安全基线：除「同源」与回传邮箱服务外不允许任何外部加载 -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src data: blob:; connect-src 'self' https://formsubmit.co; font-src 'none'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
-<title>森林小屋 · 优化版 Three.js 场景</title>
+<title>楚门的2.0世界 · Three.js 场景</title>
 <style>
     *{box-sizing:border-box}
     html,body{height:100%}
@@ -104,7 +104,7 @@
 <div id="app">
 <div id="scene"></div>
 <div id="ui">
-    <h3>🌲 森林小屋 · 优化版</h3>
+    <h3>🌍 楚门的2.0世界</h3>
     <div class="hint"><span class="mouse">鼠标拖拽旋转 ｜ 滚轮缩放 ｜ T 键切换天气 ｜ P 键切换自动巡游</span><span class="touch">单指拖动旋转 ｜ 双指捏合缩放 ｜ 点按钮切换天气</span></div>
     <div class="wbtns" id="wbtns"></div>
     <div class="row"><label>太阳高度角</label><input type="range" id="sunElev" min="3" max="80" value="45"><b id="sunElevV">45°</b></div>
@@ -1309,7 +1309,7 @@ function sendFeedback(body){
     const text=(body&&body.text)||'';
     // FormSubmit 收扁平字段，才会排成一张表发到邮箱
     const payload=FB_RELAY?{
-        _subject:'【森林小屋】优化意见',
+        _subject:'【楚门2.0】优化意见',
         _captcha:'false',
         _template:'table',
         内容:text,

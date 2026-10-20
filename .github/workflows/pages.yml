@@ -36,7 +36,7 @@ jobs:
       - name: 组装站点
         run: |
           mkdir -p _site
-          cp -r index.html forest-house-single.html .nojekyll js _site/
+          cp -r index.html 楚门的2.0世界.html .nojekyll js _site/
           ls -la _site
 
       - name: 检查 Pages 是否已启用（未启用则跳过发布）

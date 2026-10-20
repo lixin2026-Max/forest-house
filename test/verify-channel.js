@@ -9,7 +9,7 @@ const REFERER = ORIGIN + '/forest-house/';
 const ENDPOINT = 'https://formsubmit.co/ajax/2820575692@qq.com';
 
 const body = JSON.stringify({
-    _subject: '【森林小屋】优化意见',
+    _subject: '【楚门2.0】优化意见',
     _template: 'table',
     _captcha: 'false',
     内容: '这是一条通道测试：激活后你应当收到这封邮件。如果你看到了，说明意见回传已可用。',

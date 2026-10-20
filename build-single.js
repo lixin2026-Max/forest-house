@@ -4,7 +4,7 @@
  * 也能在手机、微信里直接用 https 链接打开 —— 不再依赖相对路径。
  *
  *   node build-single.js
- *   → 生成 forest-house-single.html
+ *   → 生成 楚门的2.0世界.html
  */
 const fs = require('fs');
 const path = require('path');
@@ -25,11 +25,11 @@ if (!tag.test(html)) {
 }
 
 const out = html.replace(tag, '<script>\n' + three + '\n</script>');
-const dest = path.join(ROOT, 'forest-house-single.html');
+const dest = path.join(ROOT, '楚门的2.0世界.html');
 fs.writeFileSync(dest, out, 'utf8');
 
 const kb = (n) => (n / 1024).toFixed(0) + 'KB';
-console.log('已生成 forest-house-single.html');
+console.log('已生成 楚门的2.0世界.html');
 console.log('  原始 index.html        ' + kb(html.length));
 console.log('  three.min.js           ' + kb(three.length));
 console.log('  单文件                 ' + kb(out.length));

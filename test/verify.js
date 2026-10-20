@@ -1,8 +1,8 @@
-/* 森林小屋场景验收测试 —— 对应 spec.md 的六条验收标准（v2 优化版） */
+/* 楚门的2.0世界 验收测试 —— 对应 spec.md 的六条验收标准（v2 优化版） */
 const fs = require('fs');
 const path = require('path');
 
-const root = path.resolve(__dirname, '..');   // forest-house-scene/
+const root = path.resolve(__dirname, '..');   // 楚门的2.0世界/
 const indexPath = path.join(root, 'index.html');
 const threePath = path.join(root, 'js', 'three.min.js');
 

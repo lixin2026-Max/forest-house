@@ -93,8 +93,8 @@ check('location.hash 只做白名单匹配',
     !/innerHTML[\s\S]{0,80}location\.hash/.test(html));
 
 /* ───────────── B. 单文件版静态审计 ───────────── */
-console.log('\n[B] forest-house-single.html 静态审计');
-const singlePath = path.join(ROOT, 'forest-house-single.html');
+console.log('\n[B] 楚门的2.0世界.html 静态审计');
+const singlePath = path.join(ROOT, '楚门的2.0世界.html');
 const hasSingle = fs.existsSync(singlePath);
 check('单文件版存在', hasSingle);
 if (hasSingle) {

@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<!-- 安全基线：除「同源」外不允许任何外部加载；connect-src 仅放行本站的 /api/feedback -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src data: blob:; connect-src 'self'; font-src 'none'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<!-- 安全基线：除「同源」与回传邮箱服务外不允许任何外部加载 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src data: blob:; connect-src 'self' https://formsubmit.co; font-src 'none'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
-<title>森林小屋 · 优化版 Three.js 场景</title>
+<title>楚门的2.0世界 · Three.js 场景</title>
 <style>
     *{box-sizing:border-box}
     html,body{height:100%}
@@ -104,7 +104,7 @@
 <div id="app">
 <div id="scene"></div>
 <div id="ui">
-    <h3>🌲 森林小屋 · 优化版</h3>
+    <h3>🌍 楚门的2.0世界</h3>
     <div class="hint"><span class="mouse">鼠标拖拽旋转 ｜ 滚轮缩放 ｜ T 键切换天气 ｜ P 键切换自动巡游</span><span class="touch">单指拖动旋转 ｜ 双指捏合缩放 ｜ 点按钮切换天气</span></div>
     <div class="wbtns" id="wbtns"></div>
     <div class="row"><label>太阳高度角</label><input type="range" id="sunElev" min="3" max="80" value="45"><b id="sunElevV">45°</b></div>
@@ -157,8 +157,12 @@ if(typeof THREE==='undefined'){
 
 /* ==================== 全局状态 ==================== */
 let scene, camera, renderer, controls, clock;
-// 移动端降档：小屏或触屏设备降低像素比、阴影分辨率与实例数量
-const IS_MOBILE = (typeof navigator!=='undefined' && /Android|iPhone|iPad|iPod|Mobile|HarmonyOS/i.test(navigator.userAgent))
+// 触屏设备：只有它才该整体旋转成横屏。桌面窄窗口不能被转，否则界面会歪掉
+const IS_TOUCH = (typeof navigator!=='undefined' && /Android|iPhone|iPad|iPod|Mobile|HarmonyOS/i.test(navigator.userAgent))
+    || (typeof window!=='undefined' && typeof window.matchMedia==='function'
+        && window.matchMedia('(pointer:coarse)').matches);
+// 移动端降档：触屏 或 小屏，都降低像素比、阴影分辨率与实例数量
+const IS_MOBILE = IS_TOUCH
     || (typeof window!=='undefined' && Math.min(window.innerWidth||1920, window.innerHeight||1080) < 820);
 let weatherIndex = 0;
 // 竖屏时整体旋转 90°；画面尺寸随旋转交换
@@ -168,7 +172,7 @@ const LAYOUT = {w: (typeof window!=='undefined'?window.innerWidth:1280)||1280,
 function measureLayout(){
     const iw=(typeof window!=='undefined'?window.innerWidth:1280)||1280;
     const ih=(typeof window!=='undefined'?window.innerHeight:720)||720;
-    ROT = IS_MOBILE && ih > iw+2;
+    ROT = IS_TOUCH && ih > iw+2;
     LAYOUT.w = ROT ? ih : iw;
     LAYOUT.h = ROT ? iw : ih;
     return LAYOUT;
@@ -1260,7 +1264,14 @@ function setupSliders(){
 // 提交策略：先本地复制（永不丢），再向**同源** /api/feedback 静默回传一条。
 // 回传失败不影响任何人体验 —— 用户看到的只是「已复制」，粘给我就行。
 const FB_MAX=600;
-const FB_ENDPOINT='/api/feedback';
+// 回传地址：FormSubmit 无需注册，POST 即发邮件到下面这个邮箱（首次会发一封确认信，点一次即可）。
+// 留空则退回本站服务器的 /api/feedback；两种都不可用时只复制、不发送。
+// 想隐藏邮箱：激活后 FormSubmit 会给你一个编码地址（https://formsubmit.co/xxxxx），替换掉下面这行即可。
+const FB_RELAY='https://formsubmit.co/ajax/2820575692@qq.com';
+function fbEndpoint(){
+    if(FB_RELAY) return FB_RELAY;
+    return '/api/feedback';
+}
 function fbEl(id){ return document.getElementById(id); }
 function pad2(n){ return n<10?'0'+n:''+n; }
 function feedbackStamp(){
@@ -1299,23 +1310,40 @@ function copyToClipboard(text){
         if(ok) resolve(); else reject(new Error('浏览器不允许复制'));
     });
 }
-// 静默回传：只发往同源 /api/feedback，3 秒超时，任何失败都不抛错、不弹窗
+// 静默回传：只发往 fbEndpoint()，3 秒超时，任何失败都不抛错、不弹窗
 function sendFeedback(body){
     if(typeof fetch!=='function') return Promise.resolve(false);
+    const meta=(body&&body.meta)||{};
+    const text=(body&&body.text)||'';
+    // FormSubmit 收扁平字段，才会排成一张表发到邮箱
+    const payload=FB_RELAY?{
+        _subject:'【楚门2.0】优化意见',
+        _captcha:'false',
+        _template:'table',
+        内容:text,
+        天气:meta.weather||'-',
+        画面:meta.screen||'-',
+        手机:meta.mobile?'是':'否',
+        浏览器:meta.ua||''
+    }:{text:text,meta:meta};
     let timer=null;
     try{
         const ctrl=(typeof AbortController==='function')?new AbortController():null;
         if(ctrl) timer=setTimeout(()=>ctrl.abort(),3000);
-        return fetch(FB_ENDPOINT,{
+        const url=fbEndpoint();
+        return fetch(url,{
             method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body:JSON.stringify(body),
+            headers:{'Content-Type':'application/json','Accept':'application/json'},
+            body:JSON.stringify(payload),
             credentials:'omit',
             keepalive:true,
             signal:ctrl?ctrl.signal:undefined
         }).then(r=>{
             if(timer) clearTimeout(timer);
-            return r.ok;
+            if(!r.ok) return false;
+            // FormSubmit 成功时回 {"success":"true"}；解析不了就当成功
+            return r.json().then(j=>String(j&&j.success||'').toLowerCase()==='true')
+                .catch(()=>true);
         }).catch(()=>{
             if(timer) clearTimeout(timer);
             return false;

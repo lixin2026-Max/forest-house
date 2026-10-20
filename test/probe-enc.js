@@ -23,4 +23,4 @@ function probe(name) {
     console.log(Object.entries(marks).map(([k, v]) => k + '=' + (v ? 'Y' : 'n')).join('  '));
 }
 
-['index.html', '_fbtmp.html', 'forest-house-single.html'].forEach(probe);
+['index.html', '_fbtmp.html', '楚门的2.0世界.html'].forEach(probe);
