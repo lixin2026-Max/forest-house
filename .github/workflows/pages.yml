@@ -4,9 +4,10 @@ name: Deploy to GitHub Pages
 # 这里先挑出「网站需要的文件」到 _site，再发布 —— 不把 test/、docs/ 一起挂到线上，
 # 也让 .git 不会被打进产物。
 #
-# configure-pages 带 enablement: true，目的是让工作流自己把 Pages 打开，
-# 省掉去 Settings → Pages 手动点一次。（如果仓库策略不允许，这一步会报错，
-# 那就手动开一次，之后每次 push 都会自动发布。）
+# configure-pages 不带 enablement：默认 GITHUB_TOKEN 没有「创建 Pages 站点」的权限，
+# 打开 Pages 必须由仓库管理员在 Settings 里点一次。这里把失败降级为「跳过」，
+# 这样即使你把 Pages 配成 "Deploy from a branch"（那就用不上本工作流），
+# 每次 push 也不会留下一个红叉。
 
 on:
   push:
@@ -38,16 +39,18 @@ jobs:
           cp -r index.html forest-house-single.html .nojekyll js _site/
           ls -la _site
 
-      - name: 启用 / 配置 Pages
+      - name: 检查 Pages 是否已启用（未启用则跳过发布）
+        id: check
+        continue-on-error: true
         uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - name: 上传产物
+        if: steps.check.outcome == 'success'
         uses: actions/upload-pages-artifact@v3
         with:
           path: _site
 
       - name: 发布
+        if: steps.check.outcome == 'success'
         id: deployment
         uses: actions/deploy-pages@v4
