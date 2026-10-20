@@ -137,8 +137,10 @@ test('PERF sRGB + ACES 色调映射开启', ()=>{
     must(/sRGBEncoding/.test(inlineJs),'no sRGB output');
     must(/ACESFilmicToneMapping/.test(inlineJs),'no tone mapping');
 });
-test('PERF pixelRatio 有上限（桌面 2 / 移动 1.6）', ()=>{
-    must(/setPixelRatio\(Math\.min\(window\.devicePixelRatio,\s*(IS_MOBILE\?1\.6:\s*)?2\)\)/.test(inlineJs),'uncapped pixel ratio');
+test('PERF pixelRatio 有上限（桌面 2 / 移动 1.5），并且统一走自适应变量', ()=>{
+    must(/const DPR_CAP = IS_MOBILE \? 1\.5 : 2;/.test(inlineJs), '缺少像素比上限常量 DPR_CAP');
+    must(/let dprCur = Math\.min\([^;]*DPR_CAP\)/.test(inlineJs), 'dprCur 未按上限初始化');
+    must(/renderer\.setPixelRatio\(dprCur\)/.test(inlineJs), '未统一使用 dprCur');
 });
 
 /* ---------- 移动端适配 ---------- */
@@ -192,7 +194,7 @@ test('GitHub Pages 需要的 .nojekyll 存在', ()=>{
 
 // ---------- AC10: 可插拔功能模块 ----------
 test('功能注册表齐备（7 个可独立开关的模块）', ()=>{
-    ['bgm','ambience','particles','views','interact','daynight','tone']
+    ['bgm','ambience','particles','views','interact','daynight','tone','roam']
         .forEach(k => must(new RegExp(k + ':\\s*\\{\\s*on:(true|false)').test(inlineJs), '缺少功能开关 ' + k));
 });
 test('模块有统一挂载/更新钩子', ()=>{
@@ -217,6 +219,36 @@ test('门与篝火可点击（门有名字，可被 raycast 命中）', ()=>{
     must(/scene\.getObjectByName\('houseDoor'\)/.test(inlineJs), '未通过名字查找门');
     must(/function onSceneTap\(ev\)/.test(inlineJs), '缺少点击命中处理');
     must(/function buildCampfire\(\)/.test(inlineJs), '缺少篝火');
+});
+test('自动漫游是可选彩蛋（默认关，拖动即让位）', ()=>{
+    must(/roam:\s*\{\s*on:false/.test(inlineJs), '漫游应默认关闭');
+    must(/function updateRoam\(dt\)/.test(inlineJs), '缺少 updateRoam()');
+    must(/updateRoam\(dt\);/.test(inlineJs), 'updateModules 未调用 updateRoam()');
+    must(/if\(FEAT\.roam\.on\)\{ FEAT\.roam\.on = false/.test(inlineJs), '拖动时应自动退出漫游');
+});
+test('自适应分辨率（掉帧降像素比、流畅再升回）', ()=>{
+    must(/function perfTick\(dt\)/.test(inlineJs), '缺少 perfTick()');
+    must(/fps < 38 && dprCur > 1/.test(inlineJs), '缺少掉帧降档');
+    must(/renderer\.setPixelRatio\(dprCur\)/.test(inlineJs), '未用 dprCur 统一像素比');
+    must(!/setPixelRatio\(Math\.min\(window\.devicePixelRatio/.test(inlineJs), '仍有写死的像素比，会与自适应冲突');
+    must(/perfTick\(dt\);/.test(inlineJs), 'updateModules 未调用 perfTick()');
+});
+test('色调氛围包至少 6 套', ()=>{
+    const n = (inlineJs.match(/\{\s*n:'[^']+',\s*f:'[^']*'\s*\}/g) || []).length;
+    must(n >= 6, '色调包不足 6 套，当前 ' + n);
+});
+test('电脑端也自适应（窄窗/矮窗各有断点）', ()=>{
+    must(/@media \(min-width:601px\) and \(max-width:1000px\)/.test(html), '缺少电脑端窄窗断点');
+    must(/@media \(max-height:620px\) and \(min-width:601px\)/.test(html), '缺少电脑端矮窗断点');
+    must(/#ui\{[^}]*max-width:calc\(100vw - 30px\)/.test(html), '#ui 没有视口上限，窄窗会溢出');
+    must(/#status\{[^}]*max-width:calc\(100vw - 30px\)/.test(html), '#status 没有视口上限');
+    must(/\.wbtns\{display:grid;grid-template-columns:repeat\(5,minmax\(0,1fr\)\)/.test(html), '天气按钮未用 5 列网格，窄窗会串行');
+});
+test('留言弹窗有固定的共建文案（三行）', ()=>{
+    must(/楚门的2\.0世界正在生长。/.test(html), '缺少「正在生长」文案');
+    must(/它不被固定场景束缚，一切都可以被重新想象。/.test(html), '缺少第二行文案');
+    must(/写下你的构思，和大家一起共建属于我们的世界。/.test(html), '缺少第三行文案');
+    must(/class="fbCreed"/.test(html), '文案未包在 .fbCreed 里');
 });
 
 // ---------- AC8: 优化意见弹窗 ----------

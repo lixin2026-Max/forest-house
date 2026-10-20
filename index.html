@@ -14,19 +14,19 @@
          overscroll-behavior:none;-webkit-text-size-adjust:100%}
     #scene{position:absolute;inset:0;touch-action:none}
     #scene canvas{display:block;width:100%!important;height:100%!important}
-    #ui{position:absolute;top:15px;left:15px;background:rgba(10,20,10,.78);color:#fff;padding:16px;border-radius:10px;font-size:13px;z-index:100;width:340px;backdrop-filter:blur(6px)}
+    #ui{position:absolute;top:15px;left:15px;background:rgba(10,20,10,.78);color:#fff;padding:16px;border-radius:10px;font-size:13px;z-index:100;width:340px;max-width:calc(100vw - 30px);backdrop-filter:blur(6px)}
     #ui h3{margin:0 0 6px 0;font-size:17px;color:#ffd97a}
     #ui .hint{font-size:11px;color:#a8bba8;line-height:1.5;margin-bottom:10px}
     #ui .hint .touch{display:none}
-    .wbtns{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px}
-    .wbtns button{flex:1;min-width:56px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);color:#dfe8df;padding:7px 4px;border-radius:6px;cursor:pointer;transition:.15s;font-size:12px}
+    .wbtns{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px;margin-bottom:10px}
+    .wbtns button{min-width:0;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);color:#dfe8df;padding:7px 4px;border-radius:6px;cursor:pointer;transition:.15s;font-size:12px}
     .wbtns button:hover{background:rgba(255,255,255,.22)}
     .wbtns button.active{background:rgba(255,190,80,.28);border-color:#ffd97a;color:#fff;font-weight:bold}
     .row{display:flex;align-items:center;justify-content:space-between;margin:7px 0;font-size:12px}
     .row label{color:#c8d8c8}
-    .row input[type=range]{width:170px;accent-color:#ffd97a}
+    .row input[type=range]{flex:1;min-width:80px;max-width:170px;accent-color:#ffd97a}
     .row b{color:#ffd97a;min-width:42px;text-align:right}
-    #status{position:absolute;top:15px;right:15px;background:rgba(10,20,10,.78);color:#cfe3cf;padding:10px 14px;border-radius:8px;font-size:12px;z-index:100;line-height:1.7;min-width:180px}
+    #status{position:absolute;top:15px;right:15px;background:rgba(10,20,10,.78);color:#cfe3cf;padding:10px 14px;border-radius:8px;font-size:12px;z-index:100;line-height:1.7;min-width:180px;max-width:calc(100vw - 30px)}
     #error{display:none;position:fixed;inset:0;background:rgba(20,0,0,.94);color:#ffb4b4;z-index:999;padding:40px;font-size:15px;line-height:1.8;white-space:pre-wrap;overflow:auto}
 
     /* ---------- 移动端 / 窄屏适配 ---------- */
@@ -93,6 +93,12 @@
     #fbMsg{margin-top:9px;font-size:12px;color:#9ee49e;min-height:17px;line-height:1.5}
     #fbMsg.err{color:#ffb4b4}
 
+    /* ===== 留言弹窗：固定共建文案 ===== */
+    .fbCreed{display:grid;gap:3px;margin:2px 0 10px;padding:10px 12px;border-radius:9px;
+        background:rgba(80,140,90,.10);border-left:3px solid rgba(120,210,130,.55)}
+    .fbCreed b{font-size:13px;color:#bff0bf;font-weight:600}
+    .fbCreed span{font-size:11.5px;color:#9fc79f}
+
     /* ===== 功能面板 ===== */
     #modBtn{position:absolute;right:15px;bottom:56px;z-index:121;width:38px;height:38px;border-radius:10px;
         display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:17px;
@@ -145,6 +151,31 @@
         #ui .hint{display:none}
         #status{display:none}
     }
+
+    /* ---------- 电脑端自适应：窗口拉窄 / 拉矮都要好看 ---------- */
+    @media (min-width:601px) and (max-width:1000px){
+        #ui{width:300px;padding:13px;font-size:12.5px}
+        #ui h3{font-size:15px}
+        .wbtns button{font-size:11.5px;padding:6px 3px}
+    }
+    @media (max-height:620px) and (min-width:601px){
+        #ui{top:10px;left:10px;padding:11px 12px}
+        #ui .hint{display:none}
+        #ui h3{font-size:15px;margin-bottom:4px}
+        .wbtns{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin-bottom:7px}
+        .wbtns button{font-size:11px;padding:6px 2px;min-width:0}
+        .row{margin:5px 0}
+        #status{top:10px;right:10px;padding:8px 11px;font-size:11px;line-height:1.55}
+        #modBtn{bottom:52px;right:10px}
+        #fbBtn{right:10px;bottom:10px}
+        #modPanel{bottom:100px;right:10px;max-height:64vh}
+    }
+    @media (max-height:440px){
+        #ui .hint{display:none}
+        #ui{padding:9px 10px}
+        .row{margin:4px 0}
+        #status{display:none}
+    }
 </style>
 </head>
 <body>
@@ -184,7 +215,12 @@
 <button id="fbBtn" type="button">💬 优化意见</button>
 <div id="fbMask">
     <div id="fbBox" role="dialog" aria-modal="true" aria-labelledby="fbTitle">
-        <h4 id="fbTitle">💬 写下你的优化意见</h4>
+        <h4 id="fbTitle">💬 写下你的构想</h4>
+        <div class="fbCreed">
+            <b>楚门的2.0世界正在生长。</b>
+            <span>它不被固定场景束缚，一切都可以被重新想象。</span>
+            <span>写下你的构思，和大家一起共建属于我们的世界。</span>
+        </div>
         <p class="sub">想改什么、哪里不好看、希望加什么，随便写。<br>点「提交意见」会先复制一份、同时静默发给我；没有回传通道时也能粘到聊天里发我。</p>
         <textarea id="fbText" maxlength="600" placeholder="例如：小屋屋顶想换成茅草；向日葵太少了；夜里太黑看不清路……"></textarea>
         <div id="fbCount">0 / 600</div>
@@ -1532,6 +1568,7 @@ const FEAT = {
     views:     { on:true, label:'预设视角' },
     interact:  { on:true, label:'点击交互（门/篝火）' },
     daynight:  { on:true, label:'自动时序（昼夜轮转）' },
+    roam:      { on:false, label:'自动漫游（慢慢环游）' },
     tone:      { on:true, label:'色调氛围' }
 };
 
@@ -1557,7 +1594,9 @@ const TONES = [
     { n:'自然', f:'none' },
     { n:'电影', f:'contrast(1.10) saturate(1.14)' },
     { n:'暖阳', f:'sepia(0.20) saturate(1.25) hue-rotate(-10deg) brightness(1.04)' },
-    { n:'冷雾', f:'saturate(0.80) brightness(1.06) hue-rotate(10deg)' }
+    { n:'冷雾', f:'saturate(0.80) brightness(1.06) hue-rotate(10deg)' },
+    { n:'雪夜', f:'saturate(0.55) brightness(1.12) contrast(0.96) hue-rotate(-6deg)' },
+    { n:'秋日', f:'sepia(0.28) saturate(1.35) hue-rotate(-14deg) contrast(1.04)' }
 ];
 
 const AUTO_SEQ = ['sunny','golden','night','mist'];
@@ -1573,6 +1612,10 @@ let doorMesh=null, doorOpen=false, tapState=null;
 
 let autoSeqOn=false, autoSeqNext=0, autoSeqAt=0;
 let toneIndex=0, viewIndex=0;
+let roamAngle=0.22*Math.PI, roamT=0;
+let perfAcc=0, perfFrames=0, perfHold=0;
+const DPR_CAP = IS_MOBILE ? 1.5 : 2;
+let dprCur = Math.min((typeof window!=='undefined'&&window.devicePixelRatio)||1, DPR_CAP);
 
 /* ---------- 音频：全部程序化生成，不加载任何音频文件 ---------- */
 function audioEnsure(){
@@ -1802,7 +1845,11 @@ function onSceneTap(ev){
 }
 function setupTap(){
     const el = renderer.domElement;
-    el.addEventListener('pointerdown', function(e){ tapState = { x:e.clientX, y:e.clientY, t:performance.now() }; });
+    el.addEventListener('pointerdown', function(e){
+        // 手动一拖，漫游就让位给人
+        if(FEAT.roam.on){ FEAT.roam.on = false; refreshModUI(); }
+        tapState = { x:e.clientX, y:e.clientY, t:performance.now() };
+    });
     el.addEventListener('pointerup', function(e){
         if(!tapState) return;
         const dx = e.clientX - tapState.x, dy = e.clientY - tapState.y;
@@ -1931,6 +1978,40 @@ function updateModules(dt, t){
         audioWeatherSync();
     }
     updateAutoSeq(t);
+    updateRoam(dt);
+    perfTick(dt);
+}
+
+/* ---------- 自动漫游（备选彩蛋，默认关） ---------- */
+function updateRoam(dt){
+    if(!FEAT.roam.on || !controls || !controls.flyTo) return;
+    roamT += dt;
+    roamAngle += dt * 0.095;
+    // 缓慢环游 + 轻微俯仰与远近呼吸，像人在院子里踱步
+    const phi = (0.26 + Math.sin(roamT*0.11)*0.05) * Math.PI;
+    const rad = 35 + Math.sin(roamT*0.08)*5;
+    controls.flyTo(roamAngle, phi, rad);
+}
+
+/* ---------- 自适应分辨率：掉帧就降像素比，流畅久了再慢慢升回来 ---------- */
+function perfTick(dt){
+    if(!renderer || !renderer.setPixelRatio) return;
+    perfAcc += dt; perfFrames++;
+    if(perfAcc < 2) return;
+    const fps = perfFrames / perfAcc;
+    perfAcc = 0; perfFrames = 0;
+    if(fps < 38 && dprCur > 1){
+        dprCur = Math.max(1, dprCur - 0.25);
+        renderer.setPixelRatio(dprCur);
+        perfHold = 0;
+    }else if(fps > 56 && dprCur < DPR_CAP){
+        perfHold++;
+        if(perfHold >= 3){
+            dprCur = Math.min(DPR_CAP, dprCur + 0.25);
+            renderer.setPixelRatio(dprCur);
+            perfHold = 0;
+        }
+    }else perfHold = 0;
 }
 
 function init(){
@@ -1938,7 +2019,7 @@ function init(){
         renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
         updateOrientation();
         renderer.setSize(LAYOUT.w,LAYOUT.h);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, IS_MOBILE?1.6:2));
+        renderer.setPixelRatio(dprCur);
         renderer.shadowMap.enabled=true;
         renderer.shadowMap.type=THREE.PCFSoftShadowMap;
         renderer.outputEncoding=THREE.sRGBEncoding;
@@ -2028,7 +2109,7 @@ function onResize(){
     camera.updateProjectionMatrix();
     renderer.setSize(LAYOUT.w,LAYOUT.h);
     if(renderer.setPixelRatio)
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, IS_MOBILE?1.6:2));
+        renderer.setPixelRatio(dprCur);
 }
 window.addEventListener('orientationchange',()=>setTimeout(onResize,220));
 window.addEventListener('load',()=>{
