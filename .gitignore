@@ -9,8 +9,9 @@ feedback.jsonl
 _fbtmp.html
 _fbsubmit.html
 
-# 测试跑出来的截图（每次重跑都会变，不进版本库）
-test/subpath.png
+# 测试跑出来的截图：每次重跑都变，不进版本库
+#（要长期留存的图放 docs/screenshots/，见 report.md）
+test/*.png
 
 # 隧道当前地址（每次重连都会变）
 tunnel-url.txt

@@ -1,29 +1,35 @@
 # 森林小屋 Three.js 场景 — 修复与优化报告
 
-> 状态：**已可正常启动** ｜ verify 38/38 + smoke 全通过 + security 全通过 + feedback-e2e 17/17 + subpath 4/4 ｜ 五种天气 + 手机竖屏/横屏已逐张实机渲染验证
+> 状态：**已可正常启动** ｜ verify 38/38 + smoke 全通过 + security 55/55 + feedback-e2e 17/17 + subpath 4/4 ｜ 五种天气 + 手机竖屏/横屏已逐张实机渲染验证 ｜ 意见邮件通道已激活并实测到达
 
 ## 交付物
 ```
 forest-house-scene/
-├── index.html            主场景（需 http 打开，见 手机上打开.md）
-├── forest-house-single.html  单文件版（three.js 已内联，643KB）
+├── index.html            主场景（需 http(s) 打开，见 手机上打开.md）
+├── forest-house-single.html  单文件版（three.js 已内联，655KB）
 ├── js/three.min.js       本地 three.js r128（离线可用）
 ├── serve.js              本地静态服务器 + /api/feedback 收件接口
-├── feedback.jsonl        收到的优化意见（一行一条，收到后才生成）
+├── tunnel.js             一条命令：起服务 + 公网隧道，打印当前 https 地址
+├── deploy.js             一键推送 GitHub Pages（等仓库建好即可跑）
 ├── build-single.js       把 index.html + three.js 打包成单文件
+├── README.md             上手与维护
 ├── report.md             本报告
 ├── 手机上打开.md          手机/微信打开的几种方式
+├── .nojekyll             GitHub Pages：跳过 Jekyll 处理
+├── docs/screenshots/     长期留存的实机截图（产物截图不进版本库）
 └── test/
-    ├── verify.js         静态验收（35 项）
+    ├── all.js            一键回归：编码自检 + 下面 4 套全跑
+    ├── pre-commit        提交前钩子（装到 .git/hooks/ 后自动生效）
+    ├── verify.js         静态验收（38 项）
     ├── smoke.js          运行时冒烟（真实执行 init + 120 帧 + 5 种天气 + 意见弹窗）
-    ├── security-audit.js 安全审计（53 项，含真起服务器打恶意请求）
+    ├── security-audit.js 安全审计（55 项，含真起服务器打恶意请求）
     ├── feedback-e2e.js   意见接口端到端（17 项）
-    ├── make-fb-submit.js 生成「自动填写并点提交」的临时页
-    ├── shadowprobe.html  阴影能力最小探针
-    ├── w_*.png           五种天气实机截图
-    ├── w_phone*.png      手机竖屏 / 横屏实机截图
-    └── fb_*.png          意见弹窗实机截图（桌面 / 手机竖 / 手机横）
+    ├── subpath-check.js  GitHub Pages 子路径部署验证（4 项，真起服务器 + 真渲染）
+    ├── verify-channel.js 邮件通道自检（真发一封到 2820575692@qq.com）
+    ├── make-fb-*.js      生成「自动填写/点击提交」的临时页
+    └── shadowprobe.html  阴影能力最小探针
 ```
+
 
 ---
 
@@ -92,7 +98,7 @@ dens = curSky.dens * (1 + wx.fogMul*4);  // → 实际密度 ×5，而滑杆显�
 
 ---
 
-## 六、移动端适配（手机可玩）
+## 四、移动端适配（手机可玩）
 
 原来只有 `mousedown/mousemove/wheel`，手机上**完全不能操作**。本次补齐：
 
@@ -109,15 +115,16 @@ dens = curSky.dens * (1 + wx.fogMul*4);  // → 实际密度 ×5，而滑杆显�
 | 面板布局 | `@media (max-width:600px),(pointer:coarse)`：面板通栏 `max-width:420px`、5 个天气按钮 `grid` 等宽、滑杆 `grid` 三栏、状态栏移到底部；`rot90` 下面板收成 300px 贴角，不挡主体 |
 | 横屏短高 | `@media (max-height:460px)` 隐藏操作提示与状态栏 |
 
-实测截图：`test/w_phone.png`（390×844 竖屏，画面已转横屏）、`test/w_phone_ls.png`（844×390 横屏，5 个天气按钮一行排开）。
+实测截图：`docs/screenshots/phone-portrait.png`（390×844 竖屏，画面已转横屏）、`docs/screenshots/phone-landscape.png`（844×390 横屏，5 个天气按钮一行排开）。
 
 ---
 
-## 七、验证方式
+## 五、验证方式
 
 ### 自动化
 ```bash
-node test/verify.js    # 静态验收 30 项（含 5 项移动端适配）
+node test/all.js       # 一键回归：编码自检 + 静态 + 冒烟 + 安全 + 意见接口 + 子路径
+node test/verify.js    # 静态验收 38 项（含 5 项移动端适配、3 项部署适配）
 node test/smoke.js     # 运行时冒烟：init + 120 帧 + 5 种天气 + UI 路径 + 场景断言
 ```
 冒烟输出示例：
@@ -136,38 +143,54 @@ msedge --headless=new --enable-unsafe-swiftshader --use-gl=angle --use-angle=swi
        --window-size=1280,720 --virtual-time-budget=7000 \
        --screenshot=out.png "file:///<路径>/index.html#night"
 ```
-五张 `test/w_*.png` 即由此产出，FPS 实测 160–350。
+五张 `docs/screenshots/weather-*.png` 即由此产出，FPS 实测 160–350。
 
 ---
 
-## 八、手机上打不开的原因与解法
+## 六、手机上打不开的原因与解法
 
-**原因**：`index.html` 靠相对路径加载 `js/three.min.js`。把 html 单独发到手机（微信/QQ/附件）时，
-多数手机不会渲染网页；即使能打开，`file://` 协议下浏览器也不允许读同目录 js。
-**结论：必须用 http(s) 打开，不能用 `file://`。**
+**先说被证伪的一条**：最初以为 `file://` 下浏览器不允许读同目录的 `js/three.min.js`。
+实测（无头 Edge 直接开 `file:///…/index.html#night`，见 `docs/screenshots/file-protocol-ok.png`）
+**桌面 Chrome/Edge 是能正常跑的** —— `<script src>` 在 `file://` 下不受同源限制，
+被拦的只有 `fetch` / `XHR` / ES module import。
+
+**真正的原因**是这三条：
+
+1. **微信 / QQ 收到 `.html` 只当文件**，不渲染，只给「用其他应用打开」；
+2. 就算“用浏览器打开”，**手机上几乎不可能把 `index.html` 和 `js/` 目录原样放进去**——
+   微信传文件只能一个个发，`js/three.min.js` 那条相对路径必然 404；
+3. iOS 沙盒、部分 Android 浏览器对本地文件的限制也各不相同。
+
+**结论：必须用 http(s) 打开，不要走 `file://`。**
 
 本次新增：
 
 | 文件 | 作用 |
 |---|---|
 | `serve.js` | 零依赖 Node 静态服务器，启动即打印手机可访问的局域网地址 |
-| `build-single.js` | 把 `index.html` + `three.min.js` 打成 **单文件** `forest-house-single.html`（643KB，无任何外链） |
-| `手机上打开.md` | 三种方式的完整说明（局域网 / 静态托管 / 小程序） |
+| `build-single.js` | 把 `index.html` + `three.min.js` 打成 **单文件** `forest-house-single.html`（655KB，无任何外链） |
+| `tunnel.js` | 一条命令：本地服务 + 公网 https 隧道，打印当前地址并写入 `tunnel-url.txt` |
+| `deploy.js` | 一键推送到 GitHub Pages（等仓库建好后运行） |
+| `手机上打开.md` | 各方式的完整说明（局域网 / 隧道 / GitHub Pages） |
 
 ```bash
 node serve.js                 # → 手机同 WiFi 打开 http://<局域网IP>:8000/
-node build-single.js          # → forest-house-single.html，可直接拖到 Netlify Drop
+node tunnel.js                # → 打印一个 https 公网地址，任何人可开
+node build-single.js          # → forest-house-single.html，可拖到 Netlify Drop
+node deploy.js                # → 推到 GitHub Pages，拿永久地址
 ```
 
 `verify.js` 的静态检查已确认单文件 **无残留 `<script src=>` 外链**，并且无头 Edge 用 `file://`
-直接渲染 `forest-house-single.html` 截图正常 —— 说明单文件本身是自包含的。
+直接渲染 `forest-house-single.html` 截图正常 —— 单文件本身是自包含的。
 
-> 微信内打开需要 **HTTPS 公网地址**：把 `forest-house-single.html` 拖到 Netlify Drop / Vercel /
-> GitHub Pages，拿到 `https://` 链接即可在微信里发给自己或别人。
+> ⚠ **隧道地址每次重连都会变**（localhost.run 免费策略），且绑在当前这台电脑的进程上。
+> 长期给别人用必须走 GitHub Pages。注意 `-R 80:127.0.0.1:8000` 里不能写 `localhost`
+> ——会解析到 IPv6 的 `::1` 而服务只绑 IPv4，结果是 502。
+
 
 ---
 
-## 九、美化
+## 七、美化
 
 - **暗角**：`#app::after` 加 `radial-gradient`（中心透明 → 边缘 30% 黑），压住四角、聚焦主体。
   纯 CSS、零渲染开销。
@@ -179,11 +202,11 @@ node build-single.js          # → forest-house-single.html，可直接拖到 N
 
 ---
 
-## 十、安全加固
+## 八、安全加固
 
 目标：手机 / 微信里打开时，页面**不联网、不落数据、无注入面**。
 
-### 10.1 页面本身
+### 8.1 页面本身
 
 | 审计项 | 结果 |
 |---|---|
@@ -204,7 +227,7 @@ head 里新增：
 <meta name="referrer" content="no-referrer">
 ```
 
-> `connect-src` 从 `'none'` 放宽到 `'self'`，只为放行唯一那个 `POST /api/feedback`（见 10.4）。
+> `connect-src` 从 `'none'` 放宽到 `'self' https://formsubmit.co`，只为放行意见回传那唯一一处 `POST`（见 8.4）。
 > 断言口径也相应收窄成「恰好一处 fetch，且必须是同源相对路径」，不是简单禁掉。
 
 > **踩过的坑**：第一版 CSP 写成 `script-src 'unsafe-inline'`，漏了 `'self'` ——
@@ -213,7 +236,7 @@ head 里新增：
 > 一个坏版本交出去。现在 `security-audit.js` 里有专门一条
 > `CSP 放行同源脚本 (script-src 'self')` 防止回归。
 
-### 10.2 本地服务器 `serve.js`
+### 8.2 本地服务器 `serve.js`
 
 | 加固点 | 说明 |
 |---|---|
@@ -228,20 +251,20 @@ head 里新增：
 
 新增 `--localhost` 开关，只绑 `127.0.0.1`（不想让同 WiFi 的别人看到时用）。
 
-### 10.3 回归测试 `test/security-audit.js`
+### 8.3 回归测试 `test/security-audit.js`
 
-静态断言 + **真起一个服务器用原始 socket 打恶意请求**，共 53 条：
+静态断言 + **真起一个服务器用原始 socket 打恶意请求**，共 55 条：
 
 ```
 node test/security-audit.js
-→ 安全审计：53 passed, 0 failed / SAFE — 全部通过
+→ 安全审计：55 passed, 0 failed / SAFE — 全部通过
 ```
 
 覆盖：五类路径穿越（明文 / 编码 / 双编码 / 反斜杠 / 编码反斜杠）、坏编码存活、
 POST/PUT 405、非白名单扩展名 403、目录不列清单、安全响应头齐全、无 CORS 通配、
 `fetch` 恰好一处且同源。
 
-### 10.4 「优化意见」回传（唯一的写入路径）
+### 8.4 「优化意见」回传（唯一的写入路径）
 
 目标：**用户写的意见我能真收到，而且收不到时绝不打扰他。**
 
@@ -303,7 +326,7 @@ node test/feedback-e2e.js
 
 ---
 
-## 十一、已知边界
+## 九、已知边界
 - 花草风摆每帧更新 `instanceMatrix`（移动端 140 草 + 26 花 ×3 组）。若低端机仍掉帧，
   把 `createGrass()` 的 `N` 再降到 80、`createSunflowers()` 的 `N` 降到 16。
 - 阴影贴图 2048 / ±42 视锥，4K 全屏远景阴影边缘会略软，属预期。

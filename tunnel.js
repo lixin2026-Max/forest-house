@@ -7,7 +7,8 @@
  * 把地址写死在文档里必然过期。所以地址以本脚本的输出为准，
  * 同时会写到 tunnel-url.txt（已在 .gitignore 里）。
  *
- * 注意：这条隧道绑在当前进程上，关掉窗口就断。要长期可用的链接请走 GitHub Pages。
+ * 注意：这条隧道绑在当前进程上，关掉窗口就断。断线会自动重连（地址会变），
+ * 但要**长期固定**的链接请走 GitHub Pages（`node deploy.js`）。
  */
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -66,30 +67,50 @@ function startTunnel() {
     });
 }
 
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
 (async () => {
     console.log('启动本地服务…');
     await waitPort();
     console.log(`  本地： http://127.0.0.1:${PORT}/`);
 
-    console.log('建立公网隧道…');
-    const { tun, url } = await startTunnel();
-
-    if (!url) {
-        console.error('  没能读到隧道地址，请看上面的 ssh 输出');
-        process.exitCode = 1;
-        tun.on('exit', () => serve.kill());
-        return;
-    }
-
-    fs.writeFileSync(path.join(ROOT, 'tunnel-url.txt'), url + '\n', 'utf8');
-    console.log('');
-    console.log('  公网： ' + url + '/');
-    console.log('  （已写入 tunnel-url.txt；该地址在隧道重连后会变）');
-    console.log('');
-    console.log('按 Ctrl+C 结束。');
-
-    const stop = () => { try { tun.kill(); } catch {} try { serve.kill(); } catch {} process.exit(0); };
+    let stopping = false;
+    const stop = () => {
+        stopping = true;
+        try { serve.kill(); } catch {}
+        process.exit(0);
+    };
     process.on('SIGINT', stop);
     process.on('SIGTERM', stop);
-    tun.on('exit', () => { console.error('隧道断开，请重新运行 node tunnel.js'); serve.kill(); process.exit(1); });
+
+    // 断线自动重连：localhost.run 会掉线，掉线后地址会变，但服务要一直在
+    for (let attempt = 1; !stopping; attempt++) {
+        console.log('');
+        console.log(attempt === 1 ? '建立公网隧道…' : `第 ${attempt} 次重连…`);
+
+        let res = null;
+        try {
+            res = await startTunnel();
+        } catch (e) {
+            console.error('  启动失败：' + e.message);
+        }
+
+        if (!res || !res.url) {
+            console.error('  没读到隧道地址，5 秒后重试');
+            await sleep(5000);
+            continue;
+        }
+
+        fs.writeFileSync(path.join(ROOT, 'tunnel-url.txt'), res.url + '\n', 'utf8');
+        console.log('  公网： ' + res.url + '/');
+        console.log('  （已写入 tunnel-url.txt；重连后地址会变）');
+
+        await new Promise(r => res.tun.once('exit', r));
+        if (stopping) break;
+
+        console.error('');
+        console.error('⚠ 隧道断开，5 秒后自动重连（新地址会重新打印）');
+        await sleep(5000);
+    }
 })();
+
