@@ -11,6 +11,10 @@
 > 改仓库名 → Pages 地址跟着变 → 意见会因来源不匹配被拒收。
 > 要改仓库名，必须重新走一遍 FormSubmit 激活。
 
+手机扫码直接打开：
+
+![扫码打开](docs/screenshots/qr-live.png)
+
 ![晴天](docs/screenshots/weather-sunny.png)
 
 ## 快速开始
