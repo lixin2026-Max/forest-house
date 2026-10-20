@@ -12,6 +12,9 @@ _fbsubmit.html
 # 测试跑出来的截图（每次重跑都会变，不进版本库）
 test/subpath.png
 
+# 隧道当前地址（每次重连都会变）
+tunnel-url.txt
+
 # 编辑器/系统
 .DS_Store
 Thumbs.db
