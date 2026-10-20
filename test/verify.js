@@ -98,7 +98,7 @@ test('AC6 所有被调用的函数都有定义', ()=>{
         .replace(/'[^'\n]*'/g,"''")
         .replace(/"[^"\n]*"/g,'""');
     // Promise 的 resolve/reject 是回调参数，不作为「未定义函数」处理
-    const builtin = /^(if|for|while|switch|return|typeof|new|function|catch|try|do|else|Error|Number|String|Boolean|Array|Object|Set|Map|JSON|Math|Date|Promise|Float32Array|Float64Array|Int32Array|Uint8Array|requestAnimationFrame|cancelAnimationFrame|setTimeout|clearTimeout|setInterval|console|THREE|resolve|reject|fetch|AbortController|URLSearchParams|FormData|Event|CustomEvent|performance|location|navigator)$/;
+    const builtin = /^(if|for|while|switch|return|typeof|new|function|catch|try|do|else|Error|Number|String|Boolean|Array|Object|Set|Map|JSON|Math|Date|Promise|Float32Array|Float64Array|Int32Array|Uint8Array|requestAnimationFrame|cancelAnimationFrame|setTimeout|clearTimeout|setInterval|clearInterval|console|THREE|resolve|reject|fetch|AbortController|URLSearchParams|FormData|Event|CustomEvent|performance|location|navigator)$/;
     const calls = [...stripped.matchAll(/(?:^|[^\w$.])([a-zA-Z_$][\w$]*)\s*\(/g)].map(m=>m[1]);
     const missing = [...new Set(calls)].filter(n=>!defined.has(n) && !builtin.test(n));
     must(missing.length===0, 'undefined function calls: '+missing.join(', '));
@@ -159,12 +159,15 @@ test('MOBILE 有窄屏媒体查询', ()=>{
     must(/@media\s*\(max-width:600px\)/.test(html),'缺少窄屏媒体查询');
     must(/#ui\{[^}]*right:\d+px/.test(html),'面板未做通栏适配');
 });
-test('MOBILE 竖屏自动转横屏（CSS 旋转 + 尺寸交换）', ()=>{
-    must(/body\.rot90\s+#app\{[^}]*rotate\(90deg\)/.test(html),'缺少 rot90 旋转规则');
-    must(/ROT\s*=\s*IS_TOUCH\s*&&\s*ih\s*>\s*iw/.test(inlineJs),'缺少竖屏判定（且必须用 IS_TOUCH，不能用 IS_MOBILE）');
-    must(/LAYOUT\.w\s*=\s*ROT\s*\?\s*ih\s*:\s*iw/.test(inlineJs),'缺少尺寸交换');
+test('MOBILE 竖屏走 9:16 原生竖构图（不再整体旋转）', ()=>{
+    // v3 起：竖屏不做 CSS 旋转，改用相机视野补偿，避免界面被转 90°
+    must(/ROT\s*=\s*false/.test(inlineJs),'竖屏不应再整体旋转成横屏');
+    must(/function fitFov\(\)/.test(inlineJs),'缺少竖屏视野补偿 fitFov()');
+    must(/camera\.fov=fitFov\(\)/.test(inlineJs),'onResize 未应用视野补偿');
+    must(/new THREE\.PerspectiveCamera\(fitFov\(\)/.test(inlineJs),'相机初始 fov 未用 fitFov()');
 });
 test('MOBILE 旋转后触摸拖动方向已补偿', ()=>{
+    // ROT 恒为 false，补偿代码保留以兼容旧链接；这里只要求它仍在位
     must(/if\(ROT\)\{\s*const t=dx;\s*dx=dy;\s*dy=-t;\s*\}/.test(inlineJs),'旋转后拖动方向未补偿');
 });
 test('MOBILE 性能降档生效（阴影/实例数量）', ()=>{
@@ -173,10 +176,10 @@ test('MOBILE 性能降档生效（阴影/实例数量）', ()=>{
 });
 
 // ---------- AC9: 部署与端侧判定 ----------
-test('ROT 只对触屏生效（桌面窄窗口不被旋转）', ()=>{
+test('触屏判定独立于性能降档（IS_TOUCH 与 IS_MOBILE 分离）', ()=>{
     must(/const IS_TOUCH\s*=/.test(inlineJs), '缺少 IS_TOUCH');
-    must(/ROT\s*=\s*IS_TOUCH\s*&&/.test(inlineJs), 'ROT 未改用 IS_TOUCH，窄窗口桌面会被转歪');
     must(/pointer:coarse/.test(inlineJs), '缺少触屏媒体查询');
+    must(/const IS_MOBILE\s*=\s*IS_TOUCH/.test(inlineJs), 'IS_MOBILE 应基于 IS_TOUCH 扩展');
 });
 test('资源用相对路径（GitHub Pages 子路径可用）', ()=>{
     must(/<script src="js\/three\.min\.js">/.test(html), 'three.js 不是相对路径');
@@ -185,6 +188,35 @@ test('资源用相对路径（GitHub Pages 子路径可用）', ()=>{
 });
 test('GitHub Pages 需要的 .nojekyll 存在', ()=>{
     must(fs.existsSync(path.join(root, '.nojekyll')), '缺少 .nojekyll');
+});
+
+// ---------- AC10: 可插拔功能模块 ----------
+test('功能注册表齐备（7 个可独立开关的模块）', ()=>{
+    ['bgm','ambience','particles','views','interact','daynight','tone']
+        .forEach(k => must(new RegExp(k + ':\\s*\\{\\s*on:(true|false)').test(inlineJs), '缺少功能开关 ' + k));
+});
+test('模块有统一挂载/更新钩子', ()=>{
+    must(/function setupModules\(\)/.test(inlineJs), '缺少 setupModules()');
+    must(/function updateModules\(dt, ?t\)/.test(inlineJs), '缺少 updateModules(dt,t)');
+    must(/setupModules\(\);/.test(inlineJs), 'init() 未调用 setupModules()');
+    must(/updateModules\(dt, ?t\);/.test(inlineJs), 'animate() 未调用 updateModules()');
+});
+test('BGM 按天气换音阶，且不加载任何音频文件', ()=>{
+    must(/BGM_SCALE\s*=\s*\{/.test(inlineJs), '缺少按天气的音阶表');
+    ['sunny','golden','mist','night','rain'].forEach(m =>
+        must(new RegExp(m + '\\s*:\\s*\\[').test(inlineJs), '音阶表缺少 ' + m));
+    must(!/\.(mp3|ogg|wav|m4a)(\?|"|')/i.test(html), '不应引用音频文件');
+});
+test('音频有总静音开关，且默认静音（不打扰打开者）', ()=>{
+    must(/id="muteBtn"/.test(html), '缺少静音按钮');
+    must(/let audioMuted=true/.test(inlineJs), '音频应默认静音');
+    must(/function setMute\(v\)/.test(inlineJs), '缺少 setMute()');
+});
+test('门与篝火可点击（门有名字，可被 raycast 命中）', ()=>{
+    must(/door\.name='houseDoor'/.test(inlineJs), '门没有 name，点不到');
+    must(/scene\.getObjectByName\('houseDoor'\)/.test(inlineJs), '未通过名字查找门');
+    must(/function onSceneTap\(ev\)/.test(inlineJs), '缺少点击命中处理');
+    must(/function buildCampfire\(\)/.test(inlineJs), '缺少篝火');
 });
 
 // ---------- AC8: 优化意见弹窗 ----------
