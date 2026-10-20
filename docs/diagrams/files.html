@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<title>文件与测试</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1240px;height:780px;overflow:hidden;
+    background:#0b1310;color:#dff0e2;
+    font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif}
+  .wrap{width:100%;height:100%;padding:38px 44px;display:flex;flex-direction:column}
+  .cap{font-size:15px;letter-spacing:.5px;opacity:.55;margin-bottom:10px}
+  h1{font-size:27px;font-weight:800;letter-spacing:1px;margin-bottom:6px}
+  .sub{font-size:14px;opacity:.62;margin-bottom:22px}
+  .foot{margin-top:auto;font-size:12px;opacity:.38;letter-spacing:.5px}
+  svg{display:block}
+</style></head><body><div class="wrap"><div class="cap">ENGINEERING DIAGRAM 03</div>
+           <h1>一个页面，五套测试，一条提交闸门</h1>
+           <div class="sub">改完不用记得该跑什么：pre-commit 会替你跑全套，红的不让提交</div>
+           <svg width="1140" height="620" viewBox="0 0 1140 620">
+             <text x="6" y="18" font-size="13" fill="#7ed08a" font-weight="700">交付物</text>
+             
+        <rect x="6" y="30" width="268" height="58" rx="9"
+              fill="#7ed08a16" stroke="#7ed08a" stroke-width="1.4"
+              />
+        <text x="20" y="55" font-size="13.5" font-weight="700" fill="#eaf6ec">index.html</text>
+        <text x="20" y="74" font-size="11.5" opacity=".6" fill="#dff0e2">单页：场景 + 交互 + 模块钩子</text>
+             
+        <rect x="300" y="30" width="220" height="58" rx="9"
+              fill="#9ad8a616" stroke="#9ad8a6" stroke-width="1.4"
+              />
+        <text x="314" y="55" font-size="13.5" font-weight="700" fill="#eaf6ec">js/three.min.js</text>
+        <text x="314" y="74" font-size="11.5" opacity=".6" fill="#dff0e2">r128 · 603KB · 本地</text>
+             
+        <rect x="546" y="30" width="268" height="58" rx="9"
+              fill="#9ad8a616" stroke="#9ad8a6" stroke-width="1.4"
+              />
+        <text x="560" y="55" font-size="13.5" font-weight="700" fill="#eaf6ec">单文件离线版.html</text>
+        <text x="560" y="74" font-size="11.5" opacity=".6" fill="#dff0e2">整页内联 · 674KB</text>
+
+             <text x="6" y="128" font-size="13" fill="#4fa8d8" font-weight="700">五套测试</text>
+             
+        <rect x="6" y="140" width="206" height="58" rx="9"
+              fill="#4fa8d816" stroke="#4fa8d8" stroke-width="1.4"
+              />
+        <text x="20" y="165" font-size="13.5" font-weight="700" fill="#eaf6ec">verify.js</text>
+        <text x="20" y="184" font-size="11.5" opacity=".6" fill="#dff0e2">55 条静态验收</text>
+             
+        <rect x="228" y="140" width="206" height="58" rx="9"
+              fill="#4fa8d816" stroke="#4fa8d8" stroke-width="1.4"
+              />
+        <text x="242" y="165" font-size="13.5" font-weight="700" fill="#eaf6ec">smoke.js</text>
+        <text x="242" y="184" font-size="11.5" opacity=".6" fill="#dff0e2">真跑 init 全流程</text>
+             
+        <rect x="450" y="140" width="206" height="58" rx="9"
+              fill="#4fa8d816" stroke="#4fa8d8" stroke-width="1.4"
+              />
+        <text x="464" y="165" font-size="13.5" font-weight="700" fill="#eaf6ec">security-audit.js</text>
+        <text x="464" y="184" font-size="11.5" opacity=".6" fill="#dff0e2">55 条安全审计</text>
+             
+        <rect x="672" y="140" width="206" height="58" rx="9"
+              fill="#4fa8d816" stroke="#4fa8d8" stroke-width="1.4"
+              />
+        <text x="686" y="165" font-size="13.5" font-weight="700" fill="#eaf6ec">feedback-e2e.js</text>
+        <text x="686" y="184" font-size="11.5" opacity=".6" fill="#dff0e2">17 条通道测试</text>
+             
+        <rect x="894" y="140" width="206" height="58" rx="9"
+              fill="#4fa8d816" stroke="#4fa8d8" stroke-width="1.4"
+              />
+        <text x="908" y="165" font-size="13.5" font-weight="700" fill="#eaf6ec">subpath-check.js</text>
+        <text x="908" y="184" font-size="11.5" opacity=".6" fill="#dff0e2">子路径真渲染 4 条</text>
+
+             <rect x="6" y="238" width="1094" height="52" rx="9"
+                   fill="#7ed08a18" stroke="#7ed08a" stroke-width="1.6"/>
+             <text x="553" y="262" text-anchor="middle" font-size="14" font-weight="700" fill="#bfe8c6">node test/all.js —— 一条命令跑完全部五套</text>
+             <text x="553" y="280" text-anchor="middle" font-size="11.5" opacity=".6" fill="#dff0e2">先做编码自检（不许出现乱码字符），再依次 spawn 五套</text>
+
+             <text x="6" y="330" font-size="13" fill="#e8c06a" font-weight="700">闸门与留档</text>
+             
+        <rect x="6" y="342" width="250" height="58" rx="9"
+              fill="#e8c06a16" stroke="#e8c06a" stroke-width="1.4"
+              />
+        <text x="20" y="367" font-size="13.5" font-weight="700" fill="#eaf6ec">.git/hooks/pre-commit</text>
+        <text x="20" y="386" font-size="11.5" opacity=".6" fill="#dff0e2">每次提交自动跑 all.js</text>
+             
+        <rect x="272" y="342" width="250" height="58" rx="9"
+              fill="#e8c06a16" stroke="#e8c06a" stroke-width="1.4"
+              />
+        <text x="286" y="367" font-size="13.5" font-weight="700" fill="#eaf6ec">git tag v3.1-stable</text>
+        <text x="286" y="386" font-size="11.5" opacity=".6" fill="#dff0e2">稳定基线，可回退</text>
+             
+        <rect x="538" y="342" width="250" height="58" rx="9"
+              fill="#e8c06a16" stroke="#e8c06a" stroke-width="1.4"
+              />
+        <text x="552" y="367" font-size="13.5" font-weight="700" fill="#eaf6ec">CHANGELOG.md</text>
+        <text x="552" y="386" font-size="11.5" opacity=".6" fill="#dff0e2">只记能感知的变化</text>
+             
+        <rect x="804" y="342" width="296" height="58" rx="9"
+              fill="#e8c06a16" stroke="#e8c06a" stroke-width="1.4"
+              />
+        <text x="818" y="367" font-size="13.5" font-weight="700" fill="#eaf6ec">docs/维护规范.md</text>
+        <text x="818" y="386" font-size="11.5" opacity=".6" fill="#dff0e2">五条规范 → 具体机制</text>
+
+             <text x="6" y="440" font-size="13" fill="#b7a8f0" font-weight="700">上线</text>
+             
+        <rect x="6" y="452" width="268" height="58" rx="9"
+              fill="#b7a8f016" stroke="#b7a8f0" stroke-width="1.4"
+              />
+        <text x="20" y="477" font-size="13.5" font-weight="700" fill="#eaf6ec">GitHub Pages</text>
+        <text x="20" y="496" font-size="11.5" opacity=".6" fill="#dff0e2">整仓 branch deploy</text>
+             
+        <rect x="300" y="452" width="300" height="58" rx="9"
+              fill="#b7a8f016" stroke="#b7a8f0" stroke-width="1.4"
+              />
+        <text x="314" y="477" font-size="13.5" font-weight="700" fill="#eaf6ec">test/live-check.js</text>
+        <text x="314" y="496" font-size="11.5" opacity=".6" fill="#dff0e2">部署后实探主页与资源</text>
+             
+        <rect x="626" y="452" width="300" height="58" rx="9"
+              fill="#b7a8f016" stroke="#b7a8f0" stroke-width="1.4"
+              />
+        <text x="640" y="477" font-size="13.5" font-weight="700" fill="#eaf6ec">.nojekyll</text>
+        <text x="640" y="496" font-size="11.5" opacity=".6" fill="#dff0e2">禁用 Jekyll，保证子路径</text>
+             
+        <rect x="950" y="452" width="150" height="58" rx="9"
+              fill="#b7a8f016" stroke="#b7a8f0" stroke-width="1.4"
+              />
+        <text x="964" y="477" font-size="13.5" font-weight="700" fill="#eaf6ec">在线地址</text>
+        <text x="964" y="496" font-size="11.5" opacity=".6" fill="#dff0e2">可直接扫码</text>
+           </svg><div class="foot">楚门的2.0世界 · 工程图 · 文件与测试</div></div></body></html>
