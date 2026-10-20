@@ -244,8 +244,20 @@ test('电脑端也自适应（窄窗/矮窗各有断点）', ()=>{
     must(/#status\{[^}]*max-width:calc\(100vw - 30px\)/.test(html), '#status 没有视口上限');
     must(/\.wbtns\{display:grid;grid-template-columns:repeat\(5,minmax\(0,1fr\)\)/.test(html), '天气按钮未用 5 列网格，窄窗会串行');
 });
-test('留言弹窗有固定的共建文案（三行）', ()=>{
-    must(/楚门的2\.0世界正在生长。/.test(html), '缺少「正在生长」文案');
+test('手机刘海/安全区适配（viewport-fit=cover + env 内边距）', ()=>{
+    must(/name="viewport"[^>]*viewport-fit=cover/.test(html), 'viewport 缺 viewport-fit=cover，刘海屏会压边');
+    must(/name="viewport"[^>]*user-scalable=no/.test(html), 'viewport 未禁双指缩放，会和相机缩放打架');
+    must(/env\(safe-area-inset-top/.test(html), '缺少顶部安全区内边距');
+    must(/env\(safe-area-inset-left/.test(html), '缺少左侧安全区内边距');
+    must(/#fbBtn\{[^}]*env\(safe-area-inset-bottom/.test(html), '意见按钮没避开底部安全区');
+    must(/#modBtn\{[^}]*env\(safe-area-inset-bottom/.test(html), '设置按钮没避开底部安全区');
+});
+test('触屏手感（无 300ms 延迟 / 不长按选中）', ()=>{
+    must(/touch-action:manipulation/.test(html), '按钮未设 touch-action:manipulation，会有 300ms 点击延迟');
+    must(/-webkit-tap-highlight-color:transparent/.test(html), '未去掉点击高亮块');
+    must(/-webkit-touch-callout:none/.test(html), '长按仍会弹系统菜单');
+});
+test('留言弹窗有固定的共建文案（三行）', ()=>{    must(/楚门的2\.0世界正在生长。/.test(html), '缺少「正在生长」文案');
     must(/它不被固定场景束缚，一切都可以被重新想象。/.test(html), '缺少第二行文案');
     must(/写下你的构思，和大家一起共建属于我们的世界。/.test(html), '缺少第三行文案');
     must(/class="fbCreed"/.test(html), '文案未包在 .fbCreed 里');

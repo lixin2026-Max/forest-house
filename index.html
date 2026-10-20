@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <!-- 安全基线：除「同源」与回传邮箱服务外不允许任何外部加载 -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src data: blob:; connect-src 'self' https://formsubmit.co; font-src 'none'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -199,6 +199,27 @@
         .row{margin:4px 0}
         #status{display:none}
     }
+
+    /* ---- 刘海屏安全区（放在最后，覆盖上面的位置规则） ---- */
+    @media (max-width:600px), (pointer:coarse){
+        #ui{left:calc(8px + env(safe-area-inset-left, 0px));
+            right:calc(8px + env(safe-area-inset-right, 0px));
+            top:calc(8px + env(safe-area-inset-top, 0px))}
+        #status{left:calc(8px + env(safe-area-inset-left, 0px));
+                bottom:calc(8px + env(safe-area-inset-bottom, 0px))}
+        #fbBtn{right:calc(8px + env(safe-area-inset-right, 0px));
+               bottom:calc(8px + env(safe-area-inset-bottom, 0px))}
+        #modBtn{right:calc(8px + env(safe-area-inset-right, 0px));
+                bottom:calc(60px + env(safe-area-inset-bottom, 0px))}
+        #modPanel{left:calc(8px + env(safe-area-inset-left, 0px));
+                  right:calc(8px + env(safe-area-inset-right, 0px));
+                  bottom:calc(112px + env(safe-area-inset-bottom, 0px))}
+        #fbMask{padding:env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+                        env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px)}
+    }
+    /* 触屏手感：去掉 300ms 点击延迟与长按选中/高亮 */
+    button, label, input[type=range]{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+    #scene, #scene canvas{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 </style>
 </head>
 <body>
