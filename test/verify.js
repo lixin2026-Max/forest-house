@@ -301,6 +301,14 @@ test('FB 移动端与旋转态有独立定位', ()=>{
     must(/body\.rot90\s+#fbBtn\{/.test(html),'旋转态未调整按钮位置');
     must(/#fbMask\{[^}]*inset:0/.test(html),'遮罩未铺满');
 });
+test('FB 回传必须显式带 Referer（FormSubmit 靠它判来源）', ()=>{
+    // 线上曾因 <meta name="referrer" content="no-referrer"> 被抹掉 Referer，
+    // FormSubmit 回「not a web server」而拒收；修法是在 fetch 上单独指定。
+    must(/referrer:FB_RELAY\?location\.href:undefined/.test(inlineJs), '未显式指定 referrer');
+    must(/referrerPolicy:FB_RELAY\?'unsafe-url':undefined/.test(inlineJs), '未指定 referrerPolicy');
+    must(/body:FB_RELAY\?new URLSearchParams\(payload\)/.test(inlineJs) ||
+         /new URLSearchParams\(payload\)/.test(inlineJs), '未用 urlencoded 简单请求（会触发预检）');
+});
 
 console.log('\n====================');
 console.log(`Results: ${passed} passed, ${failed} failed`);
