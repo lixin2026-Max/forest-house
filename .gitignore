@@ -9,6 +9,9 @@ feedback.jsonl
 _fbtmp.html
 _fbsubmit.html
 
+# 测试跑出来的截图（每次重跑都会变，不进版本库）
+test/subpath.png
+
 # 编辑器/系统
 .DS_Store
 Thumbs.db
