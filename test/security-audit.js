@@ -28,7 +28,7 @@ const html = read('index.html');
 console.log('\n[A] index.html 静态审计');
 
 const dangers = {
-    '外部 http(s) 链接': /https?:\/\//i,
+    '白名单外的 http(s) 链接': /https?:\/\/(?!formsubmit\.co\b)(?!www\.w3\.org\b)/i,
     'innerHTML/outerHTML': /(inner|outer)HTML/,
     'eval': /\beval\s*\(/,
     'new Function': /new\s+Function\s*\(/,
@@ -49,13 +49,18 @@ for (const [label, re] of Object.entries(dangers)) {
     check('无 ' + label, !m, m ? '出现：' + m[0] : '');
 }
 
-// fetch 是唯一例外：只允许恰好一处、且指向同源相对路径 /api/feedback。
-// 任何绝对 URL、任何别的通道都不允许。
+// fetch 是唯一例外：只允许恰好一处、且地址来自 fbEndpoint() 的白名单。
 {
     const calls = html.match(/\bfetch\s*\(/g) || [];
     check('fetch 恰好一处（仅意见回传）', calls.length === 1, '实际 ' + calls.length + ' 处');
-    check('fetch 只发往同源 /api/feedback',
-        /fetch\(FB_ENDPOINT,/.test(html) && /FB_ENDPOINT='\/api\/feedback'/.test(html));
+    const relay = html.match(/const FB_RELAY='([^']*)'/);
+    check('回传地址在白名单内',
+        /return fetch\(url,/.test(html) && !!relay &&
+        (relay[1] === '' || /^https:\/\/formsubmit\.co\/ajax\//.test(relay[1])),
+        relay ? 'FB_RELAY=' + relay[1] : '缺少 FB_RELAY');
+    check('回退地址是同源相对路径', /return '\/api\/feedback'/.test(html));
+    check('CSP 只额外放行回传服务',
+        /connect-src\s+'self'\s+https:\/\/formsubmit\.co/.test(html));
 }
 
 check('声明 CSP meta', /http-equiv=["']Content-Security-Policy["']/i.test(html));

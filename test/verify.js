@@ -185,19 +185,26 @@ test('FB 弹窗可开关（点击按钮/关闭/Esc/点遮罩）', ()=>{
     must(/e\.key==='Escape'/.test(inlineJs),'缺少 Esc 关闭');
     must(/e\.target===fbEl\('fbMask'\)/.test(inlineJs),'点遮罩未关闭');
 });
-test('FB 提交：先复制兜底，再只向同源 /api/feedback 回传', ()=>{
-    must(/function copyToClipboard\(/.test(inlineJs),'缺少复制实现');
+test('FB 提交：先复制兜底，再只回传到白名单地址', ()=>{    must(/function copyToClipboard\(/.test(inlineJs),'缺少复制实现');
     must(/navigator\.clipboard[^;]*writeText/.test(inlineJs),'未使用 Clipboard API');
     must(/execCommand\('copy'\)/.test(inlineJs),'缺少 execCommand 降级');
-    // 网络调用必须恰好一处，且目标是同源相对路径
+    // 网络调用必须恰好一处
     const fetchCalls = inlineJs.match(/\bfetch\s*\(/g) || [];
     must(fetchCalls.length===1,'应恰好一处 fetch，实际 '+fetchCalls.length);
-    must(/const FB_ENDPOINT='\/api\/feedback'/.test(inlineJs),'回传地址必须是同源相对路径');
-    must(/fetch\(FB_ENDPOINT,/.test(inlineJs),'fetch 未指向 FB_ENDPOINT');
+    // 地址只能来自 fbEndpoint()，且候选项只有两个：FormSubmit 或本站相对路径
+    must(/function fbEndpoint\(/.test(inlineJs),'缺少 fbEndpoint()');
+    must(/return fetch\(url,/.test(inlineJs),'fetch 未使用 fbEndpoint() 的结果');
+    const relay = inlineJs.match(/const FB_RELAY='([^']*)'/);
+    must(relay,'缺少 FB_RELAY 常量');
+    if(relay) must(relay[1]===''||/^https:\/\/formsubmit\.co\/ajax\//.test(relay[1]),
+        'FB_RELAY 只允许空串或 https://formsubmit.co/ajax/ 开头');
+    must(/return '\/api\/feedback'/.test(inlineJs),'回退地址必须是同源相对路径');
     must(/keepalive:true/.test(inlineJs),'缺少 keepalive，关页时可能丢');
     must(/AbortController/.test(inlineJs)&&/abort\(\)/.test(inlineJs),'缺少 3 秒超时中断');
-    // 禁止任何外发/持久化
-    must(!/https?:\/\//.test(inlineJs),'出现绝对 URL，可能外发');
+    // 除回传服务外不允许任何绝对 URL
+    const abs = inlineJs.match(/https?:\/\/[^\s'"]+/g) || [];
+    const outside = abs.filter(u => !/^https:\/\/formsubmit\.co\//.test(u));
+    must(outside.length===0,'出现白名单外的绝对 URL：'+outside.join(', '));
     must(!/XMLHttpRequest|sendBeacon|WebSocket/.test(inlineJs),'出现其他网络通道');
     must(!/localStorage|sessionStorage|document\.cookie/.test(inlineJs),'提交写了存储');
     // 顺序保证：先复制，后发送

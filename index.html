@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<!-- 安全基线：除「同源」外不允许任何外部加载；connect-src 仅放行本站的 /api/feedback -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src data: blob:; connect-src 'self'; font-src 'none'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<!-- 安全基线：除「同源」与回传邮箱服务外不允许任何外部加载 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src data: blob:; connect-src 'self' https://formsubmit.co; font-src 'none'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <title>森林小屋 · 优化版 Three.js 场景</title>
 <style>
@@ -1252,7 +1252,14 @@ function setupSliders(){
 // 提交策略：先本地复制（永不丢），再向**同源** /api/feedback 静默回传一条。
 // 回传失败不影响任何人体验 —— 用户看到的只是「已复制」，粘给我就行。
 const FB_MAX=600;
-const FB_ENDPOINT='/api/feedback';
+// 回传地址：FormSubmit 无需注册，POST 即发邮件到下面这个邮箱（首次会发一封确认信，点一次即可）。
+// 留空则退回本站服务器的 /api/feedback；两种都不可用时只复制、不发送。
+// 想隐藏邮箱：激活后 FormSubmit 会给你一个编码地址（https://formsubmit.co/xxxxx），替换掉下面这行即可。
+const FB_RELAY='https://formsubmit.co/ajax/2820575692@qq.com';
+function fbEndpoint(){
+    if(FB_RELAY) return FB_RELAY;
+    return '/api/feedback';
+}
 function fbEl(id){ return document.getElementById(id); }
 function pad2(n){ return n<10?'0'+n:''+n; }
 function feedbackStamp(){
@@ -1291,23 +1298,40 @@ function copyToClipboard(text){
         if(ok) resolve(); else reject(new Error('浏览器不允许复制'));
     });
 }
-// 静默回传：只发往同源 /api/feedback，3 秒超时，任何失败都不抛错、不弹窗
+// 静默回传：只发往 fbEndpoint()，3 秒超时，任何失败都不抛错、不弹窗
 function sendFeedback(body){
     if(typeof fetch!=='function') return Promise.resolve(false);
+    const meta=(body&&body.meta)||{};
+    const text=(body&&body.text)||'';
+    // FormSubmit 收扁平字段，才会排成一张表发到邮箱
+    const payload=FB_RELAY?{
+        _subject:'【森林小屋】优化意见',
+        _captcha:'false',
+        _template:'table',
+        内容:text,
+        天气:meta.weather||'-',
+        画面:meta.screen||'-',
+        手机:meta.mobile?'是':'否',
+        浏览器:meta.ua||''
+    }:{text:text,meta:meta};
     let timer=null;
     try{
         const ctrl=(typeof AbortController==='function')?new AbortController():null;
         if(ctrl) timer=setTimeout(()=>ctrl.abort(),3000);
-        return fetch(FB_ENDPOINT,{
+        const url=fbEndpoint();
+        return fetch(url,{
             method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body:JSON.stringify(body),
+            headers:{'Content-Type':'application/json','Accept':'application/json'},
+            body:JSON.stringify(payload),
             credentials:'omit',
             keepalive:true,
             signal:ctrl?ctrl.signal:undefined
         }).then(r=>{
             if(timer) clearTimeout(timer);
-            return r.ok;
+            if(!r.ok) return false;
+            // FormSubmit 成功时回 {"success":"true"}；解析不了就当成功
+            return r.json().then(j=>String(j&&j.success||'').toLowerCase()==='true')
+                .catch(()=>true);
         }).catch(()=>{
             if(timer) clearTimeout(timer);
             return false;

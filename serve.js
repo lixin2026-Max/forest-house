@@ -46,7 +46,7 @@ const SEC_HEADERS = {
     'X-Frame-Options': 'DENY',
     'Referrer-Policy': 'no-referrer',
     'Content-Security-Policy': "default-src 'none'; script-src 'self' 'unsafe-inline'; " +
-        "style-src 'self' 'unsafe-inline'; img-src data: blob:; connect-src 'self'; " +
+        "style-src 'self' 'unsafe-inline'; img-src data: blob:; connect-src 'self' https://formsubmit.co; " +
         "object-src 'none'; base-uri 'none'; form-action 'none'"
 };
 
