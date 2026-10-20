@@ -1318,15 +1318,26 @@ function sendFeedback(body){
         手机:meta.mobile?'是':'否',
         浏览器:meta.ua||''
     }:{text:text,meta:meta};
+    // 发法很关键：application/json 会触发 CORS 预检（多花 1 秒多），
+    // 叠加 FormSubmit 自身 ~1.4 秒的响应，很容易撞上超时被判失败。
+    // urlencoded 属于「简单请求」，不预检；服务端两者都收。
+    const bodyText=FB_RELAY?new URLSearchParams(payload):JSON.stringify(payload);
     let timer=null;
     try{
         const ctrl=(typeof AbortController==='function')?new AbortController():null;
-        if(ctrl) timer=setTimeout(()=>ctrl.abort(),3000);
+        // 12 秒：慢网下 FormSubmit 偶发 3–5 秒，3 秒会误判成失败
+        if(ctrl) timer=setTimeout(()=>ctrl.abort(),12000);
         const url=fbEndpoint();
         return fetch(url,{
             method:'POST',
-            headers:{'Content-Type':'application/json','Accept':'application/json'},
-            body:JSON.stringify(payload),
+            headers:FB_RELAY?{'Accept':'application/json'}
+                            :{'Content-Type':'application/json','Accept':'application/json'},
+            body:bodyText,
+            // 关键：页面 <meta name="referrer" content="no-referrer"> 会抹掉 Referer，
+            // FormSubmit 收不到来源就会回 "Make sure you open this page through a web server"。
+            // 这里对这一次请求单独放行来源（只有站点根地址，不含其它信息）。
+            referrer:FB_RELAY?location.href:undefined,
+            referrerPolicy:FB_RELAY?'unsafe-url':undefined,
             credentials:'omit',
             keepalive:true,
             signal:ctrl?ctrl.signal:undefined

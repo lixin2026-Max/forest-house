@@ -98,7 +98,7 @@ test('AC6 所有被调用的函数都有定义', ()=>{
         .replace(/'[^'\n]*'/g,"''")
         .replace(/"[^"\n]*"/g,'""');
     // Promise 的 resolve/reject 是回调参数，不作为「未定义函数」处理
-    const builtin = /^(if|for|while|switch|return|typeof|new|function|catch|try|do|else|Error|Number|String|Boolean|Array|Object|Set|Map|JSON|Math|Date|Promise|Float32Array|Float64Array|Int32Array|Uint8Array|requestAnimationFrame|cancelAnimationFrame|setTimeout|clearTimeout|setInterval|console|THREE|resolve|reject|fetch|AbortController)$/;
+    const builtin = /^(if|for|while|switch|return|typeof|new|function|catch|try|do|else|Error|Number|String|Boolean|Array|Object|Set|Map|JSON|Math|Date|Promise|Float32Array|Float64Array|Int32Array|Uint8Array|requestAnimationFrame|cancelAnimationFrame|setTimeout|clearTimeout|setInterval|console|THREE|resolve|reject|fetch|AbortController|URLSearchParams|FormData|Event|CustomEvent|performance|location|navigator)$/;
     const calls = [...stripped.matchAll(/(?:^|[^\w$.])([a-zA-Z_$][\w$]*)\s*\(/g)].map(m=>m[1]);
     const missing = [...new Set(calls)].filter(n=>!defined.has(n) && !builtin.test(n));
     must(missing.length===0, 'undefined function calls: '+missing.join(', '));

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>referrer 修正验证</title>
+<style>
+  body{margin:0;background:#0b0f14;color:#cfd8e3;font:600 17px/1.6 ui-monospace,Consolas,monospace}
+  pre{margin:0;padding:18px;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<pre id="out">…</pre>
+<script>
+const out = document.getElementById('out');
+const lines = [];
+const log = () => { out.textContent = lines.join('\n'); };
+const EP = 'https://formsubmit.co/ajax/2820575692@qq.com';
+const body = () => new URLSearchParams({ 内容: 'referrer 验证 ' + Date.now(), _subject: '【楚门2.0】诊断', _captcha: 'false' });
+
+async function hit(label, extra) {
+    try {
+        const r = await fetch(EP, Object.assign({
+            method: 'POST', headers: { 'Accept': 'application/json' }, body: body(), credentials: 'omit'
+        }, extra));
+        const txt = await r.text();
+        lines.push(label + ' → HTTP ' + r.status + '\n   ' + txt.slice(0, 190));
+    } catch (e) {
+        lines.push(label + ' → 抛错 ' + e.name + ' ' + e.message);
+    }
+    log();
+}
+
+(async () => {
+    lines.push('origin: ' + location.origin);
+    lines.push('文档 referrer meta: ' + (document.querySelector('meta[name="referrer"]') ? 'no-referrer（会抹掉 Referer）' : '无'));
+    lines.push('');
+    log();
+
+    await hit('① 现状（无 referrer）', {});
+    await new Promise(r => setTimeout(r, 500));
+    await hit('② referrer + unsafe-url', { referrer: location.href, referrerPolicy: 'unsafe-url' });
+    await new Promise(r => setTimeout(r, 500));
+    await hit('③ 只给 referrerPolicy', { referrerPolicy: 'unsafe-url' });
+})();
+</script>
+</body>
+</html>

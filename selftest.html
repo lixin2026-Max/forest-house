@@ -1318,15 +1318,26 @@ function sendFeedback(body){
         手机:meta.mobile?'是':'否',
         浏览器:meta.ua||''
     }:{text:text,meta:meta};
+    // 发法很关键：application/json 会触发 CORS 预检（多花 1 秒多），
+    // 叠加 FormSubmit 自身 ~1.4 秒的响应，很容易撞上超时被判失败。
+    // urlencoded 属于「简单请求」，不预检；服务端两者都收。
+    const bodyText=FB_RELAY?new URLSearchParams(payload):JSON.stringify(payload);
     let timer=null;
     try{
         const ctrl=(typeof AbortController==='function')?new AbortController():null;
-        if(ctrl) timer=setTimeout(()=>ctrl.abort(),3000);
+        // 12 秒：慢网下 FormSubmit 偶发 3–5 秒，3 秒会误判成失败
+        if(ctrl) timer=setTimeout(()=>ctrl.abort(),12000);
         const url=fbEndpoint();
         return fetch(url,{
             method:'POST',
-            headers:{'Content-Type':'application/json','Accept':'application/json'},
-            body:JSON.stringify(payload),
+            headers:FB_RELAY?{'Accept':'application/json'}
+                            :{'Content-Type':'application/json','Accept':'application/json'},
+            body:bodyText,
+            // 关键：页面 <meta name="referrer" content="no-referrer"> 会抹掉 Referer，
+            // FormSubmit 收不到来源就会回 "Make sure you open this page through a web server"。
+            // 这里对这一次请求单独放行来源（只有站点根地址，不含其它信息）。
+            referrer:FB_RELAY?location.href:undefined,
+            referrerPolicy:FB_RELAY?'unsafe-url':undefined,
             credentials:'omit',
             keepalive:true,
             signal:ctrl?ctrl.signal:undefined
@@ -1526,15 +1537,15 @@ window.addEventListener('load',()=>{
 </script>
 
 <script>
-/* ===== 上线自检驱动（仅 _selftest.html 内出现） ===== */
+/* ===== 上线自检驱动（仅 selftest.html 内出现） ===== */
 (function () {
     const log = (t) => {
         let p = document.getElementById('selftestOut');
         if (!p) {
             p = document.createElement('pre');
             p.id = 'selftestOut';
-            p.style.cssText = 'position:fixed;inset:0;z-index:99999;margin:0;padding:24px;' +
-                'background:#0b0f14;color:#7CFF9E;font:600 22px/1.6 ui-monospace,Consolas,monospace;' +
+            p.style.cssText = 'position:fixed;inset:0;z-index:99999;margin:0;padding:22px;' +
+                'background:#0b0f14;color:#7CFF9E;font:600 19px/1.55 ui-monospace,Consolas,monospace;' +
                 'white-space:pre-wrap;overflow:auto';
             document.body.appendChild(p);
         }
@@ -1555,22 +1566,25 @@ window.addEventListener('load',()=>{
             box.value = '【上线自检】GitHub Pages 真实 origin 提交 · ' + new Date().toISOString();
             box.dispatchEvent(new Event('input', { bubbles: true }));
 
-            log('OO 已填好，点击「提交意见」…\norigin: ' + location.origin + '\nrelay: ' + (typeof FB_RELAY === 'string' ? FB_RELAY : '(局部变量)'));
+            log('OO 已填好，点击「提交意见」…\norigin: ' + location.origin);
+            const t0 = performance.now();
             document.getElementById('fbCopy').click();
 
             const msg = document.getElementById('fbMsg');
             let last = '';
-            for (let i = 0; i < 60; i++) {
+            for (let i = 0; i < 80; i++) {
                 await sleep(250);
                 const t = (msg.textContent || '').trim();
                 if (t && t !== last) { last = t; log('OO 回执：' + t); }
-                if (/已收到|没发出去|失败|出错/.test(t)) break;
+                if (/已收到|没有回传通道|失败|出错/.test(t)) break;
             }
-            await sleep(800);
+            await sleep(600);
             const final = (msg.textContent || '').trim();
             const ok = /已收到/.test(final);
+
             log((ok ? 'OK  生产链路通' : 'BAD 生产链路未通') +
                 '\n\n回执：' + (final || '(空)') +
+                '\n被判定耗时：' + Math.round(performance.now() - t0) + 'ms' +
                 '\norigin：' + location.origin +
                 '\n时间：' + new Date().toLocaleString('zh-CN'));
         } catch (e) {

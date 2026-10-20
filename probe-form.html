@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>FormSubmit 发法诊断</title>
+<style>
+  body{margin:0;background:#0b0f14;color:#cfd8e3;font:600 17px/1.55 ui-monospace,Consolas,monospace}
+  pre{margin:0;padding:20px;white-space:pre-wrap}
+  .ok{color:#7CFF9E}.bad{color:#FF8A8A}.warn{color:#FFD479}
+</style>
+</head>
+<body>
+<pre id="out">…</pre>
+<script>
+const EP = 'https://formsubmit.co/ajax/2820575692@qq.com';
+const out = document.getElementById('out');
+let lines = [];
+function add(s){ lines.push(s); out.textContent = lines.join('\n'); }
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function probe(name, init, timeoutMs) {
+    const t0 = performance.now();
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs || 8000);
+    let s = '【' + name + '】';
+    try {
+        const r = await fetch(EP, Object.assign({ signal: ctrl.signal }, init));
+        clearTimeout(timer);
+        const body = await r.text();
+        const ms = Math.round(performance.now() - t0);
+        s += ' HTTP ' + r.status + ' / ' + ms + 'ms\n    ' + body.slice(0, 220);
+    } catch (e) {
+        clearTimeout(timer);
+        s += ' 抛错(' + Math.round(performance.now() - t0) + 'ms): ' + e.name + ' ' + e.message +
+             (e.name === 'AbortError' ? '  ← 超时' : '  ← 多为 CORS 预检被拒');
+    }
+    add(s);
+}
+
+const base = { 内容: '诊断 ' + new Date().toISOString(), _subject: '【楚门2.0】诊断', _captcha: 'false' };
+
+(async () => {
+    add('origin: ' + location.origin + '\nEP: ' + EP + '\n');
+
+    await probe('A application/json（现在的写法）', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(base)
+    });
+
+    await sleep(600);
+    await probe('B x-www-form-urlencoded（不触发预检）', {
+        method: 'POST',
+        headers: { 'Accept': 'application/json' },
+        body: new URLSearchParams(base)
+    });
+
+    await sleep(600);
+    await probe('C multipart FormData（不触发预检）', {
+        method: 'POST',
+        headers: { 'Accept': 'application/json' },
+        body: (() => { const fd = new FormData(); for (const k in base) fd.append(k, base[k]); return fd; })()
+    });
+
+    await sleep(600);
+    await probe('D text/plain 裸 JSON（不触发预检）', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8', 'Accept': 'application/json' },
+        body: JSON.stringify(base)
+    });
+
+    add('\n—— 结束 ——');
+})();
+</script>
+</body>
+</html>
