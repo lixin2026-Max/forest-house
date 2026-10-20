@@ -1,6 +1,6 @@
 # 森林小屋 Three.js 场景 — 修复与优化报告
 
-> 状态：**已可正常启动** ｜ verify 35/35 + smoke 全通过 + security 53/53 + feedback-e2e 17/17 ｜ 五种天气 + 手机竖屏/横屏已逐张实机渲染验证
+> 状态：**已可正常启动** ｜ verify 38/38 + smoke 全通过 + security 全通过 + feedback-e2e 17/17 + subpath 4/4 ｜ 五种天气 + 手机竖屏/横屏已逐张实机渲染验证
 
 ## 交付物
 ```
@@ -249,18 +249,24 @@ POST/PUT 405、非白名单扩展名 403、目录不列清单、安全响应头�
 
 ```
 点「提交意见」
-  ├─ ① 先 copyToClipboard()  ← 不依赖网络，永远可用
-  └─ ② 再 fetch('/api/feedback')  ← keepalive + AbortController 3 秒超时
+  ├─ ① 先 copyToClipboard()        ← 不依赖网络，永远可用
+  └─ ② 再 POST FB_RELAY            ← keepalive + AbortController 3 秒超时
+        ├─ FB_RELAY 有值  → https://formsubmit.co/ajax/<邮箱>，转发成邮件
+        └─ FB_RELAY 为空  → '/api/feedback'，落到本地 feedback.jsonl
         ├─ ok   → 「✅ 已收到，谢谢！」
         └─ 失败 → 「✅ 已复制到剪贴板 —— 这条链接没有回传通道，粘到聊天里发我即可。」
 ```
 
 关键设计：
-- **顺序不可颠倒**：先复制后发送。纯静态托管（GitHub Pages 等）没有后端，`fetch` 必然失败，
+- **顺序不可颠倒**：先复制后发送。纯静态托管（GitHub Pages 等）没有后端，直连后端那条路必然失败，
   但用户内容一定在剪贴板里，不会白写一场。
 - **失败静默**：任何异常都在 `.catch()` 里转成 `false`，不弹错误框、不打断操作。
-- **只发同源相对路径**：`const FB_ENDPOINT='/api/feedback';`，没有绝对 URL；CSP `connect-src 'self'` 兜底。
-- **不带身份**：只带 `天气 / 画面尺寸 / 是否手机 / UA` 用于复现，不生成 ID、不写 cookie、不写 localStorage。
+- **两条回传通道，切换只改一个常量**：`FB_RELAY` 有值走 FormSubmit（静态托管的默认）；
+  留空串则退回同源 `'/api/feedback'`。CSP `connect-src 'self' https://formsubmit.co` 把两者都放行、别的一律禁掉。
+- **不带身份**：只带 `天气 / 画面尺寸 / 是否手机 / UA` 用于复现，不生成 ID、不写 cookie、不写 localStorage；
+  `fetch` 带 `credentials:'omit'`。
+- **第三方边界要讲明白**：走 FormSubmit 时文字会经过 formsubmit.co 再转发到 `2820575692@qq.com`，
+  `手机上打开.md` 的安全章已如实写明，也写了怎么绕开它。
 
 服务端（`serve.js`）：
 

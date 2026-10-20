@@ -149,8 +149,12 @@ if(typeof THREE==='undefined'){
 
 /* ==================== 全局状态 ==================== */
 let scene, camera, renderer, controls, clock;
-// 移动端降档：小屏或触屏设备降低像素比、阴影分辨率与实例数量
-const IS_MOBILE = (typeof navigator!=='undefined' && /Android|iPhone|iPad|iPod|Mobile|HarmonyOS/i.test(navigator.userAgent))
+// 触屏设备：只有它才该整体旋转成横屏。桌面窄窗口不能被转，否则界面会歪掉
+const IS_TOUCH = (typeof navigator!=='undefined' && /Android|iPhone|iPad|iPod|Mobile|HarmonyOS/i.test(navigator.userAgent))
+    || (typeof window!=='undefined' && typeof window.matchMedia==='function'
+        && window.matchMedia('(pointer:coarse)').matches);
+// 移动端降档：触屏 或 小屏，都降低像素比、阴影分辨率与实例数量
+const IS_MOBILE = IS_TOUCH
     || (typeof window!=='undefined' && Math.min(window.innerWidth||1920, window.innerHeight||1080) < 820);
 let weatherIndex = 0;
 // 竖屏时整体旋转 90°；画面尺寸随旋转交换
@@ -160,7 +164,7 @@ const LAYOUT = {w: (typeof window!=='undefined'?window.innerWidth:1280)||1280,
 function measureLayout(){
     const iw=(typeof window!=='undefined'?window.innerWidth:1280)||1280;
     const ih=(typeof window!=='undefined'?window.innerHeight:720)||720;
-    ROT = IS_MOBILE && ih > iw+2;
+    ROT = IS_TOUCH && ih > iw+2;
     LAYOUT.w = ROT ? ih : iw;
     LAYOUT.h = ROT ? iw : ih;
     return LAYOUT;

@@ -161,7 +161,7 @@ test('MOBILE 有窄屏媒体查询', ()=>{
 });
 test('MOBILE 竖屏自动转横屏（CSS 旋转 + 尺寸交换）', ()=>{
     must(/body\.rot90\s+#app\{[^}]*rotate\(90deg\)/.test(html),'缺少 rot90 旋转规则');
-    must(/ROT\s*=\s*IS_MOBILE\s*&&\s*ih\s*>\s*iw/.test(inlineJs),'缺少竖屏判定');
+    must(/ROT\s*=\s*IS_TOUCH\s*&&\s*ih\s*>\s*iw/.test(inlineJs),'缺少竖屏判定（且必须用 IS_TOUCH，不能用 IS_MOBILE）');
     must(/LAYOUT\.w\s*=\s*ROT\s*\?\s*ih\s*:\s*iw/.test(inlineJs),'缺少尺寸交换');
 });
 test('MOBILE 旋转后触摸拖动方向已补偿', ()=>{
@@ -170,6 +170,21 @@ test('MOBILE 旋转后触摸拖动方向已补偿', ()=>{
 test('MOBILE 性能降档生效（阴影/实例数量）', ()=>{
     must(/mapSize\.set\(IS_MOBILE\?1024:2048/.test(inlineJs),'阴影分辨率未降档');
     must(/IS_MOBILE\?140:260/.test(inlineJs),'草地实例未降档');
+});
+
+// ---------- AC9: 部署与端侧判定 ----------
+test('ROT 只对触屏生效（桌面窄窗口不被旋转）', ()=>{
+    must(/const IS_TOUCH\s*=/.test(inlineJs), '缺少 IS_TOUCH');
+    must(/ROT\s*=\s*IS_TOUCH\s*&&/.test(inlineJs), 'ROT 未改用 IS_TOUCH，窄窗口桌面会被转歪');
+    must(/pointer:coarse/.test(inlineJs), '缺少触屏媒体查询');
+});
+test('资源用相对路径（GitHub Pages 子路径可用）', ()=>{
+    must(/<script src="js\/three\.min\.js">/.test(html), 'three.js 不是相对路径');
+    const abs = [...html.matchAll(/(?:src|href)\s*=\s*["'](\/[^/"'][^"']*)["']/g)].map(m=>m[1]);
+    must(abs.length === 0, '存在以 / 开头的绝对路径：' + abs.join(', '));
+});
+test('GitHub Pages 需要的 .nojekyll 存在', ()=>{
+    must(fs.existsSync(path.join(root, '.nojekyll')), '缺少 .nojekyll');
 });
 
 // ---------- AC8: 优化意见弹窗 ----------

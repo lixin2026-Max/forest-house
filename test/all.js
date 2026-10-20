@@ -8,7 +8,8 @@ const SUITES = [
     ['verify.js', '静态验收'],
     ['smoke.js', '运行时冒烟'],
     ['security-audit.js', '安全审计'],
-    ['feedback-e2e.js', '意见接口端到端']
+    ['feedback-e2e.js', '意见接口端到端'],
+    ['subpath-check.js', '子路径部署（GitHub Pages）']
 ];
 
 let failed = 0;

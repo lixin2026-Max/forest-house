@@ -1,0 +1,21 @@
+#!/bin/sh
+# 提交前自动跑全套回归：node test/all.js
+# 装法：cp test/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+# 跳过：git commit --no-verify
+NODE="C:/Users/Lenovo/AppData/Local/Programs/DeepSeek Harness/resources/runtime/primary-runtime/dependencies/node/bin/node.exe"
+if [ ! -x "$NODE" ]; then
+    NODE="$(command -v node)"
+fi
+if [ -z "$NODE" ]; then
+    echo "[pre-commit] 找不到 node，跳过回归" >&2
+    exit 0
+fi
+echo "[pre-commit] 跑回归测试…"
+"$NODE" test/all.js
+if [ $? -ne 0 ]; then
+    echo "" >&2
+    echo "[pre-commit] ✗ 回归未通过，提交已阻止" >&2
+    echo "           确要提交请用：git commit --no-verify" >&2
+    exit 1
+fi
+exit 0
