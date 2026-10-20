@@ -8,6 +8,7 @@ feedback.jsonl
 # 临时预览页（由 test/make-*.js 生成）
 _fbtmp.html
 _fbsubmit.html
+_fbprod.html
 
 # 测试跑出来的截图：每次重跑都变，不进版本库
 #（要长期留存的图放 docs/screenshots/，见 report.md）
