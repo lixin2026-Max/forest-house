@@ -98,7 +98,7 @@ test('AC6 所有被调用的函数都有定义', ()=>{
         .replace(/'[^'\n]*'/g,"''")
         .replace(/"[^"\n]*"/g,'""');
     // Promise 的 resolve/reject 是回调参数，不作为「未定义函数」处理
-    const builtin = /^(if|for|while|switch|return|typeof|new|function|catch|try|do|else|Error|Number|String|Boolean|Array|Object|Set|Map|JSON|Math|Date|Promise|Float32Array|Float64Array|Int32Array|Uint8Array|requestAnimationFrame|cancelAnimationFrame|setTimeout|clearTimeout|setInterval|clearInterval|console|THREE|resolve|reject|fetch|AbortController|URLSearchParams|FormData|Event|CustomEvent|performance|location|navigator)$/;
+    const builtin = /^(if|for|while|switch|return|typeof|new|function|catch|try|do|else|Error|Number|String|Boolean|Array|Object|Set|Map|JSON|Math|Date|Promise|Float32Array|Float64Array|Int32Array|Uint8Array|requestAnimationFrame|cancelAnimationFrame|setTimeout|clearTimeout|setInterval|clearInterval|console|THREE|parseInt|parseFloat|isNaN|localStorage|resolve|reject|fetch|AbortController|URLSearchParams|FormData|Event|CustomEvent|performance|location|navigator)$/;
     const calls = [...stripped.matchAll(/(?:^|[^\w$.])([a-zA-Z_$][\w$]*)\s*\(/g)].map(m=>m[1]);
     const missing = [...new Set(calls)].filter(n=>!defined.has(n) && !builtin.test(n));
     must(missing.length===0, 'undefined function calls: '+missing.join(', '));
@@ -285,7 +285,12 @@ test('FB 提交：先复制兜底，再只回传到白名单地址', ()=>{    mu
     const outside = abs.filter(u => !/^https:\/\/formsubmit\.co\//.test(u));
     must(outside.length===0,'出现白名单外的绝对 URL：'+outside.join(', '));
     must(!/XMLHttpRequest|sendBeacon|WebSocket/.test(inlineJs),'出现其他网络通道');
-    must(!/localStorage|sessionStorage|document\.cookie/.test(inlineJs),'提交写了存储');
+    // 全页只允许一个本地计数键（轻量访问统计，不上传），不允许别的存储
+    must(!/sessionStorage|document\.cookie/.test(inlineJs),'出现未授权的存储');
+    const lsKeys = [...inlineJs.matchAll(/localStorage\.(?:getItem|setItem)\('([^']+)'/g)].map(m=>m[1]);
+    const badKeys = lsKeys.filter(k => k !== 'ct2_visits');
+    must(badKeys.length===0,'出现未授权的本地存储键：'+badKeys.join(', '));
+    must(!/localStorage\.(?:getItem|setItem)\((?!'ct2_visits')/.test(inlineJs),'存在动态拼接的存储键');
     // 顺序保证：先复制，后发送
     const iCopy = inlineJs.indexOf('copyToClipboard(text).then(');
     const iSend = inlineJs.indexOf('sendFeedback({');
@@ -333,6 +338,36 @@ test('模块隔离：每帧只驱动开着的模块', ()=>{
     const m = inlineJs.match(/function updateModules\(dt, t\)\{[\s\S]*?\n\}/);
     must(m, '找不到 updateModules');
     must(/FEAT\[k\]\.on && h && h\.update/.test(m[0]), 'updateModules 未按模块分发');
+});
+
+// ---------- 全局部署模块（与场景功能互不冲突） ----------
+test('全局模块：加载兜底 + 进度数字 + 失败降级', ()=>{
+    must(/<div id="boot"/.test(html), '缺少加载兜底层');
+    must(/id="bootBar"/.test(html) && /id="bootPct"/.test(html), '缺少进度条/百分比数字');
+    must(/function bootTo\(/.test(inlineJs) && /function bootDone\(/.test(inlineJs), '缺少 bootTo/bootDone');
+    must(/function bootFail\(/.test(inlineJs), '缺少 bootFail 兜底');
+    must(/bootDone\(\);/.test(inlineJs), 'init 成功后未收起加载层');
+    // 资源加载失败降级：捕获 script/link/img 的 error
+    must(/addEventListener\('error',\s*function\(ev\)/.test(inlineJs), '未监听资源 error');
+    must(/tagName==='SCRIPT'\|\|t\.tagName==='LINK'/.test(inlineJs), '未识别 script/link 失败');
+    must(/webglcontextlost/.test(inlineJs), '未处理 WebGL 上下文丢失');
+});
+
+test('全局模块：访问统计只存本地，不发网络请求', ()=>{
+    must(/localStorage\.setItem\('ct2_visits'/.test(inlineJs), '缺少本地访问计数');
+    // setupGlobal 里只要不出现 fetch/XHR 就算达标（全页 fetch 仍只允许回传意见那一处）
+    const seg = inlineJs.slice(inlineJs.indexOf('function setupGlobal()'), inlineJs.indexOf('window.addEventListener(\'load\''));
+    must(seg.length > 0, '找不到 setupGlobal');
+    must(!/fetch\s*\(|XMLHttpRequest/.test(seg), '全局模块里出现了网络请求（统计应只存本地）');
+});
+
+test('全局模块：分享链接 / 弱网低画质 / 版本日志 / 免责声明', ()=>{
+    must(/id="shareBtn"/.test(html), '缺分享按钮');
+    must(/location\.href\.split\('#'\)\[0\]/.test(inlineJs), '分享的是带 hash 的地址');
+    must(/id="lowqBtn"/.test(html) && /function applyLowQuality\(/.test(inlineJs), '缺弱网低画质开关');
+    must(/dprCur=1;/.test(inlineJs), '低画质未降到 1 倍像素比');
+    must(/const VERSIONS = \[/.test(inlineJs) && /id="mpVer"/.test(html), '缺版本日志');
+    must(/class="mpDisclaimer"/.test(html), '缺共创免责声明');
 });
 
 console.log('\n====================');

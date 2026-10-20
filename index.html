@@ -128,6 +128,29 @@
     .mpMute{font-family:inherit;font-size:12px;padding:8px;border-radius:8px;cursor:pointer;
         border:1px solid rgba(140,220,140,.35);background:rgba(30,50,30,.9);color:#ffe0a0}
     .mpMute.on{background:#3f8f4a;border-color:#5fb86b;color:#fff}
+    /* ===== 全局部署模块（加载兜底 / 分享 / 低画质 / 统计 / 版本 / 免责） ===== */
+    #boot{position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;
+      background:radial-gradient(120% 90% at 50% 20%,#1b2a20 0%,#0b1310 70%);
+      transition:opacity .45s ease;color:#dff0e2}
+    #boot.hide{opacity:0;pointer-events:none}
+    .bootBox{width:min(78vw,320px);text-align:center;font:600 14px/1.7 ui-monospace,Consolas,monospace}
+    .bootTitle{font-size:17px;letter-spacing:1px;margin-bottom:10px;color:#bfe8c6}
+    .bootMsg{font-size:12px;opacity:.85;margin-bottom:12px;min-height:20px}
+    .bootBar{height:4px;border-radius:3px;background:rgba(255,255,255,.14);overflow:hidden}
+    .bootBar i{display:block;height:100%;width:0;border-radius:3px;
+      background:linear-gradient(90deg,#7ed08a,#4fa8d8);transition:width .3s ease}
+    .bootPct{font-size:11px;opacity:.7;margin-top:7px}
+    .bootTip{font-size:11px;opacity:.6;margin-top:14px;line-height:1.6}
+    .mpGlobal{display:grid;grid-template-columns:1fr;gap:6px;margin:2px 0 6px}
+    .mpGlobal button{padding:8px 6px;font-size:12px;border-radius:8px;cursor:pointer;
+      background:rgba(255,255,255,.07);border:1px solid rgba(160,220,170,.30);color:#cfe8cf}
+    .mpGlobal button:active{transform:scale(.985)}
+    .mpToggle.on{background:#3f8f4a;border-color:#5fb86b;color:#fff}
+    .mpStat{font-size:11px;opacity:.62;margin:0 0 4px;line-height:1.6}
+    .mpVer{font-size:11px;line-height:1.75;opacity:.82;margin-bottom:8px}
+    .mpVer b{color:#bfe8c6;font-weight:700}
+    .mpDisclaimer{font-size:10.5px;line-height:1.7;opacity:.55;
+      border-left:2px solid rgba(120,210,130,.35);padding-left:8px}
     .mpTip{font-size:10.5px;color:#7f9f7f}
 
     @media (max-width:600px),(pointer:coarse){
@@ -179,6 +202,16 @@
 </style>
 </head>
 <body>
+<!-- 加载兜底：场景没起来之前先给一句人话，而不是白屏 -->
+<div id="boot">
+    <div class="bootBox">
+        <div class="bootTitle">🌍 楚门的2.0世界</div>
+        <div class="bootMsg" id="bootMsg">正在准备场景…</div>
+        <div class="bootBar"><i id="bootBar"></i></div>
+        <div class="bootPct" id="bootPct">0%</div>
+        <div class="bootTip" id="bootTip"></div>
+    </div>
+</div>
 <div id="app">
 <div id="scene"></div>
 <div id="ui">
@@ -209,6 +242,20 @@
     <div class="mpSound">
         <button type="button" id="muteBtn" class="mpMute">🔇 声音已关闭</button>
         <span class="mpTip">浏览器要求先点一下才能出声</span>
+    </div>
+    <div class="mpSep"></div>
+    <div class="mpSub">全局</div>
+    <div class="mpGlobal">
+        <button type="button" id="shareBtn">🔗 复制分享链接</button>
+        <button type="button" id="lowqBtn" class="mpToggle">📶 弱网低画质：关</button>
+    </div>
+    <div class="mpStat" id="mpStat"></div>
+    <div class="mpSep"></div>
+    <div class="mpSub">版本日志</div>
+    <div class="mpVer" id="mpVer"></div>
+    <div class="mpDisclaimer">
+        本世界为开放式共创，访客提交的构想、命名与素材需经负责人审核后才会进入公共场景；
+        你桌面上的私人调整只保存在本机浏览器，不影响他人。
     </div>
 </div>
 
@@ -241,6 +288,9 @@
 
 /* ==================== 启动保护 ==================== */
 function showFatal(msg){
+    // 出错时先把加载层收掉，避免两层提示叠在一起
+    var b=document.getElementById('boot');
+    if(b) b.style.display='none';
     var el=document.getElementById('error');
     el.style.display='block';
     el.textContent='⚠ 场景无法启动\n\n'+msg+
@@ -2003,6 +2053,7 @@ function setupModules(){
 
     if(audioTimer) clearInterval(audioTimer);
     audioTimer = setInterval(audioTick, 250);
+    setupGlobal();
     refreshModUI();
 }
 function updateModules(dt, t){
@@ -2055,6 +2106,7 @@ function perfTick(dt){
 
 function init(){
     try{
+        bootTo(18,'准备渲染器…');
         renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
         updateOrientation();
         renderer.setSize(LAYOUT.w,LAYOUT.h);
@@ -2138,8 +2190,10 @@ function init(){
     if(_hi>0) setWeather(_hi,true);
     // 所有材质就位后统一转线性空间（sRGB 输出下才不会被冲淡成灰白）
     linearizeMaterials(scene);
+    bootTo(94,'收尾…');
     animate();
     document.getElementById('status').textContent='✅ 运行中';
+    bootDone();
 }
 function onResize(){
     updateOrientation();
@@ -2151,9 +2205,122 @@ function onResize(){
         renderer.setPixelRatio(dprCur);
 }
 window.addEventListener('orientationchange',()=>setTimeout(onResize,220));
+/* ---------- 全局部署模块：加载兜底 / 资源降级 / 访问统计 / 分享 / 弱网低画质 / 版本日志 ----------
+   这一层和场景功能完全无关，只依赖 DOM，出问题不影响场景渲染。 */
+const VERSIONS = [
+    { v:'v3.2', d:'2026-10-21', n:'模块生命周期钩子、维护规范、线上实探' },
+    { v:'v3.1', d:'2026-10-20', n:'自动漫游、6 套色调、自适应分辨率、电脑端自适应' },
+    { v:'v3',   d:'2026-10-20', n:'9:16 竖屏、8 个可插拔开关、程序化音频、粒子与视角' },
+    { v:'v2',   d:'2026-10-20', n:'CSP 与安全加固、手机适配、意见通道' },
+    { v:'v1',   d:'2026-10-20', n:'森林小屋、向日葵、蝴蝶蜜蜂、五种天气' }
+];
+
+function bootTo(p, msg){
+    const bar=document.getElementById('bootBar'), pct=document.getElementById('bootPct');
+    const m=document.getElementById('bootMsg');
+    if(bar) bar.style.width=Math.max(0,Math.min(100,p))+'%';
+    if(pct) pct.textContent=Math.round(p)+'%';
+    if(msg && m) m.textContent=msg;
+}
+function bootDone(){
+    const b=document.getElementById('boot');
+    if(!b) return;
+    bootTo(100,'完成');
+    setTimeout(function(){ b.classList.add('hide'); }, 200);
+    setTimeout(function(){ b.style.display='none'; }, 900);
+}
+function bootFail(msg){
+    const b=document.getElementById('boot');
+    if(!b) return;
+    const m=document.getElementById('bootMsg');
+    if(m){ m.textContent=msg; m.style.color='#ff9a9a'; }
+    const t=document.getElementById('bootTip');
+    if(t) t.textContent='可以刷新重试；如果一直这样，可能是浏览器不支持 WebGL，或脚本被拦截。';
+}
+
+let lowQuality=false;
+function applyLowQuality(){
+    const lq=document.getElementById('lowqBtn');
+    if(lq){
+        lq.classList.toggle('on', lowQuality);
+        lq.textContent='📶 弱网低画质：'+(lowQuality?'开':'关');
+    }
+    if(!renderer) return;
+    if(lowQuality){
+        dprCur=1;
+        if(renderer.setPixelRatio) renderer.setPixelRatio(1);
+        if(FEAT.particles && FEAT.particles.on) toggleFeat('particles', false);
+    }else{
+        dprCur=Math.min(window.devicePixelRatio||1, DPR_CAP);
+        if(renderer.setPixelRatio) renderer.setPixelRatio(dprCur);
+        if(FEAT.particles && !FEAT.particles.on) toggleFeat('particles', true);
+    }
+}
+
+function setupGlobal(){
+    /* 访问统计：只在本机浏览器累加，不上传任何请求 */
+    let visits=1;
+    try{
+        visits=(parseInt(localStorage.getItem('ct2_visits')||'0',10)||0)+1;
+        localStorage.setItem('ct2_visits', String(visits));
+    }catch(e){ /* 隐私模式禁用存储时静默跳过 */ }
+    const st=document.getElementById('mpStat');
+    if(st) st.textContent='你第 '+visits+' 次来到这里 · 这个数字只存在本机浏览器，不上传';
+
+    /* 版本日志 */
+    const vw=document.getElementById('mpVer');
+    if(vw){
+        vw.textContent='';
+        VERSIONS.forEach(function(v){
+            const d=document.createElement('div');
+            const b=document.createElement('b');
+            b.textContent=v.v+' ';
+            d.appendChild(b);
+            d.appendChild(document.createTextNode(v.d+' · '+v.n));
+            vw.appendChild(d);
+        });
+    }
+
+    /* 一键复制分享链接 */
+    const sb=document.getElementById('shareBtn');
+    if(sb) sb.addEventListener('click', function(){
+        const url=location.href.split('#')[0];
+        if(typeof copyToClipboard==='function') copyToClipboard(url);
+        sb.textContent='✅ 链接已复制';
+        setTimeout(function(){ sb.textContent='🔗 复制分享链接'; }, 1600);
+    });
+
+    /* 弱网低画质 */
+    const lq=document.getElementById('lowqBtn');
+    if(lq) lq.addEventListener('click', function(){ lowQuality=!lowQuality; applyLowQuality(); });
+
+    /* 资源加载失败降级：脚本/样式/图片 404 时给一句人话，而不是白屏 */
+    window.addEventListener('error', function(ev){
+        const t=ev.target;
+        if(t && (t.tagName==='SCRIPT'||t.tagName==='LINK'||t.tagName==='IMG')){
+            const name=t.src||t.href||'资源';
+            if(typeof showFatal==='function')
+                showFatal('资源加载失败：'+name+'\n离线双文件版需要 js/three.min.js 与本页同目录。');
+        }
+    }, true);
+
+    /* 显卡上下文丢失：给出可操作提示，而不是静默卡死 */
+    if(renderer && renderer.domElement){
+        renderer.domElement.addEventListener('webglcontextlost', function(e){
+            e.preventDefault();
+            if(typeof showFatal==='function')
+                showFatal('显卡上下文丢失（常见于显存不足或切换显卡）。刷新页面即可恢复。');
+        }, false);
+    }
+}
+
 window.addEventListener('load',()=>{
     try{ init(); }
-    catch(e){ showFatal('初始化异常：'+e.message+'\n'+(e.stack||'')); throw e; }
+    catch(e){
+        bootFail('初始化失败：'+e.message);
+        showFatal('初始化异常：'+e.message+'\n'+(e.stack||''));
+        throw e;
+    }
 });
 </script>
 </body>

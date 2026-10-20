@@ -28,3 +28,7 @@ tunnel-url.txt
 Thumbs.db
 .vscode/
 *.bak
+
+boottest.html
+bootsafe.html
+paneltest.html

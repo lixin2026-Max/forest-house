@@ -32,7 +32,8 @@ const dangers = {
     'innerHTML/outerHTML': /(inner|outer)HTML/,
     'eval': /\beval\s*\(/,
     'new Function': /new\s+Function\s*\(/,
-    'localStorage': /localStorage/,
+    // 只允许一个本地计数键 ct2_visits（轻量访问统计，不上传）；其余 localStorage 用法一律不许
+    'localStorage（非计数键）': /localStorage\.(?:getItem|setItem)\((?!'ct2_visits')/,
     'sessionStorage': /sessionStorage/,
     'document.cookie': /document\.cookie/,
     'XMLHttpRequest': /XMLHttpRequest/,

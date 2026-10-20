@@ -1,4 +1,4 @@
-// 打开功能面板并截图，验证开关 / 视角 / 色调 / 静音按钮都在位。
+// 生成 paneltest.html：打开功能面板并把面板放开（不裁切），用于截图核对全局区。
 const fs = require('fs');
 const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
@@ -8,12 +8,16 @@ const inject = `
 <script>
 setTimeout(function(){
     var p = document.getElementById('modPanel');
-    if (p) p.classList.add('on');
-    var b = document.getElementById('modBtn');
-    if (b) b.style.outline = '2px solid #ff0';
+    if(!p) return;
+    p.classList.add('on');
+    // 放开面板高度限制，把整块内容一次性摊开（仅截图用）
+    p.style.maxHeight = 'none';
+    p.style.bottom = '6px';
+    p.style.top = '6px';
+    p.style.overflow = 'visible';
 }, 1500);
 </script>
 </body>`;
 
 fs.writeFileSync(path.join(ROOT, 'paneltest.html'), src.replace('</body>', inject), 'utf8');
-console.log('ok');
+console.log('paneltest.html 已生成');
