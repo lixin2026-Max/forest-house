@@ -310,6 +310,31 @@ test('FB 回传必须显式带 Referer（FormSubmit 靠它判来源）', ()=>{
          /new URLSearchParams\(payload\)/.test(inlineJs), '未用 urlencoded 简单请求（会触发预检）');
 });
 
+// ---------- 迭代维护规范：模块隔离 ----------
+test('模块隔离：每个功能都有独立生命周期钩子', ()=>{
+    const featKeys = [...inlineJs.matchAll(/^\s{4}(\w+):\s*\{ on:(?:true|false), label:/gm)].map(m=>m[1]);
+    must(featKeys.length >= 8, 'FEAT 项太少：' + featKeys.length);
+    const hookBlock = inlineJs.slice(inlineJs.indexOf('const MODULE_HOOKS = {'));
+    must(hookBlock.length > 0, '找不到 MODULE_HOOKS');
+    featKeys.forEach(k=>{
+        must(new RegExp('\\n\\s{4}' + k + ':\\s*\\{').test(hookBlock), '缺少模块钩子：' + k);
+    });
+});
+
+test('模块隔离：开关只经钩子分发，不再写死分支', ()=>{
+    const m = inlineJs.match(/function toggleFeat\(k, v\)\{[\s\S]*?\n\}/);
+    must(m, '找不到 toggleFeat');
+    must(/MODULE_HOOKS\[k\]/.test(m[0]), 'toggleFeat 未走模块钩子');
+    must(!/k === '/.test(m[0]), 'toggleFeat 仍在写死模块分支（会退化成全局耦合）');
+    must(/h\.setup/.test(m[0]) && /h\.teardown/.test(m[0]), '钩子未成对调用 setup/teardown');
+});
+
+test('模块隔离：每帧只驱动开着的模块', ()=>{
+    const m = inlineJs.match(/function updateModules\(dt, t\)\{[\s\S]*?\n\}/);
+    must(m, '找不到 updateModules');
+    must(/FEAT\[k\]\.on && h && h\.update/.test(m[0]), 'updateModules 未按模块分发');
+});
+
 console.log('\n====================');
 console.log(`Results: ${passed} passed, ${failed} failed`);
 process.exit(failed>0 ? 1 : 0);

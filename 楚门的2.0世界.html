@@ -1580,8 +1580,54 @@ const FEAT = {
     tone:      { on:true, label:'色调氛围' }
 };
 
-const BGM_SCALE = {
-    sunny: [0,4,7,9,12,16],
+/* ---------- 模块生命周期钩子 ----------
+   每个模块只在自己的 setup / update / teardown 里动自己的东西：
+   开关走 FEAT，行为走这里，互不直接调用。修某个功能的 bug 时只改它这一段。
+   缺 update 的模块表示它不参与每帧（如 BGM 由 audioTick 定时器驱动）。 */
+function disposeParticles(){
+    if(!ambPts) return;
+    scene.remove(ambPts);
+    ambPts.geometry.dispose();
+    ambPts.material.dispose();
+    ambPts = null; ambSeeds = null;
+}
+
+const MODULE_HOOKS = {
+    bgm: {
+        setup(){ if(actx && aBgm) aBgm.gain.setTargetAtTime(0.22, actx.currentTime, 0.4); },
+        teardown(){ if(actx && aBgm) aBgm.gain.setTargetAtTime(0.0001, actx.currentTime, 0.4); }
+    },
+    ambience: {
+        setup(){ if(actx && aAmb) aAmb.gain.setTargetAtTime(0.40, actx.currentTime, 0.4); },
+        teardown(){ if(actx && aAmb) aAmb.gain.setTargetAtTime(0.0001, actx.currentTime, 0.4); }
+    },
+    particles: {
+        setup(){ buildParticles(); },
+        teardown(){ disposeParticles(); },
+        update(dt, t){ updateParticles(dt, t); }
+    },
+    views: {
+        teardown(){ viewIndex = 0; }
+    },
+    interact: {
+        teardown(){ setFire(false); setDoor(false); }
+    },
+    daynight: {
+        setup(){ autoSeqOn = true; autoSeqNext = 0; },
+        teardown(){ autoSeqOn = false; },
+        update(dt, t){ updateAutoSeq(t); }
+    },
+    roam: {
+        teardown(){ roamT = 0; },
+        update(dt){ updateRoam(dt); }
+    },
+    tone: {
+        setup(){ applyTone(toneIndex); },
+        teardown(){ if(renderer) renderer.domElement.style.filter = 'none'; }
+    }
+};
+
+const BGM_SCALE = {    sunny: [0,4,7,9,12,16],
     golden:[0,4,7,11,12,19],
     mist:  [0,3,7,10,12,15],
     night: [0,3,5,10,12,15],
@@ -1905,30 +1951,22 @@ function refreshModUI(){
 function toggleFeat(k, v){
     if(!FEAT[k]) return;
     FEAT[k].on = !!v;
-    if(k === 'tone') applyTone(toneIndex);
-    if(k === 'particles'){
-        if(!FEAT.particles.on){
-            if(ambPts){
-                scene.remove(ambPts);
-                ambPts.geometry.dispose();
-                ambPts.material.dispose();
-                ambPts = null;
-                ambSeeds = null;
-            }
-        }else buildParticles();
+    const h = MODULE_HOOKS[k];
+    if(h){
+        if(FEAT[k].on){ if(h.setup) h.setup(); }
+        else { if(h.teardown) h.teardown(); }
     }
-    if((k === 'bgm' || k === 'ambience') && actx){
-        if(k === 'bgm') aBgm.gain.setTargetAtTime(FEAT.bgm.on ? 0.22 : 0.0001, actx.currentTime, 0.4);
-        else aAmb.gain.setTargetAtTime(FEAT.ambience.on ? 0.40 : 0.0001, actx.currentTime, 0.4);
-    }
-    if(k === 'daynight' && !FEAT.daynight.on) autoSeqOn = false;
     refreshModUI();
 }
 function setupModules(){
     doorMesh = scene.getObjectByName('houseDoor') || null;
     buildCampfire();
-    buildParticles();
     setupTap();
+    // 场景相关的构建各自走模块自己的 setup，注册表只负责"哪些是开着的"
+    Object.keys(FEAT).forEach(function(k){
+        const h = MODULE_HOOKS[k];
+        if(FEAT[k].on && h && h.setup) h.setup();
+    });
 
     const list = document.getElementById('mpList');
     if(list){
@@ -1973,11 +2011,14 @@ function setupModules(){
 
     if(audioTimer) clearInterval(audioTimer);
     audioTimer = setInterval(audioTick, 250);
-    autoSeqOn = true;
     refreshModUI();
 }
 function updateModules(dt, t){
-    updateParticles(dt, t);
+    // 只驱动开着的模块，顺序即执行顺序
+    Object.keys(FEAT).forEach(function(k){
+        const h = MODULE_HOOKS[k];
+        if(FEAT[k].on && h && h.update) h.update(dt, t);
+    });
     if(fireOn && campfireLight)
         campfireLight.intensity = 1.9 + Math.sin(t*11.3)*0.35 + Math.sin(t*23.7)*0.22;
     if(weatherIndex !== modulesLastWeather){
@@ -1985,8 +2026,6 @@ function updateModules(dt, t){
         particleWeatherSync();
         audioWeatherSync();
     }
-    updateAutoSeq(t);
-    updateRoam(dt);
     perfTick(dt);
 }
 
