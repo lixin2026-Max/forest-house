@@ -55,10 +55,32 @@ const driver = String.raw`
             await sleep(800);
             const final = (msg.textContent || '').trim();
             const ok = /已收到/.test(final);
+
+            // —— 直接探一次 FormSubmit，把真实响应打出来，别靠猜 ——
+            let diag = '';
+            try {
+                const t0 = performance.now();
+                const r = await fetch('https://formsubmit.co/ajax/2820575692@qq.com', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify({
+                        _subject: '【楚门2.0】上线通道诊断',
+                        content: '来自 selftest 页面的直接探测 ' + new Date().toISOString()
+                    })
+                });
+                const body = await r.text();
+                diag = '\n\n—— 直接探测 FormSubmit ——' +
+                    '\nstatus: ' + r.status + ' ' + r.statusText +
+                    '\n耗时: ' + Math.round(performance.now() - t0) + 'ms' +
+                    '\nbody: ' + body.slice(0, 400);
+            } catch (e) {
+                diag = '\n\n—— 直接探测 FormSubmit ——\nfetch 抛错: ' + (e && e.message);
+            }
+
             log((ok ? 'OK  生产链路通' : 'BAD 生产链路未通') +
-                '\n\n回执：' + (final || '(空)') +
+                '\n\n按钮回执：' + (final || '(空)') +
                 '\norigin：' + location.origin +
-                '\n时间：' + new Date().toLocaleString('zh-CN'));
+                '\n时间：' + new Date().toLocaleString('zh-CN') + diag);
         } catch (e) {
             log('BAD 自检异常：' + e.message);
         }
