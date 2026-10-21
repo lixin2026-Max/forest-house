@@ -598,6 +598,12 @@
     .mpViews button,.mpTones button,.mpThemes button{font-family:inherit;font-size:11.5px;padding:6px 4px;border-radius:7px;
         cursor:pointer;border:1px solid var(--line-soft);background:var(--chip);color:var(--btn-txt)}
     .mpViews button.on,.mpTones button.on,.mpThemes button.on{background:var(--pri);border-color:var(--pri-line);color:var(--pri-txt)}
+    #sceneQualityBtns{grid-template-columns:1fr 1fr 1fr}
+    #sceneSliders{display:grid;gap:6px}
+    .mpSlider{display:flex;align-items:center;gap:7px;font-size:11px}
+    .mpSliderLb{flex:none;width:106px}
+    .mpSlider input{flex:1;accent-color:#4aa457;height:14px;min-width:0}
+    .mpSliderVal{flex:none;width:40px;text-align:right;color:var(--mp-sub)}
     .mpSound{display:grid;gap:5px}
     .mpMute{font-family:inherit;font-size:12px;padding:8px;border-radius:8px;cursor:pointer;
         border:1px solid var(--dlg-line);background:var(--btn);color:var(--mute-txt)}
@@ -888,11 +894,24 @@
 
 <!-- ===== 可插拔功能面板：每个功能一个独立开关，关掉即彻底停用 ===== -->
 <button id="modBtn" type="button" title="功能开关">⚙</button>
-<div id="modPanel" role="dialog" aria-label="功能开关">
+<div id="modPanel" role="dialog" aria-label="场景中枢">
     <div class="mpHead">
-        <h4>⚙ 功能开关</h4>
+        <h4>⚙ 场景中枢</h4>
         <button type="button" id="modClose" aria-label="关闭">✕</button>
     </div>
+    <div class="mpSub">画质总开关（草 / 天空 / 水体 / 模型四套一起切）</div>
+    <div class="mpViews" id="sceneQualityBtns"></div>
+    <div class="mpTip" id="sceneQualityTip"></div>
+    <div class="mpSep"></div>
+    <div class="mpSub">渲染调节（拖动实时生效）</div>
+    <div id="sceneSliders"></div>
+    <div class="mpSep"></div>
+    <div class="mpSub">化身（小龙本体 / 少女三款 / 自由搭配）</div>
+    <div class="mpGlobal">
+        <button type="button" id="sceneAvatarBtn">🎨 打开定制面板（化身与搭配都在里面）</button>
+    </div>
+    <div class="mpSep"></div>
+    <div class="mpSub">功能开关</div>
     <div class="mpList" id="mpList"></div>
     <div class="mpSep"></div>
     <div class="mpSub">视角</div>
@@ -1355,6 +1374,85 @@ function buildRiverPts(){
     const ext=buildRiverExtPts();
     for(let i=1;i<ext.length;i++) RIVER_PTS.push({x:ext[i].x, z:ext[i].z, half:ext[i].half});
 }
+/* ==================== SCENE 中枢（Issue #75 · v5.0 收编件） ====================
+   全场景可调参数的唯一声明处：草地/天空/水体/氛围四组存量 CFG 的字面量
+   本体都在下面这一个对象里，各系统原先的 GRASS_CFG / SKY_CFG / WATER_CFG /
+   ATMO_CFG 改为指向本中枢对应分区的别名（同一对象、不是两份值），代码里
+   不许再另抄一份数值。新加渲染参数必须先进这里（quality 总档 / render
+   玩家可调层 / 各系统分区），再由系统读取。
+   玩家在「场景中枢」面板里改的渲染偏好经 store.scene 存本机 ct2_scene
+   （SCENE_KEY 写死，第 13 个白名单键）：只存面板可调层与档位偏好，
+   系统分区默认值仍以这里的字面量为准、存档只覆盖同名字段。
+   总档口径：quality.mode = 'auto'（设备能力自动判定，默认）| 'full'
+   （拉满）| 'lite'（保底）；手动选择优先、当次会话内由 SceneHub 驱动
+   grass/sky/water/model 四套 tier 与既有 applyLowQuality 同步。 */
+const SCENE_KEY='ct2_scene';
+const SCENE = {
+    quality: { mode: 'auto' },
+    render: {
+        bgBrightness: 1,      // 背景亮度：远山环明暗倍率（skyBackdropTick 每帧读）
+        grassDensity: 1,      // 草簇密度倍率（GrassSys.applyCounts 每帧读）
+        grassHeightK: 1       // 草高倍率（簇几何按此重建，见 GrassSys.setBladeScale）
+    },
+    water: {
+        flowSpeed: 1.15,     // 顺流速度（世界单位/秒）：河面实际速度 = flowSpeed × aFlow.z
+        lakeSpeed: 0.05,     // 湖面切向慢漂倍率
+        poolSpeed: 0.22,     // 河尾小潭/远河潭倍率
+        opacity: 0.93,       // 与旧材质一致——鱼在水下可见、涟漪在上层的口径不变
+        refl: 0.85,          // 天空反光强度上限（菲涅尔项）
+        fitMargin: 0.05,     // 缎带贴合：水边高出走廊带面的余量（盖住断点峰顶）
+        fitMax: 0.8          // 缎带贴合：单边最大抬升，防极端横坡把水边抬成墙
+    },
+    sky: {
+        tiers: {
+            // 环贴图宽高比按「周长:环高」（2023:132≈15.3）配平：像素在世界里
+            // 近似方形，否则竖向笔触会被横向拉宽数倍成砖块（截图实测教训）
+            full: { ringTexW: 4096, ringTexH: 256, ringSegs: 128, cloudTexW: 512, cloudTexH: 256 },
+            lite: { ringTexW: 2048, ringTexH: 256, ringSegs: 64,  cloudTexW: 256, cloudTexH: 128 }
+        },
+        ring: {
+            radius: 322, height: 132, baseY: -8,
+            snowDepth: { spring: 0.10, summer: 0.09, autumn: 0.10, winter: 0.34 },   // 雪盖厚度（v，自脊线向下；相对脊线而非绝对高度——绝对雪线会把高脊区整片刷白、与浅色天底糊成一碗）
+            snowMinRidge: { spring: 0.70, summer: 0.74, autumn: 0.70, winter: 0.0 }, // 脊线低于此值不积雪（冬季全积）；夏/春/秋只许高峰戴帽——门槛太低会连成一圈白帘（收口实测教训）
+            cloudBandY: 0.40, cloudBandAlpha: 0.30,     // 山腰云雾带中心 v 与峰值不透明度
+            treeBand: 0.17                               // 林线带顶部 v
+        },
+        clouds: {
+            groups: { full: 16, lite: 10 },
+            rMin: 80, rMax: 165, yMin: 52, yMax: 80,
+            scaleW: [36, 64],                            // 云团宽（米），比旧版更大更蓬松
+            wrap: 185                                    // 漂移回卷半边长（与云影同源漂移，见 skyBackdropTick）
+        }
+    },
+    grass: {
+        bladesPerTuft: 5,                    // 每簇草叶数（每叶 2 三角面）
+        bladeH: [0.52, 0.88],                // 簇内草叶高度范围（米）
+        zones: [9400, 3700, 1700],           // 三环目标簇数：核心 r≤68 / 中环 ≤130 / 外环 ≤216
+        ringKeep: [1.0, 0.16, 0.045],        // 中/外环采样保留率（密度渐变）
+        tiers: {                             // 双档实例数（full=拉满 / lite=保底）
+            full: { tufts: 14800, flowers: 900, dandelions: 650 },
+            lite: { tufts: 4200,  flowers: 300, dandelions: 200 }
+        },
+        cloud: { scale: 0.016, drift: 0.020, thresh: 0.40, soft: 0.24, strength: 0.55 },
+        tint:  { scale: 0.045, amt: 0.16 },   // 地面世界噪声大斑块（振幅 ±）
+        sway:  { grassAmp: 0.13, flowerAmp: 0.07 },
+        season: {
+            grassWinterKeep: 0.13,           // 冬季草簇保留比例（残雪草）
+            flowerK:    { spring: 1.0, summer: 0.85, autumn: 0.40, winter: 0 },
+            dandelionK: { spring: 0.7, summer: 1.0,  autumn: 0.25, winter: 0 }
+        }
+    },
+    atmo: {
+        fogSeasonMul: { spring: 1.08, summer: 1.0, autumn: 1.14, winter: 1.22 },
+        fogBankMax: 0.50,          // 远景雾带不透明度上限
+        windTreeAmp: 0.075,        // 阔叶树冠叶尖摆幅（米，低幅慢频走统一风摆着色器）
+        windNeedleAmp: 0.050,      // 松针摆幅
+        bloomRayMax: 0.34,         // 丁达尔光束不透明度上限
+        audioBirdP: { spring: 0.85, summer: 0.70, autumn: 0.40, winter: 0.12 }
+    }
+};
+window.SCENE = SCENE;
+
 /* ==================== 游戏级水体（Issue #77 · v5.0） ====================
    河与湖共用同一套 ShaderMaterial 家族：多层程序纹理顺流而下、天空色
    反光＋菲涅尔掠射增强、阳光镜面与细碎闪光、岸边泡沫＋极边软化。
@@ -1364,17 +1462,9 @@ function buildRiverPts(){
    太阳色与方向（uSunCol/uSunDir）喂进来，与全场光照口径同源。
    双档（全版口径）：拉满档两层纹理＋三层波纹，保底档减一层纹理与
    一层波纹，但流动与反光都在；默认按设备能力定档（粗指针/小屏→保底），
-   弱网低画质开关经 window.__waterTier 手动切换，#75 集中化时收进中枢。
+   弱网低画质开关经 window.__waterTier 手动切换，已由 #75 收进 SCENE 中枢总档。
    draw calls 增量 0：仍是 pondMesh 1 件＋远河潭 disc 1 件、共用材质。 */
-const WATER_CFG = {
-    flowSpeed: 1.15,     // 顺流速度（世界单位/秒）：河面实际速度 = flowSpeed × aFlow.z
-    lakeSpeed: 0.05,     // 湖面切向慢漂倍率
-    poolSpeed: 0.22,     // 河尾小潭/远河潭倍率
-    opacity: 0.93,       // 与旧材质一致——鱼在水下可见、涟漪在上层的口径不变
-    refl: 0.85,          // 天空反光强度上限（菲涅尔项）
-    fitMargin: 0.05,     // 缎带贴合：水边高出走廊带面的余量（盖住断点峰顶）
-    fitMax: 0.8          // 缎带贴合：单边最大抬升，防极端横坡把水边抬成墙
-};
+const WATER_CFG = SCENE.water;   // #75：本体在 SCENE 中枢（上方），此名仅别名
 const WATER_VS = `
 attribute vec4 aFlow;
 attribute vec2 aCoord;
@@ -1758,7 +1848,7 @@ const CONFIG = {
 };
 
 /* ---------- 薄存储适配层 ----------
-   核心系统不直接碰本地存储：一律经 store.<槽> 读写。槽位与 12 个白名单键
+   核心系统不直接碰本地存储：一律经 store.<槽> 读写。槽位与 13 个白名单键
    一一对应，键名仍以字面量出现在下面这唯一实现处（安全审计照常钉死）。
    移植时只换 mkSlot 底下的读写实现（小程序 storage / App 本地库），上层不动。 */
 
@@ -1790,6 +1880,10 @@ const GUEST_KEY='ct2_guest';
    图鉴的解锁集合只存本机 ct2_codex（CODEX_KEY 写死，照其余各键的治理先例）：
    只记「见过哪些条目」的 id 清单，不绑任何身份。 */
 const CODEX_KEY='ct2_codex';
+/* ---------- 场景中枢（Issue #75） ----------
+   场景中枢的面板偏好存本机 ct2_scene（SCENE_KEY 写死在 SCENE 中枢一节，
+   照其余各键的治理先例）：只记画质总档模式与面板可调的渲染参数
+   （草密度/草高/云影/背景亮度/水流/水面反光/雾带），不记任何身份信息。 */
 function mkSlot(read, write){
     const slot = { failed:false, _read:read, _write:write,
         get(){ try{ return slot._read(); }catch(e){ slot.failed = true; return null; } },
@@ -1813,7 +1907,8 @@ const store = {
     echo:   mkSlot(()=>localStorage.getItem(ECHO_KEY),     v=>localStorage.setItem(ECHO_KEY, v)),
     codex:  mkSlot(()=>localStorage.getItem(CODEX_KEY),    v=>localStorage.setItem(CODEX_KEY, v)),
     guest:  mkSlot(()=>localStorage.getItem(GUEST_KEY),    v=>localStorage.setItem(GUEST_KEY, v)),
-    music:  mkSlot(()=>localStorage.getItem(MUSIC_KEY),    v=>localStorage.setItem(MUSIC_KEY, v))
+    music:  mkSlot(()=>localStorage.getItem(MUSIC_KEY),    v=>localStorage.setItem(MUSIC_KEY, v)),
+    scene:  mkSlot(()=>localStorage.getItem(SCENE_KEY),    v=>localStorage.setItem(SCENE_KEY, v))
 };
 
 /* 主题状态只从 applyUiTheme 这一处进出：换根元素类 + 存偏好 + 同步面板按钮 */
@@ -1832,6 +1927,179 @@ function applyUiTheme(t, save){
 }
 // 进页面先恢复上次选的主题（默认深色，与变量化前的现版观感一致）
 applyUiTheme(store.theme.get() === 'light' ? 'light' : 'dark', false);
+
+/* ---------- SCENE 中枢运行时（Issue #75） ----------
+   面板与各系统的唯一接线层：读档（ct2_scene 白名单清洗后覆盖中枢同名
+   字段）→ 画质总档驱动四套 tier → 滑杆实时写回中枢并调用各系统既有
+   入口（__windSway.setCloud / WATER_U / GrassSys / AtmoSys 读的都是
+   中枢同一对象）。本层不自建任何渲染逻辑。 */
+const SceneHub = {
+    _built: false,
+    _clamp(v, a, b, d){ v = parseFloat(v); return (isFinite(v)) ? Math.max(a, Math.min(b, v)) : d; },
+    load(){
+        const sv = store.scene.json({});
+        if(sv && typeof sv === 'object'){
+            if(sv.q === 'full' || sv.q === 'lite' || sv.q === 'auto') SCENE.quality.mode = sv.q;
+            const r = sv.r || {};
+            SCENE.render.grassDensity = this._clamp(r.grassDensity, 0.3, 1.3, 1);
+            SCENE.render.grassHeightK = this._clamp(r.grassHeightK, 0.6, 1.6, 1);
+            SCENE.render.bgBrightness = this._clamp(r.bgBrightness, 0.5, 1.4, 1);
+            const c = sv.c || {};
+            SCENE.grass.cloud.drift = this._clamp(c.drift, 0, 0.06, SCENE.grass.cloud.drift);
+            SCENE.grass.cloud.strength = this._clamp(c.strength, 0, 0.85, SCENE.grass.cloud.strength);
+            const w = sv.w || {};
+            SCENE.water.flowSpeed = this._clamp(w.flowSpeed, 0.3, 2.5, SCENE.water.flowSpeed);
+            SCENE.water.refl = this._clamp(w.refl, 0, 1.2, SCENE.water.refl);
+            const a = sv.a || {};
+            SCENE.atmo.fogBankMax = this._clamp(a.fogBankMax, 0, 0.8, SCENE.atmo.fogBankMax);
+        }
+        // 注：本函数在脚本执行期就跑（早于 ATMO_U/GrassSys 定义）——云影值
+        // 已写进中枢、ATMO_U 建时自会从中枢读到；GrassSys.userDensity 与
+        // 水面反光的运行时同步在 buildPanel（init 期）补齐。
+    },
+    save(){
+        store.scene.save({
+            q: SCENE.quality.mode,
+            r: { grassDensity: SCENE.render.grassDensity, grassHeightK: SCENE.render.grassHeightK,
+                 bgBrightness: SCENE.render.bgBrightness },
+            c: { drift: SCENE.grass.cloud.drift, strength: SCENE.grass.cloud.strength },
+            w: { flowSpeed: SCENE.water.flowSpeed, refl: SCENE.water.refl },
+            a: { fogBankMax: SCENE.atmo.fogBankMax }
+        });
+    },
+    /* 画质总档：一处切换同时驱动 grass/sky/water/model 四套 tier 与既有
+       低画质逻辑。auto = 回到各系统设备自动判定（默认）；手动档优先，
+       选择落盘 ct2_scene，下次进页仍按手动档（面板可随时切回自动）。 */
+    setQuality(mode, save){
+        if(mode !== 'full' && mode !== 'lite') mode = 'auto';
+        SCENE.quality.mode = mode;
+        if(mode === 'lite'){ lowQuality = true; applyLowQuality(); }
+        else if(mode === 'full'){ lowQuality = false; applyLowQuality(); }
+        else { lowQuality = false; applyLowQuality(); }
+        // applyLowQuality 只按 lowQuality 二值同步（sky/water/model 走自动口径）；
+        // 手动档在这里把四套 tier 钉到目标档，auto 则逐套恢复自动判定。
+        if(typeof GrassSys !== 'undefined')
+            GrassSys.setTier(mode === 'auto' ? null : mode);
+        if(mode === 'full'){
+            if(window.__skyTier) window.__skyTier('full');
+            if(window.__waterTier) window.__waterTier('ultra');
+            if(window.__modelTier) window.__modelTier('hi');
+        }else if(mode === 'lite'){
+            if(window.__skyTier) window.__skyTier('lite');
+            if(window.__waterTier) window.__waterTier('base');
+            if(window.__modelTier) window.__modelTier('lo');
+        }else{
+            if(window.__skyTier && typeof skyTierAuto === 'function') window.__skyTier(skyTierAuto());
+            if(window.__waterTier) window.__waterTier((typeof IS_MOBILE !== 'undefined' && IS_MOBILE) ? 'base' : 'ultra');
+            if(window.__modelTier) window.__modelTier(null);
+        }
+        this.refreshQualityUI();
+        if(save) this.save();
+    },
+    refreshQualityUI(){
+        const box = document.getElementById('sceneQualityBtns');
+        if(box) for(let i = 0; i < box.children.length; i++)
+            box.children[i].classList.toggle('on', box.children[i].dataset.q === SCENE.quality.mode);
+        const tip = document.getElementById('sceneQualityTip');
+        if(tip){
+            const auto = (typeof IS_MOBILE !== 'undefined' && IS_MOBILE) ? '保底（移动设备自动判定）' : '拉满（桌面设备自动判定）';
+            tip.textContent = SCENE.quality.mode === 'auto'
+                ? '当前：自动 → ' + auto + '。手动选拉满/保底后优先手动，本次与以后都记住。'
+                : '当前：手动' + (SCENE.quality.mode === 'full' ? '拉满' : '保底') + '（优先于自动判定）。';
+        }
+    },
+    /* 滑杆定义：get/set 都只碰中枢与各系统既有入口，改动实时生效不刷新 */
+    sliders(){
+        const H = this;
+        return [
+            { id:'grassDensity', label:'🌿 草簇密度', min:0.3, max:1.3, step:0.05, fmt:v=>Math.round(v*100)+'%',
+              get:()=>SCENE.render.grassDensity,
+              set:v=>{ SCENE.render.grassDensity = v; if(typeof GrassSys !== 'undefined') GrassSys.userDensity = v; } },
+            { id:'grassHeightK', label:'🌱 草高', min:0.6, max:1.6, step:0.05, fmt:v=>Math.round(v*100)+'%',
+              get:()=>SCENE.render.grassHeightK,
+              set:v=>{ SCENE.render.grassHeightK = v; if(typeof GrassSys !== 'undefined' && GrassSys.setBladeScale) GrassSys.setBladeScale(v); } },
+            { id:'cloudDrift', label:'☁️ 云影速度', min:0, max:0.06, step:0.002, fmt:v=>v.toFixed(3),
+              get:()=>SCENE.grass.cloud.drift,
+              set:v=>{ SCENE.grass.cloud.drift = v; if(window.__windSway) window.__windSway.setCloud({ drift: v }); } },
+            { id:'cloudStrength', label:'🌥 云影强度', min:0, max:0.85, step:0.05, fmt:v=>Math.round(v*100)+'%',
+              get:()=>SCENE.grass.cloud.strength,
+              set:v=>{ SCENE.grass.cloud.strength = v; if(window.__windSway) window.__windSway.setCloud({ strength: v }); } },
+            { id:'bgBrightness', label:'🏔 背景亮度（远山）', min:0.5, max:1.4, step:0.05, fmt:v=>Math.round(v*100)+'%',
+              get:()=>SCENE.render.bgBrightness, set:v=>{ SCENE.render.bgBrightness = v; } },
+            { id:'waterFlow', label:'🌊 水流速度', min:0.3, max:2.5, step:0.05, fmt:v=>v.toFixed(2),
+              get:()=>SCENE.water.flowSpeed, set:v=>{ SCENE.water.flowSpeed = v; } },
+            { id:'waterRefl', label:'💧 水面反光', min:0, max:1.2, step:0.05, fmt:v=>Math.round(v*100)+'%',
+              get:()=>SCENE.water.refl,
+              set:v=>{ SCENE.water.refl = v; if(typeof WATER_U !== 'undefined' && WATER_U) WATER_U.uRefl.value = v; } },
+            { id:'fogBankMax', label:'🌫 远景雾带强度', min:0, max:0.8, step:0.05, fmt:v=>Math.round(v*100)+'%',
+              get:()=>SCENE.atmo.fogBankMax, set:v=>{ SCENE.atmo.fogBankMax = v; } }
+        ];
+    },
+    buildPanel(){
+        if(this._built) { this.refreshQualityUI(); return; }
+        this._built = true;
+        const qb = document.getElementById('sceneQualityBtns');
+        if(qb){
+            qb.textContent = '';
+            [['auto','🔄 自动'],['full','✨ 拉满'],['lite','🍃 保底']].forEach(pair=>{
+                const b = document.createElement('button');
+                b.type = 'button'; b.textContent = pair[1]; b.dataset.q = pair[0];
+                b.addEventListener('click', ()=>this.setQuality(pair[0], true));
+                qb.appendChild(b);
+            });
+        }
+        const sb = document.getElementById('sceneSliders');
+        if(sb){
+            sb.textContent = '';
+            this.sliders().forEach(sd=>{
+                const row = document.createElement('div'); row.className = 'mpSlider';
+                const lb = document.createElement('span'); lb.className = 'mpSliderLb'; lb.textContent = sd.label;
+                const inp = document.createElement('input');
+                inp.type = 'range'; inp.min = sd.min; inp.max = sd.max; inp.step = sd.step;
+                inp.value = sd.get(); inp.id = 'scene_' + sd.id;
+                const val = document.createElement('span'); val.className = 'mpSliderVal';
+                val.textContent = sd.fmt(sd.get());
+                inp.addEventListener('input', ()=>{ const v = parseFloat(inp.value); sd.set(v); val.textContent = sd.fmt(v); this.save(); });
+                row.appendChild(lb); row.appendChild(inp); row.appendChild(val);
+                sb.appendChild(row);
+            });
+        }
+        const av = document.getElementById('sceneAvatarBtn');
+        if(av) av.addEventListener('click', ()=>{
+            if(typeof openDragonCustom === 'function') openDragonCustom();
+            else { const e = document.getElementById('dragonCustomBtn'); if(e) e.click(); }
+        });
+        // 运行时同步：把读档值推给已建好的各系统（密度/云影/水面反光）
+        if(typeof GrassSys !== 'undefined') GrassSys.userDensity = SCENE.render.grassDensity;
+        if(window.__windSway) window.__windSway.setCloud({ drift: SCENE.grass.cloud.drift, strength: SCENE.grass.cloud.strength });
+        if(typeof WATER_U !== 'undefined' && WATER_U) WATER_U.uRefl.value = SCENE.water.refl;
+        // 进页面按存档/自动口径落一次总档（各系统此时已建好或将按中枢值建）
+        this.setQuality(SCENE.quality.mode, false);
+        this.refreshQualityUI();
+    },
+    probe(){
+        return {
+            mode: SCENE.quality.mode, lowQuality: (typeof lowQuality !== 'undefined') ? lowQuality : null,
+            grassTier: (typeof GrassSys !== 'undefined') ? GrassSys.tier : null,
+            grassLock: (typeof GrassSys !== 'undefined') ? GrassSys._tierLock : null,
+            grassCount: (typeof grassIM !== 'undefined' && grassIM) ? grassIM.count : null,
+            grassDensity: SCENE.render.grassDensity, grassHeightK: SCENE.render.grassHeightK,
+            skyTier: (typeof window !== 'undefined') ? window.__skyTierName : null,
+            waterTier: (typeof WATER_U !== 'undefined' && WATER_U) ? WATER_U.uTier.value : null,
+            waterRefl: (typeof WATER_U !== 'undefined' && WATER_U) ? WATER_U.uRefl.value : null,
+            waterFlow: SCENE.water.flowSpeed,
+            modelTier: (typeof ModelPipe !== 'undefined') ? ModelPipe.tier() : null,
+            modelOverride: (typeof ModelPipe !== 'undefined') ? ModelPipe._tierOverride : null,
+            cloudDrift: (typeof ATMO_U !== 'undefined') ? ATMO_U.uCloudDrift.value : null,
+            cloudStrength: (typeof ATMO_U !== 'undefined') ? ATMO_U.uCloudStrength.value : null,
+            bgBrightness: SCENE.render.bgBrightness, fogBankMax: SCENE.atmo.fogBankMax,
+            saved: store.scene.get()
+        };
+    }
+};
+window.SceneHub = SceneHub;
+window.__sceneProbe = function(){ return SceneHub.probe(); };
+SceneHub.load();
 
 /* ==================== 程序化贴图工厂 ==================== */
 function makeCanvas(w,h){ const c=document.createElement('canvas'); c.width=w; c.height=h; return c; }
@@ -2221,34 +2489,14 @@ function makeOrbitControls(cam, dom){
    ② 天空云升级：整团积云贴图（十余个软团叠绘成一朵、中隆边收、平底），
       每组主团＋副团两个 sprite——云量观感更蓬松，sprite 数反而比旧版
       多团散点更少；漂移与 #73 地面云影同源同速（见 skyBackdropTick）。
-   参数全集中在 SKY_CFG（#75 集中化收编），双档 tiers 各给一份值：
+   参数本体在 SCENE.sky（#75 中枢），SKY_CFG 为其别名，双档 tiers 各给一份值：
    拉满档贴图 4096×256＋环 128 分段，保底档 2048×256＋64 分段（宽高比
    按周长:环高配平、像素近似方形，见 tiers 注），雪线/云带/林线四要素
    两档都在，降的只是分辨率。draw calls 增量：
    山环 +1、云 sprite 净减，合计 ≤+2。
    与 #81 分工：雾效/天光/Bloom 等氛围层归 #81 在本件之上叠加，
    本件只做天空与背景本体，不另起雾/风摆实现。 */
-const SKY_CFG = {
-    tiers: {
-        // 环贴图宽高比按「周长:环高」（2023:132≈15.3）配平：像素在世界里
-        // 近似方形，否则竖向笔触会被横向拉宽数倍成砖块（截图实测教训）
-        full: { ringTexW: 4096, ringTexH: 256, ringSegs: 128, cloudTexW: 512, cloudTexH: 256 },
-        lite: { ringTexW: 2048, ringTexH: 256, ringSegs: 64,  cloudTexW: 256, cloudTexH: 128 }
-    },
-    ring: {
-        radius: 322, height: 132, baseY: -8,
-        snowDepth: { spring: 0.10, summer: 0.09, autumn: 0.10, winter: 0.34 },   // 雪盖厚度（v，自脊线向下；相对脊线而非绝对高度——绝对雪线会把高脊区整片刷白、与浅色天底糊成一碗）
-        snowMinRidge: { spring: 0.70, summer: 0.74, autumn: 0.70, winter: 0.0 }, // 脊线低于此值不积雪（冬季全积）；夏/春/秋只许高峰戴帽——门槛太低会连成一圈白帘（收口实测教训）
-        cloudBandY: 0.40, cloudBandAlpha: 0.30,     // 山腰云雾带中心 v 与峰值不透明度
-        treeBand: 0.17                               // 林线带顶部 v
-    },
-    clouds: {
-        groups: { full: 16, lite: 10 },
-        rMin: 80, rMax: 165, yMin: 52, yMax: 80,
-        scaleW: [36, 64],                            // 云团宽（米），比旧版更大更蓬松
-        wrap: 185                                    // 漂移回卷半边长（与云影同源漂移，见 skyBackdropTick）
-    }
-};
+const SKY_CFG = SCENE.sky;   // #75：本体在 SCENE 中枢，此名仅别名
 let skyTier = 'full';
 function skyTierAuto(){
     return (IS_MOBILE || (typeof lowQuality !== 'undefined' && lowQuality)) ? 'lite' : 'full';
@@ -2481,7 +2729,7 @@ function skyBackdropTick(dt){
             mtnMesh.material.map=mtnTexSet[Season.name];
             mtnSeasonApplied=Season.name;
         }
-        mtnMesh.material.color.setScalar(cloudDarkF);
+        mtnMesh.material.color.setScalar(cloudDarkF * ((typeof SCENE !== 'undefined' && SCENE.render) ? SCENE.render.bgBrightness : 1));   // #75 背景亮度（中枢滑杆）
     }
     if(cloudGroup && typeof ATMO_U!=='undefined'){
         const dir=ATMO_U.uCloudDir.value;
@@ -4884,27 +5132,10 @@ function createGrass(){
    #81 氛围件给树叶材质 apply 同一块即可同风摆动，不许各做一套。
    双档：拉满/保底两档参数全在 GRASS_CFG.tiers，实例按「核心→外围」顺序
    写入，切档只改 count（保底约 1/3，远景靠贴图与噪声层兜底不秃）。
-   全部可调参数集中在 GRASS_CFG（#75 集中化时收编），代码里不散落硬编码。 */
-const GRASS_CFG = {
-    bladesPerTuft: 5,                    // 每簇草叶数（每叶 2 三角面）
-    bladeH: [0.52, 0.88],                // 簇内草叶高度范围（米）
-    zones: [9400, 3700, 1700],           // 三环目标簇数：核心 r≤68 / 中环 ≤130 / 外环 ≤216
-    ringKeep: [1.0, 0.16, 0.045],        // 中/外环采样保留率（密度渐变）
-    tiers: {                             // 双档实例数（full=拉满 / lite=保底）
-        full: { tufts: 14800, flowers: 900, dandelions: 650 },
-        lite: { tufts: 4200,  flowers: 300, dandelions: 200 }
-    },
-    cloud: { scale: 0.016, drift: 0.020, thresh: 0.40, soft: 0.24, strength: 0.55 },
-    tint:  { scale: 0.045, amt: 0.16 },   // 地面世界噪声大斑块（振幅 ±）
-    sway:  { grassAmp: 0.13, flowerAmp: 0.07 },
-    season: {
-        grassWinterKeep: 0.13,           // 冬季草簇保留比例（残雪草）
-        flowerK:    { spring: 1.0, summer: 0.85, autumn: 0.40, winter: 0 },
-        dandelionK: { spring: 0.7, summer: 1.0,  autumn: 0.25, winter: 0 }
-    }
-};
+   全部可调参数本体在 SCENE.grass（#75 中枢），GRASS_CFG 为其别名，代码里不散落硬编码。 */
+const GRASS_CFG = SCENE.grass;   // #75：本体在 SCENE 中枢，此名仅别名
 /* 共享大气 uniforms：时间与风力每帧由 GrassSys.tick 写入（与 Env 同源），
-   云影/地面斑块参数指向 GRASS_CFG，#75 收编时改这里即可全场生效 */
+   云影/地面斑块参数指向 GRASS_CFG（=SCENE.grass），#75 中枢改这里即可全场生效 */
 const ATMO_U = {
     uTime:          { value: 0 },
     uWindK:         { value: 1 },
@@ -5015,17 +5246,24 @@ function grassTierAuto(){
     return (IS_MOBILE || (typeof lowQuality !== 'undefined' && lowQuality)) ? 'lite' : 'full';
 }
 const GrassSys = {
-    tier: null, _tierLock: null,
+    tier: null, _tierLock: null, userDensity: 1,   // #75 中枢滑杆：草簇密度倍率（SceneHub 写）
     placed: { tufts: 0, flowers: 0, dandelions: 0 },
     _flowerIM: null, _dandeIM: null, _flowerCur: 1, _dandeCur: 1,
     patchGround(mat){ return atmoPatch(mat, { tintAmt: GRASS_CFG.tint.amt }); },
     patchCloud(mat){ return atmoPatch(mat, {}); },
     setTier(t){ this._tierLock = t || null; },   // 验收/中枢页手动切档（null=回自动）
+    setBladeScale(k){   // #75 中枢滑杆「草高」：簇几何按中枢倍率重建（几何只有一份、重建便宜）
+        if(typeof grassIM !== 'undefined' && grassIM){
+            const old = grassIM.geometry;
+            grassIM.geometry = meadowTuftGeo();
+            if(old) old.dispose();
+        }
+    },
     _applyCount(im, n){ if(im && im.count !== n) im.count = Math.max(0, n); },
     applyCounts(gk, fk, dk){
         const base = GRASS_CFG.tiers[this.tier || 'full'];
         this._applyCount((typeof grassIM !== 'undefined') ? grassIM : null,
-            Math.min(this.placed.tufts, Math.floor(base.tufts * gk)));
+            Math.min(this.placed.tufts, Math.floor(base.tufts * gk * (this.userDensity || 1))));
         this._applyCount(this._flowerIM,
             Math.min(this.placed.flowers, Math.floor(base.flowers * fk)));
         this._applyCount(this._dandeIM,
@@ -5100,7 +5338,8 @@ function meadowTuftGeo(){
         const ang = (b / GRASS_CFG.bladesPerTuft) * Math.PI * 2 + rnd() * 0.9;
         const dx = Math.cos(ang), dz = Math.sin(ang);
         const ox = dx * 0.09 * rnd(), oz = dz * 0.09 * rnd();
-        const h = GRASS_CFG.bladeH[0] + rnd() * (GRASS_CFG.bladeH[1] - GRASS_CFG.bladeH[0]);
+        const h = (GRASS_CFG.bladeH[0] + rnd() * (GRASS_CFG.bladeH[1] - GRASS_CFG.bladeH[0]))
+            * ((typeof SCENE !== 'undefined' && SCENE.render) ? SCENE.render.grassHeightK : 1);   // #75 草高倍率
         const w0 = 0.052 + rnd() * 0.02, bend = 0.05 + rnd() * 0.09;
         const tip = tipCols[(rnd() * tipCols.length) | 0];
         const px = -dz, pz = dx;
@@ -9215,14 +9454,7 @@ const Season = {
    双档：电脑拉满档五件默认全开、Bloom 中档；手机保底档雾/光/风/音保留
    低档、Bloom 默认关。性能：雾带与 Bloom 全是少量透明片，关档即隐藏，
    不走后处理管线，保底档零额外绘制。探针：window.__atmoProbe。 */
-const ATMO_CFG = {
-    fogSeasonMul: { spring: 1.08, summer: 1.0, autumn: 1.14, winter: 1.22 },
-    fogBankMax: 0.50,          // 远景雾带不透明度上限
-    windTreeAmp: 0.075,        // 阔叶树冠叶尖摆幅（米，低幅慢频走统一风摆着色器）
-    windNeedleAmp: 0.050,      // 松针摆幅
-    bloomRayMax: 0.34,         // 丁达尔光束不透明度上限
-    audioBirdP: { spring: 0.85, summer: 0.70, autumn: 0.40, winter: 0.12 }
-};
+const ATMO_CFG = SCENE.atmo;   // #75：本体在 SCENE 中枢，此名仅别名
 const atmoClamp = (v, a, b)=>Math.max(a, Math.min(b, v));
 /* 雾色点缀（线性空间，与 curSky 同口径）：雨灰、晨蓝、冬青白、黄昏暖 */
 const ATMO_FOG_TINT = { rain: C(0x707c8a), morn: C(0xbdd6ee), pale: C(0xdfe9f2), dusk: C(0xf2c184) };
@@ -12912,6 +13144,7 @@ function setupModules(){
         });
     }
     refreshThemeUI();
+    if(typeof SceneHub !== 'undefined') SceneHub.buildPanel();   // #75 场景中枢页（总档+滑杆+化身入口）
     const mb = document.getElementById('muteBtn');
     if(mb) mb.addEventListener('click', function(){ setMute(!audioMuted); });
     const openBtn = document.getElementById('modBtn');
@@ -14312,7 +14545,7 @@ function setupGlobal(){
 
     /* 弱网低画质 */
     const lq=document.getElementById('lowqBtn');
-    if(lq) lq.addEventListener('click', function(){ lowQuality=!lowQuality; applyLowQuality(); });
+    if(lq) lq.addEventListener('click', function(){ SceneHub.setQuality(SCENE.quality.mode==='lite' ? 'auto' : 'lite', true); });   // #75：弱网低画质并入中枢总档（开=保底，关=回自动）
 
     /* 站内更新日志（Issue #37）：入口在上方功能面板的「版本日志」一节，开页自动展示当前版 */
     setupChangelog();
