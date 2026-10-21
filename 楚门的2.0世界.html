@@ -1279,6 +1279,134 @@ function buildRiverPts(){
         const t=i/RIVER_N, c=riverCenter(t);
         RIVER_PTS.push({x:c[0],z:c[1],half:riverHalfW(t)});
     }
+    // 世界扩容（Issue #78）：延长段接在老河尾后——水面/河床缎带、两岸点缀、
+    // distToRiver 避让都沿 RIVER_PTS 工作，延长自动生效，老段逐点不变
+    const ext=buildRiverExtPts();
+    for(let i=1;i<ext.length;i++) RIVER_PTS.push({x:ext[i].x, z:ext[i].z, half:ext[i].half});
+}
+/* ==================== 世界扩容 · 地形支撑（Issue #78 · v5.0 先行地基） ====================
+   红线：核心区（半径 70 内）terrainH 与旧版逐值一致（探针采样比对为零差异）；
+   新地形只在 70 外生成，且经 outerFade（72 内恒 0）与各系统的平滑带接入，
+   接缝无台阶。新世界可玩半径 WORLD_R=220（旧内容外缘 66 的 3.33 倍，
+   可玩面积约 11 倍）；220 之外只抬远山坡地作谷缘，不再可走。 */
+const WORLD_R=220;
+const RIVER_EXT_CTRL=[[35.5,8.5],[47,30],[52,58],[68,84],[76,112],[94,146]];  // 延长河道控制点（首点=老河尾 RIVER_P2）
+let RIVER_EXT_PTS=null;            // 延长段采样 {x,z,half,s}：s 为距老河尾的沿程长
+function buildRiverExtPts(){
+    if(RIVER_EXT_PTS) return RIVER_EXT_PTS;
+    // 控制折线先细分、再 Chaikin 圆角两遍：曲线单调不回头（Catmull-Rom 在
+    // 间距悬殊的控制点间会打卷，实测河道坐标往回走、开槽相互叠穿，已弃用）
+    let poly=RIVER_EXT_CTRL.map(p=>[p[0],p[1]]);
+    const subdiv=[];
+    for(let i=0;i<poly.length-1;i++){
+        const a=poly[i], b=poly[i+1];
+        const steps=Math.max(2,Math.round(Math.hypot(b[0]-a[0],b[1]-a[1])/3.2));
+        for(let j=(i===0?0:1);j<=steps;j++)
+            subdiv.push([a[0]+(b[0]-a[0])*j/steps, a[1]+(b[1]-a[1])*j/steps]);
+    }
+    poly=subdiv;
+    for(let pass=0;pass<2;pass++){
+        const out=[poly[0]];
+        for(let i=0;i<poly.length-1;i++){
+            const a=poly[i], b=poly[i+1];
+            out.push([a[0]*0.75+b[0]*0.25, a[1]*0.75+b[1]*0.25]);
+            out.push([a[0]*0.25+b[0]*0.75, a[1]*0.25+b[1]*0.75]);
+        }
+        out.push(poly[poly.length-1]);
+        poly=out;
+    }
+    let s=0; const pts=[];
+    poly.forEach((c,i)=>{
+        if(i>0) s+=Math.hypot(c[0]-poly[i-1][0], c[1]-poly[i-1][1]);
+        pts.push({x:c[0], z:c[1], s:s, half:0});
+    });
+    const total=s||1;
+    pts.forEach(p=>{ p.half=0.95+0.3*(p.s/total); });   // 越往下游略宽
+    RIVER_EXT_PTS=pts;
+    return pts;
+}
+/* 点到延长河道的带边距离与沿程 s（地形开槽专用） */
+function riverExtDist(x,z){
+    const pts=buildRiverExtPts();
+    let best=1e9, bestS=0;
+    for(let i=0;i<pts.length-1;i++){
+        const a=pts[i], b=pts[i+1];
+        const vx=b.x-a.x, vz=b.z-a.z, wx=x-a.x, wz=z-a.z;
+        const L2=vx*vx+vz*vz||1;
+        let t=(wx*vx+wz*vz)/L2; t=Math.max(0,Math.min(1,t));
+        const dd=Math.hypot(wx-vx*t,wz-vz*t);
+        if(dd<best){ best=dd; bestS=a.s+(b.s-a.s)*t; }
+    }
+    return {d:best, s:bestS};
+}
+let _riverY0=null;
+function riverY0(){   // 老河尾的地形高：按核心公式手算，避免递归进扩容逻辑
+    if(_riverY0===null){
+        const x=RIVER_P2.x, z=RIVER_P2.z, d=Math.hypot(x,z);
+        const flat=Math.min(1,Math.max(0,(d-24)/16));
+        const n=hash2(Math.floor(x/6),Math.floor(z/6))*2-1;
+        const n2=hash2(Math.floor(x/17)+3,Math.floor(z/17)+7)*2-1;
+        _riverY0=(n*0.5+n2*0.9)*flat;
+    }
+    return _riverY0;
+}
+function smooth01(v){ v=Math.max(0,Math.min(1,v)); return v*v*(3-2*v); }
+function outerFade(d){ return smooth01((d-72)/10); }   // 核心保护罩：72 内扩容影响恒为零
+/* 乡村分区压平垫：{x,z,r,s}——r 内全平、外加 14 羽化，s 为压平强度（牧场留缓坡取 0.55） */
+const ZONE_PADS=[
+    {x:102,  z:48,  r:34, s:1},      // 麦田
+    {x:128,  z:-52, r:31, s:1},      // 果园
+    {x:-128, z:42,  r:37, s:0.55},   // 牧场
+    {x:-52,  z:138, r:32, s:1}       // 村舍群
+];
+const WINDMILL_HILL={x:-128, z:-138};
+function outerRawH(x,z,base,d){   // 未经分区压平/河道开槽的外围高度
+    const na=1-0.45*smooth01((d-70)/60);          // 远处噪声略收：新区以平滑缓丘为主
+    let h=base*na;
+    const hAmp=6.2*smooth01((d-70)/50);           // 缓丘幅值渐入（70 处为 0，接缝无台阶）
+    h+=hAmp*(Math.sin(x*0.021+1.7)*Math.sin(z*0.017-0.6)*0.62
+            +Math.sin(x*0.0085-0.4)*Math.sin(z*0.011+2.1)*0.55);
+    if(d>224) h+=(d-224)*0.17*smooth01((d-224)/30);   // 谷缘远山坡（只看不走）
+    const wm=Math.hypot(x-WINDMILL_HILL.x, z-WINDMILL_HILL.z);
+    h+=5.4*Math.exp(-(wm*wm)/(2*21*21));               // 风车丘
+    return h;
+}
+function zonePadY(p){   // 压平目标高 = 该区中心未经压平的高度（算一次缓存）
+    if(p._y===undefined){
+        const bd=Math.hypot(p.x,p.z);
+        const flat=Math.min(1,Math.max(0,(bd-24)/16));
+        const n=hash2(Math.floor(p.x/6),Math.floor(p.z/6))*2-1;
+        const n2=hash2(Math.floor(p.x/17)+3,Math.floor(p.z/17)+7)*2-1;
+        p._y=outerRawH(p.x, p.z, (n*0.5+n2*0.9)*flat, bd);
+    }
+    return p._y;
+}
+function outerTerrain(x,z,base,d){
+    let h=outerRawH(x,z,base,d);
+    for(const p of ZONE_PADS){
+        const dd=Math.hypot(x-p.x, z-p.z);
+        if(dd>p.r+14) continue;
+        const m=(1-smooth01((dd-p.r)/14))*p.s*outerFade(d);
+        if(m>0) h+=(zonePadY(p)-h)*m;
+    }
+    // 延长河道开槽：把河道走廊压向一条自老河尾缓降的剖面，水面缎带随后贴地形走
+    if(x>16 && z>-10){
+        const rd=riverExtDist(x,z);
+        const half=0.95+0.3*Math.min(1, rd.s/150);
+        if(rd.d<half+6){
+            const profY=riverY0()-0.011*rd.s;
+            const target=profY-0.32+Math.max(0, rd.d-half)*0.10;
+            const w=(1-smooth01((rd.d-half-0.9)/4.6))*smooth01(rd.s/16)*outerFade(d);
+            if(w>0) h+=(target-h)*w;
+        }
+        const ep=buildRiverExtPts()[buildRiverExtPts().length-1];
+        const ed=Math.hypot(x-ep.x, z-ep.z);
+        if(ed<7){   // 远河潭：河尾收成一个小潭面
+            const m=(1-smooth01((ed-3.4)/3.6))*outerFade(d);
+            if(m>0) h+=(riverY0()-0.011*ep.s-0.38-h)*m;
+        }
+    }
+    return h;
 }
 // 到河面的带边距离：<0 表示已经站在河里
 function distToRiver(x,z){
@@ -1326,9 +1454,21 @@ const WalkMap = {
         for(const sp of HUNT_SPOTS) if(Math.hypot(x-sp[0],z-sp[1])<1.3) return false;
         return true;
     },
+    /* 世界边界（Issue #78）：可玩半径——旧世界内容外缘约 66，扩容后 220，
+       之外是谷缘坡地，只看不走 */
+    inWorld(x, z){ return Math.hypot(x, z) <= WORLD_R; },
+    /* 石桥桥面高度（Issue #78）：点在桥面范围内返回甲板高，否则 null。
+       桥的位姿由建造段写入 window.__bridge（中心/轴向/半长半宽/端高/拱高） */
+    bridgeY(x, z){
+        const B=window.__bridge; if(!B) return null;
+        const dx=x-B.cx, dz=z-B.cz;
+        const a=dx*B.ax+dz*B.az, b=dx*B.bx+dz*B.bz;
+        if(Math.abs(a)>B.halfLen || Math.abs(b)>B.halfWid) return null;
+        return B.baseY + (1-(a/B.halfLen)*(a/B.halfLen))*B.peak;
+    },
     /* 角色行走口径：脚下是干地、且不在复合禁区里（供 #27 小龙等地面角色移动查询） */
     isWalkable(x, z){
-        return this.waterDry(x, z, 0) && this.clearOf(x, z);
+        return this.inWorld(x, z) && this.waterDry(x, z, 0) && this.clearOf(x, z);
     },
     /* 冰面口径（#21 季节）：点是否落在结冰的湖面/河尾潭面上（留 0.3 边距，
        免得贴着岸边冰缘行走）。只回答「是不是冰」，冻没冻由 Season.frozen 说了算 */
@@ -1341,6 +1481,7 @@ const WalkMap = {
        isWalkable/clearOf，世界布局不随季节变，指纹口径不动） */
     charWalkable(x, z){
         if(this.isWalkable(x, z)) return true;
+        if(this.bridgeY(x, z) !== null) return true;   // 石桥桥面可过（Issue #78；落脚高走 worldFloorY）
         return (typeof Season !== 'undefined') && Season.frozen && this.iceAt(x, z);
     }
 };
@@ -1742,7 +1883,7 @@ function makeOrbitControls(cam, dom){
             const d=fingerDist();
             if(pinchDist>0&&d>0){
                 st.radius*=pinchDist/d;
-                st.radius=Math.max(9,Math.min(130,st.radius));
+                st.radius=Math.max(9,Math.min(185,st.radius));
             }
             pinchDist=d;
         }
@@ -1765,7 +1906,7 @@ function makeOrbitControls(cam, dom){
         if(st.external)return;
         e.preventDefault();
         st.radius*=e.deltaY>0?1.08:0.92;
-        st.radius=Math.max(9,Math.min(130,st.radius));
+        st.radius=Math.max(9,Math.min(185,st.radius));
     },{passive:false});
     apply();
     return { update:apply, target:st.target,
@@ -1834,7 +1975,9 @@ function terrainH(x,z){
     const flat=Math.min(1,Math.max(0,(d-24)/16));   // 半径24内完全平
     const n=hash2(Math.floor(x/6),Math.floor(z/6))*2-1;
     const n2=hash2(Math.floor(x/17)+3,Math.floor(z/17)+7)*2-1;
-    return (n*0.5+n2*0.9)*flat;
+    const base=(n*0.5+n2*0.9)*flat;
+    if(d<=70) return base;   // 核心区：与扩容前逐值一致（Issue #78 红线，探针验证）
+    return outerTerrain(x,z,base,d);
 }
 // 河道缎带：沿中心线采样点铺一条跟地形的带子（高度三点平滑，免折角）。
 // halfPlus 是在河面半宽上再外扩的量（垫底沙带用）；vScale 控制水纹沿程的密度。
@@ -3162,7 +3305,7 @@ function createInterior(){
         if(o.material && o.material === skyMat) return false;
         if(o === cloudGroup || o === sunMesh || o === moonMesh) return false;
         if(o === rainPoints || o === starsGroup) return false;
-        if(o === window.__terrain) return false;
+        if(o === window.__terrain || o === window.__terrainOuter || o === window.__terrainCorridor) return false;
         if(sun && o === sun.target) return false;
         return true;
     });
@@ -5137,10 +5280,10 @@ function dragonWalkTo(a, tx, tz, speed, dt){
     const tries = [[ux*step, uz*step], [ux*step, 0], [0, uz*step]];
     for(const tr of tries){
         const nx = p.x + tr[0], nz = p.z + tr[1];
-        if(Math.hypot(nx, nz) > 58) continue;          // 世界边界
+        if(Math.hypot(nx, nz) > WORLD_R) continue;          // 世界边界（#78：随扩容更新为新半径；自主漫游目标仍在核心 55 内选，偏置不变）
         // #40：龙在室内时改走房间口径（边界+家具避让），脚下高度是室内地板
         if(window.__roomDragon ? !Interior.walkableWorld(nx, nz) : !WalkMap.charWalkable(nx, nz)) continue;
-        p.x = nx; p.z = nz; p.y = window.__roomDragon ? Interior.floorWorldY() : Season.floorY(nx, nz);
+        p.x = nx; p.z = nz; p.y = window.__roomDragon ? Interior.floorWorldY() : worldFloorY(nx, nz);
         dragonFace(a, Math.atan2(ux, uz), dt);
         return true;
     }
@@ -5688,7 +5831,7 @@ function dragonClickMove(e){
     let x = o.x + d.x*tt, z = o.z + d.z*tt;
     tt = (terrainH(x, z) - o.y)/d.y;                     // 按地形高度再交一次，落点更贴地
     if(tt > 0){ x = o.x + d.x*tt; z = o.z + d.z*tt; }
-    if(Math.hypot(x, z) > 58) return;
+    if(Math.hypot(x, z) > WORLD_R) return;
     if(dragonAgent && WalkMap.isWalkable(x, z)) dragonAgent.moveTarget = {x:x, z:z};
 }
 function setupDragonControls(){
@@ -7218,6 +7361,7 @@ function animate(){
     controls.update();
     Interior.update(dt, t);
     FishSys.update(dt, t);
+    updateExpansion(dt, t);   // #78：水车/风车缓转
     updateStandees(t);
     renderer.render(scene,camera);
     fpsTick(dt);
@@ -10393,6 +10537,723 @@ function perfTick(dt){
     }else perfHold = 0;
 }
 
+
+/* ==================== 世界扩容建造（Issue #78 · v5.0 先行地基） ====================
+   在 createOutskirts 之后、createInterior 抓室外清单之前运行：
+   新区全部物件登记进室外清单（进屋自动隐藏），外圈地面与核心地面
+   一样被排除在清单外（留给窗外景色）；季节在 init 末尾才初始化，
+   故这里推入 window.__treeTops 的新树顶会被雪帽/春花/落叶一并照顾；
+   材质也赶得上 linearizeMaterials。全区低模程序建模：能合并的静态件
+   全部并入 ruralStatics 一次绘制，作物/果实/草簇走实例化。 */
+function outerGroundY(x,z){
+    // 外圈地面/新区物件的落点高度：核心方地边缘内侧下沉 5.5cm 防共面闪烁，
+    // 离边 10 单位后归零（此环地带在核心地面之下穿过，不外露）
+    const m=Math.max(Math.abs(x),Math.abs(z));
+    return terrainH(x,z) - 0.055*(1-smooth01((m-78)/10));
+}
+function worldFloorY(x, z){   // 龙/角色在外区的落脚高：桥面优先，否则季节地面（含冰面口径）
+    const by=WalkMap.bridgeY(x, z);
+    if(by !== null) return by;
+    return Season.floorY(x, z);
+}
+/* 三点成梁：世界坐标两端点之间一根刷色方梁（栅栏横杆/桥栏/晾衣绳横杆共用） */
+function beamGeo3(x1,y1,z1, x2,y2,z2, w,h, col){
+    const dx=x2-x1, dy=y2-y1, dz=z2-z1;
+    const lenH=Math.hypot(dx,dz), len=Math.hypot(lenH,dy)||0.01;
+    const g=new THREE.BoxGeometry(len,h,w);
+    g.rotateZ(Math.atan2(dy,lenH));
+    g.rotateY(-Math.atan2(dz,dx));
+    g.translate((x1+x2)/2,(y1+y2)/2,(z1+z2)/2);
+    paintGeo(g,col);
+    return g;
+}
+let EXP_ROADS=[];   // 土路折线（散布避让共用）
+function distToRoads(x,z){
+    let best=1e9;
+    for(const line of EXP_ROADS) for(let i=0;i<line.length-1;i++){
+        const a=line[i], b=line[i+1];
+        const vx=b[0]-a[0], vz=b[1]-a[1], wx=x-a[0], wz=z-a[1];
+        const L2=vx*vx+vz*vz||1;
+        let t=(wx*vx+wz*vz)/L2; t=Math.max(0,Math.min(1,t));
+        const dd=Math.hypot(wx-vx*t,wz-vz*t);
+        if(dd<best) best=dd;
+    }
+    return best;
+}
+let expWheel=null, expMill=null;
+function updateExpansion(dt, t){
+    if(expWheel) expWheel.rotation.x-=dt*0.5;    // 水车缓转（轴沿局部 X）
+    if(expMill) expMill.rotation.z+=dt*0.32;     // 风车叶缓转
+}
+/* ---------------- 牧场氛围动物：牛羊（AgentKit 居民，只游走/吃草，无新交互） ---------------- */
+const GRAZER_DEF={
+    name:'grazer', initial:'graze',
+    states:{
+        graze:{ enter(a){ a.t=3.5+Math.random()*5; },
+            update(a,dt,t){
+                a.t-=dt;
+                a.head.rotation.x+= (0.92+Math.sin(t*1.2+(a.phase||0))*0.06 - a.head.rotation.x)*Math.min(1,dt*2.2);
+                if(a.t<=0) AgentKit.setState(a, Math.random()<0.55?'roam':'idle');
+            } },
+        idle:{ enter(a){ a.t=2+Math.random()*3.5; },
+            update(a,dt){
+                a.t-=dt;
+                a.head.rotation.x+= (0.04 - a.head.rotation.x)*Math.min(1,dt*2.2);
+                if(a.t<=0) AgentKit.setState(a,'graze');
+            } },
+        roam:{ enter(a){ a.t=16;
+                const ang=Math.random()*Math.PI*2, r=4+Math.random()*11;
+                const tx=a.home.x+Math.cos(ang)*r, tz=a.home.z+Math.sin(ang)*r;
+                a.target=WalkMap.isWalkable(tx,tz)?{x:tx,z:tz}:null;
+                if(!a.target) AgentKit.setState(a,'graze');
+              },
+            update(a,dt){
+                a.head.rotation.x+= (0.12 - a.head.rotation.x)*Math.min(1,dt*2.2);
+                if(!a.target){ AgentKit.setState(a,'graze'); return; }
+                const p=a.group.position;
+                if(Math.hypot(a.target.x-p.x,a.target.z-p.z)<0.5 || (a.t-=dt)<=0){ AgentKit.setState(a,'graze'); return; }
+                AgentKit.groundStep(a, a.target.x, a.target.z, (a.speed||0.55)*dt);
+            } }
+    }
+};
+function makeGrazer(kind, x, z, tint){
+    const grp=new THREE.Group(), parts=[];
+    const dark=kind==='cow'?0x6e5138:0x4a4038;
+    if(kind==='cow'){
+        const body=new THREE.BoxGeometry(0.98,0.85,1.58); body.translate(0,1.14,0); parts.push(paintGeo(body,tint));
+        const udder=new THREE.BoxGeometry(0.5,0.24,0.62); udder.translate(0,0.64,0.12); parts.push(paintGeo(udder,0xd9a7a0));
+        [[-0.33,0.56],[0.33,0.56],[-0.33,-0.56],[0.33,-0.56]].forEach(L=>{
+            const leg=new THREE.CylinderGeometry(0.075,0.09,0.74,6); leg.translate(L[0],0.37,L[1]); parts.push(paintGeo(leg,dark));
+        });
+        const tail=new THREE.CylinderGeometry(0.028,0.045,0.85,5); tail.rotateX(0.45); tail.translate(0,1.18,-0.86); parts.push(paintGeo(tail,tint));
+    } else {
+        const body=new THREE.IcosahedronGeometry(0.58,1); body.scale(1.02,0.9,1.32); body.translate(0,1.0,0); parts.push(paintGeo(body,0xefe9dd));
+        [[-0.26,0.4],[0.26,0.4],[-0.26,-0.4],[0.26,-0.4]].forEach(L=>{
+            const leg=new THREE.CylinderGeometry(0.05,0.06,0.58,5); leg.translate(L[0],0.29,L[1]); parts.push(paintGeo(leg,dark));
+        });
+    }
+    const bodyMesh=new THREE.Mesh(mergePaintedGeos(parts),
+        new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.95}));
+    bodyMesh.castShadow=true;
+    const headGrp=new THREE.Group();
+    headGrp.position.set(0, kind==='cow'?1.36:1.14, kind==='cow'?0.8:0.64);
+    const hp=[];
+    if(kind==='cow'){
+        const skull=new THREE.BoxGeometry(0.46,0.5,0.55); skull.translate(0,0,0.24); hp.push(paintGeo(skull,tint));
+        const muzzle=new THREE.BoxGeometry(0.34,0.26,0.24); muzzle.translate(0,-0.12,0.56); hp.push(paintGeo(muzzle,0xcaa49a));
+        [-1,1].forEach(s=>{
+            const horn=new THREE.ConeGeometry(0.05,0.24,5); horn.rotateZ(-s*0.6); horn.translate(s*0.27,0.32,0.08); hp.push(paintGeo(horn,0xe8e0cc));
+            const ear=new THREE.BoxGeometry(0.22,0.07,0.13); ear.translate(s*0.34,0.1,0.02); hp.push(paintGeo(ear,tint));
+        });
+    } else {
+        const skull=new THREE.BoxGeometry(0.3,0.34,0.42); skull.translate(0,0,0.18); hp.push(paintGeo(skull,dark));
+        [-1,1].forEach(s=>{
+            const ear=new THREE.BoxGeometry(0.17,0.06,0.1); ear.translate(s*0.22,0.1,0.02); hp.push(paintGeo(ear,dark));
+        });
+    }
+    const headMesh=new THREE.Mesh(mergePaintedGeos(hp),
+        new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.95}));
+    headMesh.castShadow=true;
+    headGrp.add(headMesh);
+    grp.add(bodyMesh); grp.add(headGrp);
+    grp.position.set(x, outerGroundY(x,z), z);
+    grp.rotation.y=Math.random()*Math.PI*2;
+    scene.add(grp);
+    return AgentKit.spawn(GRAZER_DEF, {group:grp, head:headGrp, home:{x:x, z:z},
+        speed:kind==='cow'?0.5:0.66, phase:Math.random()*7, t:Math.random()*4, target:null});
+}
+/* ---------------- 村舍小屋（合并进静态件） ---------------- */
+function cottageGeos(list, x, z, yaw, s, bodyCol, roofCol){
+    const baseY=outerGroundY(x,z);
+    const add=(geo, lx,ly,lz, col, ry)=>{
+        paintGeo(geo,col);
+        geo.translate(lx,ly,lz);
+        geo.scale(s,s,s);
+        geo.rotateY(yaw);
+        geo.translate(x,baseY,z);
+        list.push(geo);
+    };
+    add(new THREE.BoxGeometry(4.6,2.9,3.8), 0,1.45,0, bodyCol);
+    const roof=new THREE.ConeGeometry(3.95,1.9,4); roof.rotateY(Math.PI/4); roof.scale(1.16,1,0.84);
+    add(roof, 0,3.85,0, roofCol);
+    add(new THREE.BoxGeometry(0.5,1.15,0.5), 1.25,3.75,0.55, 0x8d8578);
+    add(new THREE.BoxGeometry(0.85,1.55,0.09), 0,0.78,1.92, 0x5d4630);
+    add(new THREE.BoxGeometry(0.72,0.72,0.09), -1.35,1.65,1.92, 0x46525e);
+    add(new THREE.BoxGeometry(0.72,0.72,0.09), 1.35,1.65,1.92, 0x46525e);
+    add(new THREE.BoxGeometry(0.09,0.72,0.72), 2.32,1.65,0, 0x46525e);
+}
+/* 栅栏一圈（点列自动取点）：柱子+两道横杆，进静态合并列；skipNear 给大门留口 */
+function fenceGeos(list, pts, closeLoop, skipNear){
+    const P=pts.slice();
+    if(closeLoop) P.push(pts[0]);
+    const posts=[];
+    for(let i=0;i<P.length-1;i++){
+        const a=P[i], b=P[i+1];
+        const len=Math.hypot(b[0]-a[0], b[1]-a[1]);
+        const steps=Math.max(1, Math.round(len/2.3));
+        for(let j=0;j<steps;j++) posts.push([a[0]+(b[0]-a[0])*j/steps, a[1]+(b[1]-a[1])*j/steps]);
+    }
+    if(closeLoop) posts.push(P[P.length-1].slice());
+    const kept=posts.filter(p=>!skipNear || Math.hypot(p[0]-skipNear[0], p[1]-skipNear[1])>2.4);
+    kept.forEach(p=>{
+        const y=outerGroundY(p[0],p[1]);
+        const post=new THREE.CylinderGeometry(0.055,0.075,1.02,5);
+        post.translate(p[0], y+0.51, p[1]);
+        list.push(paintGeo(post, 0x8a6b48));
+    });
+    for(let i=0;i<kept.length-1;i++){
+        const a=kept[i], b=kept[i+1];
+        if(Math.hypot(b[0]-a[0], b[1]-a[1])>3.4) continue;   // 大门口断开
+        const ya=outerGroundY(a[0],a[1]), yb=outerGroundY(b[0],b[1]);
+        list.push(beamGeo3(a[0],ya+0.36,a[1], b[0],yb+0.36,b[1], 0.05,0.08, 0x97754f));
+        list.push(beamGeo3(a[0],ya+0.72,a[1], b[0],yb+0.72,b[1], 0.05,0.08, 0x97754f));
+    }
+}
+function buildExpansion(){
+    const rnd=mulberry32(7801);
+    const statics=[];   // 全部静态刷色件最终合并成一个 mesh
+    /* ---------- 外圈地面：与核心地面共用同一材质，四季换色/换雪自动同步 ----------
+       环带间距是保真度命门：地形噪声以 6 单位为格、河道只有 2–3 单位宽，
+       网格间距一大，插值面就在格间鼓包/塌陷——河道被埋、道路被顶穿、
+       角色脚下与眼中地面差出半米。56–170（全部可玩内容所在环带）用
+       2.5 间距密网，170 外只是远景剪影，逐步放疏。 */
+    {
+        const rings=[];
+        for(let r=56;r<=170;r+=2.5) rings.push(r);
+        rings.push(178,186,195,204,214,224,235,246,258,270,283,296,308);
+        const SEG=184, pos=[], uvA=[], idx=[];
+        rings.forEach(r=>{
+            for(let i=0;i<=SEG;i++){
+                const a=i/SEG*Math.PI*2, x=Math.cos(a)*r, z=Math.sin(a)*r;
+                pos.push(x, outerGroundY(x,z), z);
+                uvA.push(x*(14/160), z*(14/160));   // 与核心地面同贴图密度
+            }
+        });
+        for(let ri=0;ri<rings.length-1;ri++) for(let i=0;i<SEG;i++){
+            const a=ri*(SEG+1)+i, b=a+SEG+1;
+            idx.push(a,a+1,b, a+1,b+1,b);
+        }
+        const g=new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+        g.setAttribute('uv', new THREE.Float32BufferAttribute(uvA,2));
+        g.setIndex(idx);
+        g.computeVertexNormals();
+        const mesh=new THREE.Mesh(g, window.__terrain.material);
+        mesh.receiveShadow=true;
+        mesh.name='outerGround';
+        scene.add(mesh);
+        window.__terrainOuter=mesh;
+    }
+    /* ---------- 河道走廊地面带：外圈地面是约 5 单位间距的粗网格，2–3 单位宽的
+       河道会整个落在网格孔里（真地形有河、渲染地面没河，水缎带被粗地面盖住，
+       实测呈断续蓝带）。沿延长河道另铺一条逐点贴真地形的地面带（同材质、
+       四季同步），把河道表面从粗网格里接管过来；带面比真地形抬高 3.5cm
+       防共面闪烁，外缘两列下扎进粗地面防露边。 ---------- */
+    {
+        const pts=buildRiverExtPts();
+        const offs=[-8,-4.5,-2.4,-1.2,0,1.2,2.4,4.5,8];
+        const pos=[], uvA=[], idx=[];
+        let row=0;
+        for(let i=0;i<pts.length;i+=2){
+            const p=pts[i], q=pts[Math.min(pts.length-1,i+2)], q0=pts[Math.max(0,i-2)];
+            let tx=q.x-q0.x, tz=q.z-q0.z;
+            const L=Math.hypot(tx,tz)||1; tx/=L; tz/=L;
+            const nx=-tz, nz=tx;
+            offs.forEach((o,k)=>{
+                const x=p.x+nx*o, z=p.z+nz*o;
+                let y=outerGroundY(x,z)+0.035;
+                // 渲染层浅槽：水面缎带是按中心高拉平的横断面，未开槽段的横坡会把
+                // 带面顶穿成蓝白断点；带面在河道内压一个 ≤0.16 的浅槽（仅视觉，
+                // 真地形与行走口径分毫不动），水面就稳稳坐在槽里
+                y-=0.16*(1-smooth01((Math.abs(o)-1.2)/3.3));
+                if(k===0 || k===offs.length-1) y-=0.09;
+                pos.push(x,y,z);
+                uvA.push(x*(14/160), z*(14/160));
+            });
+            if(row>0){
+                const a=(row-1)*offs.length, b=row*offs.length;
+                for(let k=0;k<offs.length-1;k++) idx.push(a+k,a+k+1,b+k, a+k+1,b+k+1,b+k);
+            }
+            row++;
+        }
+        const g=new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+        g.setAttribute('uv', new THREE.Float32BufferAttribute(uvA,2));
+        g.setIndex(idx);
+        g.computeVertexNormals();
+        const strip=new THREE.Mesh(g, window.__terrain.material);
+        strip.receiveShadow=true;
+        strip.name='riverCorridor';
+        scene.add(strip);
+        window.__terrainCorridor=strip;
+    }
+    /* ---------- 石桥：先定桥位（下游 s≈62 处），WalkMap 桥面口径随之生效 ---------- */
+    const extPts=buildRiverExtPts();
+    let bridgeInfo=null;
+    {
+        let bi=0;
+        extPts.forEach((p,i)=>{ if(Math.abs(p.s-62)<Math.abs(extPts[bi].s-62)) bi=i; });
+        const c=extPts[bi], q1=extPts[Math.min(extPts.length-1,bi+2)], q0=extPts[Math.max(0,bi-2)];
+        let tx=q1.x-q0.x, tz=q1.z-q0.z;
+        const tl=Math.hypot(tx,tz)||1; tx/=tl; tz/=tl;
+        const ax=-tz, az=tx;   // 桥轴 = 河切线的法向
+        const halfLen=6.4, halfWid=1.85, peak=0.55;
+        const e1=[c.x-ax*halfLen, c.z-az*halfLen], e2=[c.x+ax*halfLen, c.z+az*halfLen];
+        const baseY=Math.max(outerGroundY(e1[0],e1[1]), outerGroundY(e2[0],e2[1]))+0.14;
+        window.__bridge={cx:c.x, cz:c.z, ax:ax, az:az, bx:tx, bz:tz,
+            halfLen:halfLen, halfWid:halfWid, baseY:baseY, peak:peak};
+        const deckY=a=>baseY+(1-(a/halfLen)*(a/halfLen))*peak;
+        const SEG_N=9;
+        for(let i=0;i<SEG_N;i++){
+            const a=-halfLen+(i+0.5)*(2*halfLen/SEG_N);
+            const slope=(deckY(a+0.4)-deckY(a-0.4))/0.8;
+            const slab=new THREE.BoxGeometry(2*halfLen/SEG_N+0.18, 0.26, halfWid*2);
+            slab.rotateZ(Math.atan(slope));
+            slab.rotateY(Math.atan2(-az,ax));
+            slab.translate(c.x+ax*a, deckY(a)-0.13, c.z+az*a);
+            statics.push(paintGeo(slab, i%2?0x8f9296:0x878b90));
+        }
+        [-1,1].forEach(side=>{   // 两侧栏杆：柱 + 顺拱顶杆
+            const off=side*(halfWid-0.14);
+            let prev=null;
+            for(let i=0;i<=6;i++){
+                const a=-halfLen+i*(2*halfLen/6);
+                const px=c.x+ax*a+tx*off, pz=c.z+az*a+tz*off, py=deckY(a);
+                const post=new THREE.BoxGeometry(0.14,0.62,0.14);
+                post.translate(px, py+0.31, pz);
+                statics.push(paintGeo(post, 0x7e8288));
+                if(prev) statics.push(beamGeo3(prev[0],prev[1]+0.6,prev[2], px,py+0.6,pz, 0.09,0.11, 0x84888e));
+                prev=[px,py,pz];
+            }
+        });
+        const westFirst=Math.hypot(e1[0],e1[1])<=Math.hypot(e2[0],e2[1]);
+        bridgeInfo={c:[c.x,c.z], west:westFirst?e1:e2, east:westFirst?e2:e1};
+        // 桥头引道石墩
+        [e1,e2].forEach(e=>{
+            const pier=new THREE.BoxGeometry(1.4,0.5,3.4);
+            pier.rotateY(Math.atan2(-az,ax));
+            pier.translate(e[0], outerGroundY(e[0],e[1])+0.1, e[1]);
+            statics.push(paintGeo(pier, 0x8f9296));
+        });
+    }
+    /* ---------- 土路：核心→桥西、桥东→麦田、桥东→果园、核心→牧场、核心→村舍 ---------- */
+    {
+        const eW=bridgeInfo.west, eE=bridgeInfo.east;
+        EXP_ROADS=[
+            [[8.5,4.5],[19,8],[28,15],[36,26],[42,40],[46,52], eW],
+            [eE, [74,60],[79,57]],
+            [eE, [80,44],[96,22],[108,-2],[117,-28],[123,-42]],
+            [[8.5,4.5],[-14,10],[-44,16],[-76,26],[-100,37]],
+            [[6,10],[-2,34],[-8,66],[-16,96],[-30,118],[-43,129]]
+        ];
+        const pos=[], uvA=[], idx=[]; let vBase=0;
+        const chaikin=pts=>{
+            let p=pts;
+            for(let pass=0;pass<2;pass++){
+                const out=[p[0]];
+                for(let i=0;i<p.length-1;i++){
+                    out.push([p[i][0]*0.75+p[i+1][0]*0.25, p[i][1]*0.75+p[i+1][1]*0.25]);
+                    out.push([p[i][0]*0.25+p[i+1][0]*0.75, p[i][1]*0.25+p[i+1][1]*0.75]);
+                }
+                out.push(p[p.length-1]);
+                p=out;
+            }
+            return p;
+        };
+        EXP_ROADS.forEach(line=>{
+            const sm=chaikin(line);
+            let dist=0;
+            sm.forEach((p,i)=>{
+                const q=sm[Math.min(sm.length-1,i+1)], q0=sm[Math.max(0,i-1)];
+                let nx=-(q[1]-q0[1]), nz=(q[0]-q0[0]);
+                const nl=Math.hypot(nx,nz)||1; nx/=nl; nz/=nl;
+                if(i>0) dist+=Math.hypot(p[0]-sm[i-1][0], p[1]-sm[i-1][1]);
+                const wHalf=1.5;
+                pos.push(p[0]+nx*wHalf, outerGroundY(p[0]+nx*wHalf,p[1]+nz*wHalf)+0.05, p[1]+nz*wHalf);
+                pos.push(p[0]-nx*wHalf, outerGroundY(p[0]-nx*wHalf,p[1]-nz*wHalf)+0.05, p[1]-nz*wHalf);
+                uvA.push(0, dist/4, 1, dist/4);
+                if(i>0){
+                    const a=vBase+(i-1)*2;
+                    idx.push(a,a+1,a+2, a+1,a+3,a+2);
+                }
+            });
+            vBase+=sm.length*2;
+        });
+        const g=new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+        g.setAttribute('uv', new THREE.Float32BufferAttribute(uvA,2));
+        g.setIndex(idx);
+        g.computeVertexNormals();
+        const rc=makeCanvas(64,64), rg=rc.getContext('2d');
+        const grad=rg.createLinearGradient(0,0,64,0);
+        grad.addColorStop(0,'rgba(166,138,92,0)');
+        grad.addColorStop(0.18,'rgba(166,138,92,0.95)');
+        grad.addColorStop(0.5,'rgba(176,148,100,1)');
+        grad.addColorStop(0.82,'rgba(166,138,92,0.95)');
+        grad.addColorStop(1,'rgba(166,138,92,0)');
+        rg.fillStyle=grad; rg.fillRect(0,0,64,64);
+        for(let i=0;i<300;i++){ rg.fillStyle='rgba(90,70,40,'+(Math.random()*0.12)+')'; rg.fillRect(Math.random()*64,Math.random()*64,1.6,1.6); }
+        const roadTex=canvasTex(rc, 1, 1);
+        const road=new THREE.Mesh(g, new THREE.MeshStandardMaterial({map:roadTex, transparent:true,
+            roughness:1, depthWrite:false, polygonOffset:true, polygonOffsetFactor:-1}));
+        road.renderOrder=1;
+        road.receiveShadow=true;
+        scene.add(road);
+    }
+    /* ---------- 麦田（102,48）：畦土 + 实例化麦穗 + 稻草人 + 栅栏 ---------- */
+    const WHEAT={x:102, z:48, rot:-0.3};
+    const wheatLocal=(lx,lz)=>{
+        const c=Math.cos(WHEAT.rot), s=Math.sin(WHEAT.rot);
+        return [WHEAT.x+lx*c-lz*s, WHEAT.z+lx*s+lz*c];
+    };
+    {
+        const sc=makeCanvas(256,256), sg=sc.getContext('2d');
+        sg.fillStyle='#6d5136'; sg.fillRect(0,0,256,256);
+        for(let y=0;y<256;y+=32){
+            const gr=sg.createLinearGradient(0,y,0,y+32);
+            gr.addColorStop(0,'#5a4230'); gr.addColorStop(0.45,'#7d5f3e');
+            gr.addColorStop(0.55,'#7d5f3e'); gr.addColorStop(1,'#543e2b');
+            sg.fillStyle=gr; sg.fillRect(0,y,256,32);
+        }
+        for(let i=0;i<2400;i++){ sg.fillStyle=rnd()<0.5?'rgba(0,0,0,0.08)':'rgba(255,235,200,0.05)';
+            sg.fillRect(rnd()*256, rnd()*256, 2, 2); }
+        const soil=new THREE.Mesh(new THREE.PlaneGeometry(50,33),
+            new THREE.MeshStandardMaterial({map:canvasTex(sc,9,6), roughness:1}));
+        soil.rotation.x=-Math.PI/2; soil.rotation.z=WHEAT.rot;
+        soil.position.set(WHEAT.x, zonePadY(ZONE_PADS[0])+0.04, WHEAT.z);
+        soil.receiveShadow=true;
+        scene.add(soil);
+        // 麦穗：交叉面片 + 麦穗贴图（alphaTest），成行实例化
+        const wc=makeCanvas(128,128), wg=wc.getContext('2d');
+        wg.clearRect(0,0,128,128);
+        for(let i=0;i<40;i++){
+            const x=8+rnd()*112, sway=(rnd()-0.5)*10, h=84+rnd()*36;
+            wg.strokeStyle='rgba(178,132,52,0.95)'; wg.lineWidth=2.4;
+            wg.beginPath(); wg.moveTo(x,128); wg.quadraticCurveTo(x+sway*0.4,128-h*0.6,x+sway,128-h); wg.stroke();
+            wg.fillStyle='rgba(219,168,64,0.98)';
+            for(let k=0;k<5;k++){
+                const t=k/5;
+                wg.beginPath();
+                wg.ellipse(x+sway*t+(k%2?2.6:-2.6), 128-h+t*10-4, 2.2, 4.6, k%2?0.5:-0.5, 0, 7);
+                wg.fill();
+            }
+            wg.beginPath(); wg.ellipse(x+sway, 124-h, 2.4, 5.2, 0, 0, 7); wg.fill();
+        }
+        const p1=new THREE.PlaneGeometry(0.62,0.98); p1.translate(0,0.49,0);
+        const p2=new THREE.PlaneGeometry(0.62,0.98); p2.rotateY(Math.PI/2); p2.translate(0,0.49,0);
+        const wheatGeo=mergeGeos([p1,p2]);
+        const wheatIM=new THREE.InstancedMesh(wheatGeo,
+            new THREE.MeshStandardMaterial({map:canvasTex(wc), alphaTest:0.42, side:THREE.DoubleSide, roughness:1}), 760);
+        let wi=0;
+        for(let row=0;row<16 && wi<760;row++){
+            const lz=-15+row*2.0;
+            for(let lx=-23.5;lx<=23.5 && wi<760;lx+=1.13){
+                const jx=lx+(rnd()-0.5)*0.5, jz=lz+(rnd()-0.5)*0.5;
+                const wpos=wheatLocal(jx,jz);
+                dummy.position.set(wpos[0], outerGroundY(wpos[0],wpos[1]), wpos[1]);
+                dummy.rotation.set(0, rnd()*Math.PI, 0);
+                const s=0.85+rnd()*0.4;
+                dummy.scale.set(s,s,s);
+                dummy.updateMatrix();
+                wheatIM.setMatrixAt(wi++, dummy.matrix);
+            }
+        }
+        wheatIM.count=wi;
+        wheatIM.instanceMatrix.needsUpdate=true;
+        scene.add(wheatIM);
+        // 稻草人 1 座（另一座在果园边）
+        const scare=(wx,wz,ry)=>{
+            const y=outerGroundY(wx,wz);
+            const pole=new THREE.CylinderGeometry(0.05,0.06,2.0,6); pole.translate(wx,y+1.0,wz); statics.push(paintGeo(pole,0x7a5c38));
+            const arm=beamGeo3(wx-Math.cos(ry)*0.75, y+1.5, wz+Math.sin(ry)*0.75, wx+Math.cos(ry)*0.75, y+1.42, wz-Math.sin(ry)*0.75, 0.06,0.06, 0x7a5c38); statics.push(arm);
+            const torso=new THREE.ConeGeometry(0.4,0.95,7); torso.translate(wx,y+1.12,wz); statics.push(paintGeo(torso,0x51668a));
+            const head=new THREE.SphereGeometry(0.17,8,6); head.translate(wx,y+1.86,wz); statics.push(paintGeo(head,0xd9b878));
+            const hat=new THREE.ConeGeometry(0.3,0.2,8); hat.translate(wx,y+2.02,wz); statics.push(paintGeo(hat,0xb08d3f));
+        };
+        scare(90,38, 0.7);
+        scare(113,58, -0.4);
+        // 麦田栅栏（留靠路一侧的口）
+        const corners=[[-25.5,-17.5],[25.5,-17.5],[25.5,17.5],[-25.5,17.5]].map(cn=>wheatLocal(cn[0],cn[1]));
+        fenceGeos(statics, corners, true, wheatLocal(-25.5,0));
+    }
+    /* ---------- 果园（128,-52）：成排果树（树冠走 LEAF_B 共享材质，季节染色自动跟） ---------- */
+    {
+        const trunkGeos=[], canopyGeos=[];
+        let fruitN=0; const fruitPos=[];
+        for(let row=0;row<4;row++) for(let col=0;col<5;col++){
+            if(rnd()<0.12) continue;   // 偶缺一棵，自然些
+            const x=128+(col-2)*6.6+(rnd()-0.5)*1.4, z=-52+(row-1.5)*6.8+(rnd()-0.5)*1.4;
+            const y=outerGroundY(x,z), s=0.9+rnd()*0.3;
+            const trunk=new THREE.CylinderGeometry(0.13*s,0.2*s,2.2*s,6);
+            trunk.translate(x, y+1.1*s, z);
+            trunkGeos.push(paintGeo(trunk, 0x6e5136));
+            const blob=new THREE.IcosahedronGeometry(1.55*s,1);
+            blob.translate(x, y+(2.2+1.15)*s, z);
+            canopyGeos.push(blob);
+            const off=new THREE.IcosahedronGeometry(0.95*s,1);
+            off.translate(x+0.9*s, y+(2.2+0.75)*s, z+0.3*s);
+            canopyGeos.push(off);
+            if(window.__treeTops) window.__treeTops.push({x:x, z:z, y:y, s:1, isPine:false, top:4.75*s});
+            for(let f=0;f<9;f++){
+                const a=rnd()*Math.PI*2, e=rnd()*Math.PI-Math.PI/2;
+                fruitPos.push([x+Math.cos(a)*Math.cos(e)*1.5*s, y+3.35*s+Math.sin(e)*1.3*s, z+Math.sin(a)*Math.cos(e)*1.5*s]);
+                fruitN++;
+            }
+        }
+        const trunks=new THREE.Mesh(mergePaintedGeos(trunkGeos),
+            new THREE.MeshStandardMaterial({vertexColors:true, roughness:1}));
+        trunks.castShadow=true;
+        scene.add(trunks);
+        const canopy=new THREE.Mesh(mergeGeos(canopyGeos), LEAF_B);
+        canopy.castShadow=true;
+        scene.add(canopy);
+        const fruitIM=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.1,0),
+            new THREE.MeshStandardMaterial({color:0xd8452e, roughness:0.55}), Math.max(1,fruitN));
+        fruitPos.forEach((p,i)=>{
+            dummy.position.set(p[0],p[1],p[2]);
+            dummy.rotation.set(0,0,0);
+            dummy.scale.set(1,1,1);
+            dummy.updateMatrix();
+            fruitIM.setMatrixAt(i, dummy.matrix);
+        });
+        fruitIM.count=fruitN;
+        fruitIM.instanceMatrix.needsUpdate=true;
+        scene.add(fruitIM);
+    }
+    /* ---------- 牧场（-128,42）：栅栏 + 牛羊 ---------- */
+    {
+        const per=[];
+        for(let i=0;i<40;i++){
+            const a=i/40*Math.PI*2;
+            per.push([-128+Math.cos(a)*31, 42+Math.sin(a)*21]);
+        }
+        fenceGeos(statics, per, true, [-98,38]);
+        makeGrazer('cow', -136, 36, 0xe8e0d0);
+        makeGrazer('cow', -120, 50, 0x8a6642);
+        makeGrazer('cow', -126, 30, 0xd9cbb2);
+        makeGrazer('sheep', -118, 36, 0xefe9dd);
+        makeGrazer('sheep', -140, 50, 0xefe9dd);
+    }
+    /* ---------- 村舍群（-52,138）：三栋小屋 + 水井 + 柴堆 + 晾衣绳 ---------- */
+    {
+        cottageGeos(statics, -63, 129, 0.55, 1.0, 0xe6dcc8, 0x9a4f38);
+        cottageGeos(statics, -43, 147, -0.35, 1.14, 0xc9a06b, 0x6e6259);
+        cottageGeos(statics, -59, 153, 0.95, 0.88, 0xd9c9a8, 0x7a4a3a);
+        const wy=outerGroundY(-52,132);
+        const well=new THREE.CylinderGeometry(0.62,0.7,0.78,10); well.translate(-52,wy+0.39,132); statics.push(paintGeo(well,0x8d9299));
+        [-0.55,0.55].forEach(dx=>{
+            const post=new THREE.BoxGeometry(0.09,1.35,0.09); post.translate(-52+dx,wy+1.05,132); statics.push(paintGeo(post,0x7a5c38));
+        });
+        const wroof=new THREE.ConeGeometry(0.95,0.5,4); wroof.rotateY(Math.PI/4); wroof.translate(-52,wy+1.95,132); statics.push(paintGeo(wroof,0x9a4f38));
+        const bucket=new THREE.CylinderGeometry(0.14,0.11,0.24,7); bucket.translate(-52,wy+0.85,132); statics.push(paintGeo(bucket,0x6e5136));
+        // 柴堆
+        const py=outerGroundY(-45,141);
+        [[0,0.12,0],[0.26,0.12,0.1],[-0.26,0.12,-0.06],[0.13,0.34,0.02],[-0.13,0.34,0.08],[0,0.55,0]].forEach(o=>{
+            const log=new THREE.CylinderGeometry(0.11,0.11,1.15,7);
+            log.rotateZ(Math.PI/2); log.rotateY(0.25);
+            log.translate(-45+o[0], py+o[1], 141+o[2]);
+            statics.push(paintGeo(log, 0x7d5a36));
+        });
+        // 晾衣绳
+        const cy=outerGroundY(-59,143);
+        [-1.7,1.7].forEach(dx=>{
+            const post=new THREE.CylinderGeometry(0.045,0.055,1.7,5); post.translate(-59+dx,cy+0.85,143); statics.push(paintGeo(post,0x8a6b48));
+        });
+        statics.push(beamGeo3(-60.7,cy+1.62,143, -57.3,cy+1.62,143, 0.02,0.02, 0x5a5148));
+        [[-60.1,0xd95f4b],[-59.0,0xe8e3d5],[-57.9,0x4b7ad9]].forEach(cl=>{
+            const cloth=new THREE.BoxGeometry(0.62,0.72,0.03); cloth.translate(cl[0],cy+1.24,143); statics.push(paintGeo(cloth,cl[1]));
+        });
+    }
+    /* ---------- 河边水车（延长河 s≈30 处）：架子进静态件，轮体单独缓转 ---------- */
+    {
+        let wi2=0;
+        extPts.forEach((p,i)=>{ if(Math.abs(p.s-30)<Math.abs(extPts[wi2].s-30)) wi2=i; });
+        const c=extPts[wi2], q1=extPts[Math.min(extPts.length-1,wi2+2)], q0=extPts[Math.max(0,wi2-2)];
+        let tx=q1.x-q0.x, tz=q1.z-q0.z;
+        const tl=Math.hypot(tx,tz)||1; tx/=tl; tz/=tl;
+        let nx=-tz, nz=tx;
+        if(nx>0){ nx=-nx; nz=-nz; }   // 轮子落在靠核心一侧的岸边
+        const wx=c.x+nx*(c.half+0.75), wz=c.z+nz*(c.half+0.75);
+        const groundAtWheel=outerGroundY(wx,wz);
+        const axleY=groundAtWheel+1.72;
+        const fx=c.x+nx*(c.half+2.2), fz=c.z+nz*(c.half+2.2);
+        const fy=outerGroundY(fx,fz);
+        [-0.55,0.55].forEach(off=>{
+            const px=fx+tx*off, pz=fz+tz*off;
+            statics.push(beamGeo3(px, outerGroundY(px,pz)-0.1, pz, wx+nx*0.32, axleY, wz+nz*0.32, 0.13,0.15, 0x6e5136));
+        });
+        statics.push(beamGeo3(wx-nx*0.5, axleY, wz-nz*0.5, wx+nx*0.55, axleY, wz+nz*0.55, 0.14,0.14, 0x5d4630));
+        // 轮盘在「水流×竖直」平面内（盘面顺流、轴沿岸向）：几何先转进 ZY 平面，
+        // 组朝向把局部 Z 对准河切线后，轮子绕局部 X 轴缓转
+        const parts=[];
+        const rim1=new THREE.TorusGeometry(1.85,0.085,6,18); rim1.rotateY(Math.PI/2); rim1.translate(-0.26,0,0); parts.push(paintGeo(rim1,0x7d5c36));
+        const rim2=new THREE.TorusGeometry(1.85,0.085,6,18); rim2.rotateY(Math.PI/2); rim2.translate(0.26,0,0); parts.push(paintGeo(rim2,0x7d5c36));
+        for(let i=0;i<8;i++){
+            const a=i/8*Math.PI*2;
+            const sp=new THREE.BoxGeometry(0.07,3.7,0.09); sp.rotateX(a); parts.push(paintGeo(sp,0x8a6b48));
+            const pd=new THREE.BoxGeometry(0.56,0.36,0.52); pd.translate(0,1.85,0); pd.rotateX(a); parts.push(paintGeo(pd,0x97754f));
+        }
+        const hub=new THREE.CylinderGeometry(0.17,0.17,0.8,8); hub.rotateZ(Math.PI/2); parts.push(paintGeo(hub,0x5d4630));
+        const wheel=new THREE.Mesh(mergePaintedGeos(parts),
+            new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.9}));
+        wheel.castShadow=true;
+        const wgrp=new THREE.Group();
+        wgrp.position.set(wx, axleY, wz);
+        wgrp.rotation.y=Math.atan2(tx,tz);
+        wgrp.add(wheel);
+        scene.add(wgrp);
+        expWheel=wheel;
+    }
+    /* ---------- 远丘风车（-128,-138）：塔身进静态件，叶片单独缓转 ---------- */
+    {
+        const mx=WINDMILL_HILL.x, mz=WINDMILL_HILL.z;
+        const my=outerGroundY(mx,mz);
+        const tower=new THREE.CylinderGeometry(1.05,1.95,10.6,8); tower.translate(mx,my+5.3,mz); statics.push(paintGeo(tower,0xb9a888));
+        const cap=new THREE.ConeGeometry(1.6,1.7,8); cap.translate(mx,my+11.4,mz); statics.push(paintGeo(cap,0x7a4a3a));
+        const door=new THREE.BoxGeometry(0.85,1.6,0.09);
+        const fx0=-mx, fz0=-mz, fl=Math.hypot(fx0,fz0)||1;
+        door.rotateY(Math.atan2(fx0/fl,fz0/fl));
+        door.translate(mx+fx0/fl*1.78, my+0.8, mz+fz0/fl*1.78);
+        statics.push(paintGeo(door,0x5d4630));
+        const parts=[];
+        for(let i=0;i<4;i++){
+            const bl=new THREE.BoxGeometry(0.36,4.5,0.05); bl.translate(0,2.25,0); bl.rotateZ(i*Math.PI/2+0.5); parts.push(paintGeo(bl,0xe8e0cc));
+        }
+        const hub=new THREE.CylinderGeometry(0.2,0.2,0.4,8); hub.rotateX(Math.PI/2); parts.push(paintGeo(hub,0x5d4630));
+        const blades=new THREE.Mesh(mergePaintedGeos(parts),
+            new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.85}));
+        const bgrp=new THREE.Group();
+        bgrp.position.set(mx+fx0/fl*1.25, my+9.7, mz+fz0/fl*1.25);
+        bgrp.rotation.y=Math.atan2(fx0/fl,fz0/fl);
+        bgrp.add(blades);
+        scene.add(bgrp);
+        expMill=blades;
+    }
+    /* ---------- 远河潭补水面：与湖河共用 pondMesh 材质，流动口径自动一致 ---------- */
+    {
+        const ep=extPts[extPts.length-1];
+        const profEnd=riverY0()-0.011*ep.s;
+        const disc=new THREE.Mesh(new THREE.CircleGeometry(4.3,22), pondMesh.material);
+        disc.rotation.x=-Math.PI/2;
+        disc.position.set(ep.x, profEnd-0.22, ep.z);
+        scene.add(disc);
+        const shore=new THREE.Mesh(new THREE.RingGeometry(4.2,5.9,22),
+            new THREE.MeshStandardMaterial({color:0xc9b586, roughness:1}));
+        shore.rotation.x=-Math.PI/2;
+        shore.position.set(ep.x, profEnd-0.3, ep.z);
+        shore.receiveShadow=true;
+        scene.add(shore);
+    }
+    /* ---------- 外围散布：低模乔木 + 岩石与草簇/野花 ----------
+       树干与岩石刷色合并；树冠单独成两件、挂核心同款季节材质
+       （松冠 NEEDLE_A、桦冠 LEAF_B），四季染色与核心树林同步 */
+    {
+        const geos=[], pineTops=[], birchTops=[];
+        let placed=0, guard=0;
+        while(placed<118 && guard++<2600){
+            const a=rnd()*Math.PI*2, r=80+Math.pow(rnd(),0.8)*122;
+            const x=Math.cos(a)*r, z=Math.sin(a)*r;
+            if(!WalkMap.waterDry(x,z,1.6)) continue;
+            let bad=false;
+            for(const p of ZONE_PADS) if(Math.hypot(x-p.x,z-p.z)<p.r+6){ bad=true; break; }
+            if(bad) continue;
+            if(Math.hypot(x-WINDMILL_HILL.x,z-WINDMILL_HILL.z)<11) continue;
+            if(distToRoads(x,z)<3.4) continue;
+            const y=outerGroundY(x,z), s=0.95+rnd()*0.9;
+            if(rnd()<0.52){   // 松
+                const t1=new THREE.CylinderGeometry(0.09*s,0.14*s,1.3*s,5); t1.translate(x,y+0.65*s,z); geos.push(paintGeo(t1,0x6e5136));
+                const c1=new THREE.ConeGeometry(1.25*s,2.6*s,7); c1.translate(x,y+(1.3+1.3)*s,z); pineTops.push(c1);
+                const c2=new THREE.ConeGeometry(0.85*s,1.9*s,7); c2.translate(x,y+(1.3+2.6)*s,z); pineTops.push(c2);
+                if(window.__treeTops) window.__treeTops.push({x:x, z:z, y:y, s:1, isPine:true, top:5.6*s});
+            } else {          // 桦/阔叶
+                const t1=new THREE.CylinderGeometry(0.1*s,0.15*s,1.9*s,5); t1.translate(x,y+0.95*s,z); geos.push(paintGeo(t1,0xcfc4ae));
+                const b1=new THREE.IcosahedronGeometry(1.35*s,0); b1.translate(x,y+(1.9+1.0)*s,z); birchTops.push(b1);
+                const b2=new THREE.IcosahedronGeometry(0.9*s,0); b2.translate(x+0.7*s,y+(1.9+1.5)*s,z+0.3*s); birchTops.push(b2);
+                if(window.__treeTops) window.__treeTops.push({x:x, z:z, y:y, s:1, isPine:false, top:4.5*s});
+            }
+            placed++;
+        }
+        for(let i=0;i<44;i++){
+            const a=rnd()*Math.PI*2, r=78+rnd()*125;
+            const x=Math.cos(a)*r, z=Math.sin(a)*r;
+            if(!WalkMap.waterDry(x,z,1.0)) continue;
+            if(distToRoads(x,z)<2.4) continue;
+            const s=0.35+rnd()*0.95;
+            const rock=new THREE.IcosahedronGeometry(s,0);
+            rock.scale(1, 0.62+rnd()*0.3, 1);
+            rock.rotateY(rnd()*Math.PI);
+            rock.translate(x, outerGroundY(x,z)+s*0.16, z);
+            geos.push(paintGeo(rock, rnd()<0.5?0x8d9299:0x7e8288));
+        }
+        const nature=new THREE.Mesh(mergePaintedGeos(geos),
+            new THREE.MeshStandardMaterial({vertexColors:true, roughness:1, flatShading:true}));
+        nature.castShadow=true;
+        nature.receiveShadow=true;
+        scene.add(nature);
+        const pineMesh=new THREE.Mesh(mergeGeos(pineTops), NEEDLE_A);
+        pineMesh.castShadow=true;
+        scene.add(pineMesh);
+        const birchMesh=new THREE.Mesh(mergeGeos(birchTops), LEAF_B);
+        birchMesh.castShadow=true;
+        scene.add(birchMesh);
+        // 草簇：与核心同款锥簇、实例化撒进新区草甸（牧场/路边加密）
+        const tuftParts=[];
+        [[0.16,0,0.5,0],[0,0.16,0.62,2.1],[-0.15,-0.1,0.44,4.2]].forEach(tp=>{
+            const cone=new THREE.ConeGeometry(0.05, tp[2], 4);
+            cone.translate(tp[0], tp[2]/2, tp[1]);
+            cone.rotateY(tp[3]);
+            tuftParts.push(cone);
+        });
+        const tuftGeo=mergeGeos(tuftParts);
+        const NTU=IS_MOBILE?240:320;
+        const tufts=new THREE.InstancedMesh(tuftGeo,
+            new THREE.MeshStandardMaterial({color:PALETTE.leaf, roughness:1}), NTU);
+        let ti=0; guard=0;
+        while(ti<NTU && guard++<4000){
+            const a=rnd()*Math.PI*2, r=76+Math.pow(rnd(),0.75)*128;
+            let x=Math.cos(a)*r, z=Math.sin(a)*r;
+            if(rnd()<0.3){ x=-128+(rnd()-0.5)*70; z=42+(rnd()-0.5)*50; }   // 牧场加密
+            if(!WalkMap.waterDry(x,z,0.4)) continue;
+            const lx=(x-WHEAT.x)*Math.cos(-WHEAT.rot)-(z-WHEAT.z)*Math.sin(-WHEAT.rot);
+            const lz=(x-WHEAT.x)*Math.sin(-WHEAT.rot)+(z-WHEAT.z)*Math.cos(-WHEAT.rot);
+            if(Math.abs(lx)<27 && Math.abs(lz)<19) continue;                    // 不进麦田
+            if(Math.hypot(x+52,z-138)<12) continue;                            // 不进村心
+            if(distToRoads(x,z)<1.8) continue;
+            dummy.position.set(x, outerGroundY(x,z)-0.02, z);
+            dummy.rotation.set((rnd()-0.5)*0.24, rnd()*Math.PI, (rnd()-0.5)*0.24);
+            const s=0.9+rnd()*0.9;
+            dummy.scale.set(s,s,s);
+            dummy.updateMatrix();
+            tufts.setMatrixAt(ti++, dummy.matrix);
+        }
+        tufts.count=ti;
+        tufts.instanceMatrix.needsUpdate=true;
+        scene.add(tufts);
+        // 野花：复用花田摆放（两色实例网格一次成型）
+        const fpts=[]; guard=0;
+        while(fpts.length<110 && guard++<3000){
+            const a=rnd()*Math.PI*2, r=84+rnd()*110;
+            const x=Math.cos(a)*r, z=Math.sin(a)*r;
+            if(!WalkMap.waterDry(x,z,0.5)) continue;
+            if(distToRoads(x,z)<2.2) continue;
+            let bad=false;
+            for(const p of ZONE_PADS) if(Math.hypot(x-p.x,z-p.z)<p.r*0.55){ bad=true; break; }
+            if(bad) continue;
+            fpts.push([x,z]);
+        }
+        placeWildflowers(fpts, rnd);
+    }
+    /* ---------- 静态件一次合并（栅栏/稻草人/村舍/桥/水车架/风车塔） ---------- */
+    {
+        const mesh=new THREE.Mesh(mergePaintedGeos(statics),
+            new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.95}));
+        mesh.castShadow=true;
+        mesh.receiveShadow=true;
+        mesh.name='ruralStatics';
+        scene.add(mesh);
+    }
+}
+
 function init(){
     try{
         bootTo(18,'准备渲染器…');
@@ -10471,6 +11332,7 @@ function init(){
     buildFarmGame();
     createFlowerBands();
     createOutskirts();
+    buildExpansion();   // #78 世界扩容：外圈地面+乡村分区+延长河道（在 createInterior 抓清单前）
     createInsects();
     createDragon();
 
