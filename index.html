@@ -138,6 +138,12 @@
         #helpBox{padding:13px 14px}
     }
 
+    /* ===== 快照 / 投票（顶栏按钮行，与帮助按钮同题） ===== */
+    .uiBtns{display:flex;gap:8px;margin-top:8px}
+    .uiBtns button{flex:1;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);
+        color:#dfe8df;padding:7px 4px;border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit;transition:.15s}
+    .uiBtns button:hover{background:rgba(255,255,255,.22)}
+
     /* ===== 留言弹窗：固定共建文案 ===== */
     .fbCreed{display:grid;gap:3px;margin:2px 0 10px;padding:10px 12px;border-radius:9px;
         background:rgba(80,140,90,.10);border-left:3px solid rgba(120,210,130,.55)}
@@ -351,6 +357,9 @@
     <div class="row"><label>自动巡游</label><input type="checkbox" id="orbitChk"><b id="orbitV">关</b></div>
     <div class="row" id="lockRow"><label>视角锁定</label><input type="checkbox" id="lockChk"><b id="lockV">关</b></div>
     <button type="button" id="helpBtn">❓ 操作帮助</button>
+    <div class="uiBtns">
+        <button type="button" id="snapBtn">📸 快照存图</button>
+    </div>
 </div>
 <div id="status">初始化中…</div>
 
@@ -2942,6 +2951,51 @@ function setupHelp(){
     if(!helpSeen()) setTimeout(showHelpTip,1500);
 }
 
+/* ==================== 快照截图（Issue #8） ====================
+   A 方案：把当前画面存成本机 PNG。渲染器没开 preserveDrawingBuffer，
+   所以必须在点击处理里先同步重绘一帧、紧接着抓画布，晚一步缓冲就被清了（黑图）。
+   抓到的就是用户此刻看到的天气/昼夜画面；文件名带日期时间。 */
+function snapshotName(){
+    // 文件名只用 ASCII＋日期时间：中文文件名在部分浏览器/本地打开时会丢弃 download 名、存成无名文件
+    const d=new Date();
+    return 'chumen-'+d.getFullYear()+pad2(d.getMonth()+1)+pad2(d.getDate())+'-'+
+        pad2(d.getHours())+pad2(d.getMinutes())+pad2(d.getSeconds())+'.png';
+}
+function saveSnapshotBlob(blob){
+    if(!blob){ showHuntToast('📸 这次没抓成功，再试一次'); return; }
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=snapshotName();
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(a.href); },4000);
+    showHuntToast('📸 快照已存好，去下载文件夹看看');
+}
+function setupSnapshot(){
+    const btn=document.getElementById('snapBtn');
+    if(!btn) return;
+    btn.addEventListener('click',function(){
+        if(!renderer||!scene||!camera) return;
+        try{
+            renderer.render(scene,camera);   // 同步重绘：保证抓帧时缓冲里是当前画面
+            const dom=renderer.domElement;
+            if(dom.toBlob) dom.toBlob(saveSnapshotBlob,'image/png');
+            else{
+                const a=document.createElement('a');
+                a.href=dom.toDataURL('image/png');
+                a.download=snapshotName();
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                showHuntToast('📸 快照已存好，去下载文件夹看看');
+            }
+        }catch(err){
+            showHuntToast('📸 这个浏览器不让抓图，换个浏览器试试');
+        }
+    });
+}
+
 /* ==================== 初始化 ==================== */
 /* ==========================================================================
    可插拔功能模块 v3
@@ -3888,6 +3942,7 @@ function init(){
     setupSliders();
     setupFeedback();
     setupHelp();
+    setupSnapshot();
     setupModules();
     window.addEventListener('resize',onResize);
     window.addEventListener('keydown',onKeyDown);
