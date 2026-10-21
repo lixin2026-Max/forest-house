@@ -144,6 +144,34 @@
         color:#dfe8df;padding:7px 4px;border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit;transition:.15s}
     .uiBtns button:hover{background:rgba(255,255,255,.22)}
 
+    /* ===== 访客投票（弹窗与帮助同题） ===== */
+    #voteMask{display:none;position:absolute;inset:0;z-index:133;
+        background:rgba(0,0,0,.45);backdrop-filter:blur(2px);
+        align-items:center;justify-content:center;padding:16px}
+    #voteMask.on{display:flex}
+    #voteBox{width:460px;max-width:100%;max-height:100%;overflow:auto;
+        background:rgba(14,26,14,.97);color:#e6f4e6;border:1px solid rgba(140,220,140,.35);
+        border-radius:14px;padding:16px 18px;box-shadow:0 18px 50px rgba(0,0,0,.55);font-size:13px}
+    #voteBox h4{margin:0 0 4px;font-size:15px;color:#bfe8bf}
+    #voteBox p.sub{margin:0 0 10px;font-size:11.5px;color:#93b093;line-height:1.5}
+    .voteOpt{display:flex;gap:10px;align-items:flex-start;padding:9px 10px;margin:0 0 8px;
+        border:1px solid rgba(140,220,140,.22);border-radius:9px;cursor:pointer;background:rgba(255,255,255,.03)}
+    .voteOpt:hover{background:rgba(120,220,120,.08)}
+    .voteOpt.sel{border-color:rgba(160,240,160,.7);background:rgba(120,220,120,.10)}
+    .voteOpt input{margin-top:2px;accent-color:#3f8f4a;width:16px;height:16px;flex:none;cursor:pointer}
+    .voteOpt .vt b{display:block;color:#bfe8bf;font-weight:600;font-size:13px}
+    .voteOpt .vt span{display:block;color:#9fc79f;font-size:11.5px;line-height:1.5;margin-top:1px}
+    #voteRow{display:flex;gap:8px;flex-wrap:wrap;margin-top:11px}
+    #voteRow button{font-family:inherit;font-size:12.5px;padding:8px 14px;border-radius:8px;cursor:pointer;
+        border:1px solid rgba(140,220,140,.35);background:rgba(30,50,30,.9);color:#d8f0d8;transition:background .15s}
+    #voteRow button:hover{background:rgba(45,80,45,.95)}
+    #voteRow button.primary{background:#3f8f4a;border-color:#5fb86b;color:#fff;font-weight:600}
+    #voteRow button.primary:hover{background:#4aa457}
+    #voteRow button.primary:disabled{background:#33543a;border-color:#446a4c;color:#b9cdb9;cursor:default}
+    #voteRow button.ghost{background:transparent}
+    #voteMsg{margin-top:9px;font-size:12px;color:#9ee49e;min-height:17px;line-height:1.5}
+    #voteMsg.err{color:#ffb4b4}
+
     /* ===== 留言弹窗：固定共建文案 ===== */
     .fbCreed{display:grid;gap:3px;margin:2px 0 10px;padding:10px 12px;border-radius:9px;
         background:rgba(80,140,90,.10);border-left:3px solid rgba(120,210,130,.55)}
@@ -359,6 +387,7 @@
     <button type="button" id="helpBtn">❓ 操作帮助</button>
     <div class="uiBtns">
         <button type="button" id="snapBtn">📸 快照存图</button>
+        <button type="button" id="voteBtn">🗳️ 投票选点子</button>
     </div>
 </div>
 <div id="status">初始化中…</div>
@@ -451,6 +480,8 @@
         <div class="hrow"><b>篝火</b><span>点篝火堆可以点火、再点熄火</span></div>
         <div class="hrow"><b>每日寻宝</b><span>每天藏 5 件小物（橡果、蘑菇、羽毛、松果、彩蛋），走近点中即收集，集齐有祝贺</span></div>
         <div class="hrow"><b>种田</b><span>点农田里空着的地块播种，再点一下浇水（雨天自动浇），等昼夜轮转一圈成熟后，再点一下收获</span></div>
+        <div class="hrow"><b>快照存图</b><span>顶栏「📸 快照存图」，把当前画面（连天气和昼夜）存成图片下载到本机</span></div>
+        <div class="hrow"><b>投票选点子</b><span>顶栏「🗳️ 投票选点子」，给最想要的新点子投票，一台设备一票，票数定期公布</span></div>
         <div class="hrow"><b>放河灯</b><span>左下角「🏮 放河灯」，写一句愿望，让它在湖上漂一会儿</span></div>
         <div class="hrow"><b>界面隐藏</b><span>顶栏与底栏停手 3 秒会自动隐藏，点屏幕右缘的小圆钮可以唤回</span></div>
         <div class="hrow"><b>更多设置</b><span>右下角齿轮里有功能开关、预设视角、色调与声音</span></div>
@@ -458,6 +489,18 @@
             <button type="button" class="primary" id="helpOk">知道啦</button>
             <button type="button" class="ghost" id="helpClose">关闭</button>
         </div>
+    </div>
+</div>
+<div id="voteMask">
+    <div id="voteBox" role="dialog" aria-modal="true" aria-labelledby="voteTitle">
+        <h4 id="voteTitle">🗳️ 下一个点子做什么，你说了算</h4>
+        <p class="sub">选一个最想要的投出去。票数会定期汇总公布，得票最高的优先排进开发计划。<br>每台设备只能投一票，先想好再点哦。</p>
+        <div id="voteOpts"></div>
+        <div id="voteRow">
+            <button type="button" class="primary" id="voteGo">投出这一票</button>
+            <button type="button" class="ghost" id="voteClose">关闭</button>
+        </div>
+        <div id="voteMsg"></div>
     </div>
 </div>
 <div id="wishBubble"></div>
@@ -2771,18 +2814,22 @@ function sendFeedback(body){
     if(typeof fetch!=='function') return Promise.resolve(false);
     const meta=(body&&body.meta)||{};
     const text=(body&&body.text)||'';
-    // FormSubmit 收扁平字段，才会排成一张表发到邮箱
-    const payload=FB_RELAY?{
-        _subject:'【楚门2.0】优化意见',
+    // FormSubmit 收扁平字段，才会排成一张表发到邮箱。
+    // 访客投票（Issue #9）也走这一条通道：meta.kind==='vote' 时换标题并加「类型/投票选择」字段区分，
+    // 普通留言的字段与原来一字不差。
+    const isVote=meta.kind==='vote';
+    const payload=FB_RELAY?Object.assign({
+        _subject:isVote?'【楚门2.0】访客投票':'【楚门2.0】优化意见',
         _captcha:'false',
         _template:'table',
         内容:text,
-        分类:meta.category||'其它',
+        分类:isVote?'投票':(meta.category||'其它'),
         天气:meta.weather||'-',
         画面:meta.screen||'-',
         手机:meta.mobile?'是':'否',
         浏览器:meta.ua||''
-    }:{text:text,meta:meta};
+    },isVote?{ 类型:'访客投票', 投票选择:meta.choiceName||meta.choice||'' }:{})
+    :{text:text,meta:meta};
     // 发法很关键：application/json 会触发 CORS 预检（多花 1 秒多），
     // 叠加 FormSubmit 自身 ~1.4 秒的响应，很容易撞上超时被判失败。
     // urlencoded 属于「简单请求」，不预检；服务端两者都收。
@@ -2994,6 +3041,124 @@ function setupSnapshot(){
             showHuntToast('📸 这个浏览器不让抓图，换个浏览器试试');
         }
     });
+}
+
+/* ==================== 访客投票（Issue #9） ====================
+   候选都是还没排期的构想。票走留言同一条 FormSubmit 通道（sendFeedback 里唯一那处 fetch），
+   靠 meta.kind='vote' 与「类型/投票选择」字段和留言区分，不新增任何端点。
+   投完把选过的 id 记在本机 ct2_vote（VOTE_KEY 写死），一台设备一票，防重复点。 */
+const VOTE_KEY='ct2_vote';
+const VOTE_OPTIONS=[
+    { id:'seasons',   name:'季节系统',     desc:'春樱、夏荷、秋枫、冬雪，小世界跟着四季换装' },
+    { id:'pet',       name:'宠物小伙伴',   desc:'一只小猫住进院子，跟着你逛、趴在篝火边打盹' },
+    { id:'treehouse', name:'树屋扩建',     desc:'小屋加盖二层，爬个梯子上去能看更远的风景' },
+    { id:'fireflies', name:'夜间萤火虫节', desc:'夏夜限定：满院萤火虫起舞，河灯与星光作陪' }
+];
+let voteOpen=false;
+function votedChoice(){
+    try{ return localStorage.getItem(VOTE_KEY)||''; }catch(e){ return ''; }
+}
+function markVoted(id){
+    try{ localStorage.setItem(VOTE_KEY,id); }catch(e){ /* 存不了就只在本次会话里拦住 */ }
+}
+function voteOptionById(id){
+    for(const o of VOTE_OPTIONS) if(o.id===id) return o;
+    return null;
+}
+function setVoteMsg(msg,isErr){
+    const m=document.getElementById('voteMsg');
+    if(!m) return;
+    m.textContent=msg||'';
+    m.className=isErr?'err':'';
+}
+function renderVoteState(){
+    const box=document.getElementById('voteOpts');
+    if(!box) return;
+    box.textContent='';
+    const done=voteOptionById(votedChoice());
+    VOTE_OPTIONS.forEach(function(o,i){
+        const lab=document.createElement('label');
+        lab.className='voteOpt'+(done&&done.id===o.id?' sel':'');
+        const rb=document.createElement('input');
+        rb.type='radio'; rb.name='voteOpt'; rb.value=o.id;
+        rb.checked= done ? (done.id===o.id) : (i===0);
+        rb.disabled= !!done;
+        rb.addEventListener('change',function(){
+            box.querySelectorAll('.voteOpt').forEach(function(el){ el.classList.remove('sel'); });
+            lab.classList.add('sel');
+            setVoteMsg('');
+        });
+        const vt=document.createElement('span');
+        vt.className='vt';
+        const b=document.createElement('b'); b.textContent=o.name;
+        const d=document.createElement('span'); d.textContent=o.desc;
+        vt.appendChild(b); vt.appendChild(d);
+        lab.appendChild(rb); lab.appendChild(vt);
+        box.appendChild(lab);
+    });
+    const go=document.getElementById('voteGo');
+    if(go){
+        go.disabled=!!done;
+        go.textContent= done?'已投过啦':'投出这一票';
+    }
+    if(done) setVoteMsg('你已经投给了「'+done.name+'」，谢谢参与！票数会定期汇总公布。');
+}
+function openVote(){
+    if(voteOpen) return;
+    voteOpen=true;
+    document.getElementById('voteMask').classList.add('on');
+    setVoteMsg('');
+    renderVoteState();
+}
+function closeVote(){
+    if(!voteOpen) return;
+    voteOpen=false;
+    document.getElementById('voteMask').classList.remove('on');
+}
+function submitVote(){
+    const done=votedChoice();
+    if(done){
+        const o=voteOptionById(done);
+        setVoteMsg('这台设备已经投过票啦'+(o?'（'+o.name+'）':'')+'，谢谢参与！',true);
+        return;
+    }
+    const sel=document.querySelector('input[name="voteOpt"]:checked');
+    const opt=sel? voteOptionById(sel.value) : null;
+    if(!opt){ setVoteMsg('先选一个点子再投。',true); return; }
+    const go=document.getElementById('voteGo');
+    if(go) go.disabled=true;
+    setVoteMsg('正在记下你这一票…');
+    const d=new Date();
+    const text='【访客投票】'+d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate())+' '+
+        pad2(d.getHours())+':'+pad2(d.getMinutes())+' · 选择:'+opt.name+'（'+opt.id+'）';
+    sendFeedback({
+        text:text,
+        meta:{
+            kind:'vote', choice:opt.id, choiceName:opt.name,
+            weather:(weatherLabels[weatherIndex]||''),
+            screen:LAYOUT.w+'x'+LAYOUT.h+(ROT?' 横屏':''),
+            mobile:IS_MOBILE,
+            ua:(typeof navigator!=='undefined'&&navigator.userAgent)?navigator.userAgent:''
+        }
+    }).then(function(ok){
+        markVoted(opt.id);
+        renderVoteState();
+        setVoteMsg(ok? '✅ 已记下你这一票，谢谢参与！票数会定期汇总公布。'
+                     : '✅ 这一票先记在本机了（刚才没连上回传通道）；票数会定期汇总公布。');
+    });
+}
+function setupVote(){
+    const btn=document.getElementById('voteBtn');
+    if(btn) btn.addEventListener('click',openVote);
+    const go=document.getElementById('voteGo');
+    if(go) go.addEventListener('click',submitVote);
+    const close=document.getElementById('voteClose');
+    if(close) close.addEventListener('click',closeVote);
+    const mask=document.getElementById('voteMask');
+    if(mask) mask.addEventListener('click',function(e){ if(e.target===mask) closeVote(); });
+    document.addEventListener('keydown',function(e){
+        if(e.key==='Escape' && voteOpen){ closeVote(); e.stopPropagation(); }
+    },true);
 }
 
 /* ==================== 初始化 ==================== */
@@ -3943,6 +4108,7 @@ function init(){
     setupFeedback();
     setupHelp();
     setupSnapshot();
+    setupVote();
     setupModules();
     window.addEventListener('resize',onResize);
     window.addEventListener('keydown',onKeyDown);
@@ -4090,7 +4256,7 @@ function setupGlobal(){
     if(!app) return;
     var HIDE_MS = 3000, timer = null;
     function anyDialogOpen(){
-        var ids = ['modPanel','fbMask','ltMask','helpMask'], i, el;
+        var ids = ['modPanel','fbMask','ltMask','helpMask','voteMask'], i, el;
         for(i = 0; i < ids.length; i++){
             el = document.getElementById(ids[i]);
             if(el && el.classList.contains('on')) return true;
@@ -4108,7 +4274,7 @@ function setupGlobal(){
         app.classList.remove('bars-off');
         arm();
     }
-    ['ui','status','fbBtn','lanternBtn','modBtn','modPanel','fbMask','ltMask','helpMask'].forEach(function(id){
+    ['ui','status','fbBtn','lanternBtn','modBtn','modPanel','fbMask','ltMask','helpMask','voteMask'].forEach(function(id){
         var el = document.getElementById(id);
         if(!el) return;
         ['pointerdown','input','change','wheel'].forEach(function(ev){
