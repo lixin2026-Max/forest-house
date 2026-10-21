@@ -304,6 +304,50 @@
         #logMask{padding:env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
                         env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px)}
     }
+    /* ===== 小龙定制（Issue #41）：与更新日志弹窗同题 ===== */
+    #dragonMask{display:none;position:absolute;inset:0;z-index:135;
+        background:var(--mask);backdrop-filter:blur(2px);
+        align-items:center;justify-content:center;padding:16px}
+    #dragonMask.on{display:flex}
+    #dragonBox{width:470px;max-width:100%;max-height:100%;overflow:auto;
+        background:var(--dlg);color:var(--dlg-txt);border:1px solid var(--dlg-line);
+        border-radius:14px;padding:16px 18px;box-shadow:var(--dlg-shadow);font-size:13px}
+    #dragonBox h4{margin:0 0 4px;font-size:15px;color:var(--dlg-h)}
+    #dgX{background:none;border:none;color:var(--note);font-size:16px;cursor:pointer;padding:0 2px;line-height:1.2;flex:none}
+    #dgX:hover{color:var(--dlg-txt)}
+    #dragonBox p.sub{margin:0 0 10px;font-size:11.5px;color:var(--dlg-sub);line-height:1.5}
+    .dgSec{font-size:12px;color:var(--accent);margin:13px 0 6px;font-weight:600}
+    .dgRow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 6px}
+    .dgLab{width:52px;flex:none;font-size:12px;color:var(--soft-txt)}
+    .dgOpts{display:flex;flex-wrap:wrap;gap:6px}
+    .dgOpts button{font-family:inherit;font-size:12px;padding:5px 11px;border-radius:999px;cursor:pointer;
+        border:1px solid var(--line-soft);background:var(--tab-bg);color:var(--soft-txt);transition:background .15s}
+    .dgOpts button:hover{background:var(--sel-bg)}
+    .dgOpts button.on{background:var(--pri);border-color:var(--pri-line);color:var(--pri-txt);font-weight:600}
+    #dgName{flex:1;min-width:140px;font-family:inherit;font-size:13px;padding:7px 10px;border-radius:8px;
+        border:1px solid var(--dlg-line);background:var(--opt-bg);color:var(--dlg-txt)}
+    .dgHint{font-size:11.5px;color:var(--note);line-height:1.5;margin:2px 0 0}
+    .dgSw{display:flex;flex-wrap:wrap;gap:7px}
+    .dgSw button{display:flex;gap:3px;align-items:center;padding:6px 9px;border-radius:999px;cursor:pointer;
+        border:1px solid var(--line-soft);background:var(--tab-bg);color:var(--soft-txt);font-family:inherit;font-size:12px}
+    .dgSw button:hover{background:var(--sel-bg)}
+    .dgSw button.on{background:var(--pri);border-color:var(--pri-line);color:var(--pri-txt);font-weight:600}
+    .dgSw i{width:11px;height:11px;border-radius:50%;display:inline-block;border:1px solid rgba(0,0,0,.25);flex:none}
+    .dgCols{display:flex;gap:12px;flex-wrap:wrap}
+    .dgCols label{font-size:12px;color:var(--soft-txt);display:flex;align-items:center;gap:6px}
+    .dgCols input[type=color]{width:34px;height:26px;border:1px solid var(--dlg-line);border-radius:6px;background:none;padding:1px;cursor:pointer}
+    #dgRow{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px}
+    #dgRow button{font-family:inherit;font-size:12.5px;padding:8px 14px;border-radius:8px;cursor:pointer;
+        border:1px solid var(--dlg-line);background:var(--btn);color:var(--btn-txt);transition:background .15s}
+    #dgRow button:hover{background:var(--btn-hov)}
+    #dgRow button.primary{background:var(--pri);border-color:var(--pri-line);color:var(--pri-txt);font-weight:600}
+    #dgRow button.primary:hover{background:var(--pri-hov)}
+    @media (max-width:600px),(pointer:coarse){
+        #dragonBox{padding:13px 14px}
+        #dragonMask{padding:env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+                        env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px)}
+    }
+
     /* 功能面板里打开日志的入口按钮（与 .mpGlobal 按钮同题） */
     .mpVerBtn{width:100%;padding:8px 6px;margin:0 0 8px;font-family:inherit;font-size:12px;border-radius:8px;cursor:pointer;
         border:1px solid var(--dlg-line);background:var(--chip);color:var(--btn-txt)}
@@ -594,6 +638,18 @@
         backdrop-filter:blur(6px);transition:background .15s}
     #dragonBar button:hover{background:rgba(60,40,10,.9)}
     #dragonBar button.on{background:#b06f1e;border-color:#e09a35;color:#fff;font-weight:600}
+    /* ===== 小龙互动菜单（#16/#17）：贴在操控条上方的小面板，风格与 dragonBar 一套 ===== */
+    #dragonMenu{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);z-index:122;
+        background:rgba(10,20,10,.88);border:1px solid rgba(255,190,90,.45);border-radius:14px;
+        padding:10px 12px;backdrop-filter:blur(6px);text-align:center;max-width:calc(100vw - 24px)}
+    #dragonMenu .dmTitle{color:#ffe2b0;font-size:12px;margin-bottom:7px;letter-spacing:1px}
+    #dragonMenu .dmRow{display:flex;gap:6px;justify-content:center;margin-bottom:6px}
+    #dragonMenu .dmRow:last-of-type{margin-bottom:0}
+    #dragonMenu button{background:rgba(30,50,30,.9);color:#ffe2b0;border:1px solid rgba(255,190,90,.35);
+        padding:7px 11px;border-radius:18px;font-size:12.5px;font-family:inherit;cursor:pointer;transition:background .15s}
+    #dragonMenu button:hover:not(:disabled){background:rgba(90,60,15,.92)}
+    #dragonMenu button:disabled{opacity:.42;cursor:default}
+    #dragonMenu .dmHint{color:#a8bba8;font-size:11px;margin-top:6px;min-height:14px}
     #joy{position:absolute;left:26px;bottom:86px;width:112px;height:112px;border-radius:50%;z-index:121;
         background:rgba(10,20,10,.35);border:1.5px solid rgba(255,255,255,.4);display:none;touch-action:none}
     #joy.on{display:block}
@@ -602,6 +658,7 @@
         transform:translate(-50%,-50%);pointer-events:none}
     @media (max-width:600px),(pointer:coarse){
         #dragonBar{bottom:calc(64px + env(safe-area-inset-bottom, 0px))}
+        #dragonMenu{bottom:calc(118px + env(safe-area-inset-bottom, 0px))}
         #joy{bottom:calc(140px + env(safe-area-inset-bottom, 0px))}
     }
     /* ===== 进屋看看（#40）：出入按钮 + 切换淡幕（独立小块，不用主题变量） ===== */
@@ -651,6 +708,22 @@
 <div id="dragonBar">
     <button type="button" id="dragonBtn">🐉 操控小龙</button>
     <button type="button" id="viewBtn" style="display:none">👁️ 第三人称</button>
+    <button type="button" id="dragonCustomBtn">🎨 定制小龙</button>
+    <button type="button" id="actBtn">🤚 互动</button>
+</div>
+<div id="dragonMenu" style="display:none">
+    <div class="dmTitle">🐉 和小龙玩</div>
+    <div class="dmRow">
+        <button type="button" id="dmPat">🖐 摸头</button>
+        <button type="button" id="dmWave">👋 打招呼</button>
+        <button type="button" id="dmSpin">🔄 转圈</button>
+    </div>
+    <div class="dmRow">
+        <button type="button" id="dmFeedP">🎃 喂南瓜</button>
+        <button type="button" id="dmFeedC">🌽 喂玉米</button>
+        <button type="button" id="dmClose">✖ 收起</button>
+    </div>
+    <div class="dmHint" id="dmHint"></div>
 </div>
 <div id="joy"><div id="joyKnob"></div></div>
 <div id="roomBar">
@@ -769,6 +842,7 @@
         <div class="hrow"><b>视角锁定</b><span>顶栏开关，锁住后拖动与巡游都不动镜头（缩放仍可用）</span></div>
         <div class="hrow"><b>敲门</b><span>点小屋的门：先轻敲两下，门会朝外打开透出暖光</span></div>
         <div class="hrow"><b>进屋看看</b><span>门开着时点门洞里的暖光、或点门口出现的「进屋看看」按钮，就能进屋参观（拖动环视、点地面走动）；操控小龙时走近门口，按钮会带它一起进屋。屋里点门或按「回到院子」出来</span></div>
+        <div class="hrow"><b>小龙互动</b><span>点小龙、或点底部「🤚 互动」：可以摸头、打招呼、让它转圈。收获的南瓜和玉米会进背包，用背包里的食物喂它，它会自己走过去吃；吃饱后它会开心地跟着你玩一阵（状态栏能看背包和喂食次数）</span></div>
         <div class="hrow"><b>篝火</b><span>点篝火堆可以点火、再点熄火</span></div>
         <div class="hrow"><b>每日寻宝</b><span>每天藏 5 件小物（橡果、蘑菇、羽毛、松果、彩蛋），走近点中即收集，集齐有祝贺</span></div>
         <div class="hrow"><b>种田</b><span>点农田里空着的地块播种，再点一下浇水（雨天自动浇），等昼夜轮转一圈、或到了第二天成熟后，再点一下收获</span></div>
@@ -810,6 +884,47 @@
         </div>
         <div id="logRow">
             <button type="button" class="primary" id="logOk">开始游玩</button>
+        </div>
+    </div>
+</div>
+<div id="dragonMask">
+    <div id="dragonBox" role="dialog" aria-modal="true" aria-labelledby="dgTitle">
+        <div class="logHead">
+            <h4 id="dgTitle">🐉 小龙定制</h4>
+            <button type="button" id="dgX" aria-label="关闭">✕</button>
+        </div>
+        <p class="sub">这条龙是你的：性别、名字、体色、配饰、性格都归你管。改任何一项都立刻生效，并自动存到本机。</p>
+        <div class="dgSec">名字</div>
+        <div class="dgRow">
+            <input type="text" id="dgName" maxlength="16" placeholder="给小龙起个名字">
+        </div>
+        <div class="dgHint">最多 8 个字；状态栏、操控按钮和进屋提示都会用它。</div>
+        <div class="dgSec">性别（影响称呼、叫声音调与默认配色）</div>
+        <div class="dgOpts" id="dgGender"></div>
+        <div class="dgSec">性格倾向（影响散步范围、发呆时长与作息）</div>
+        <div class="dgOpts" id="dgPers"></div>
+        <div class="dgHint" id="dgPersDesc"></div>
+        <div class="dgSec">体色预设</div>
+        <div class="dgSw" id="dgPal"></div>
+        <div class="dgSec">自由选色（选了就盖过预设）</div>
+        <div class="dgCols">
+            <label>主色 <input type="color" id="dgColBody"></label>
+            <label>肚皮 <input type="color" id="dgColBelly"></label>
+            <label>标志件 <input type="color" id="dgColAccent"></label>
+        </div>
+        <div class="dgSec">花纹</div>
+        <div class="dgOpts" id="dgPattern"></div>
+        <div class="dgSec">部件样式</div>
+        <div class="dgRow"><span class="dgLab">角</span><div class="dgOpts" id="dgHorn"></div></div>
+        <div class="dgRow"><span class="dgLab">背刺</span><div class="dgOpts" id="dgSpike"></div></div>
+        <div class="dgRow"><span class="dgLab">翅膀</span><div class="dgOpts" id="dgWing"></div></div>
+        <div class="dgRow"><span class="dgLab">尾巴尖</span><div class="dgOpts" id="dgTail"></div></div>
+        <div class="dgSec">配饰（可叠穿）</div>
+        <div class="dgOpts" id="dgAcc"></div>
+        <div id="dgRow">
+            <button type="button" id="dgCall">🔊 叫一声</button>
+            <button type="button" id="dgReset">恢复默认</button>
+            <button type="button" class="primary" id="dgOk">完成</button>
         </div>
     </div>
 </div>
@@ -1002,7 +1117,7 @@ const CONFIG = {
 };
 
 /* ---------- 薄存储适配层 ----------
-   核心系统不直接碰本地存储：一律经 store.<槽> 读写。槽位与 8 个白名单键
+   核心系统不直接碰本地存储：一律经 store.<槽> 读写。槽位与 10 个白名单键
    一一对应，键名仍以字面量出现在下面这唯一实现处（安全审计照常钉死）。
    移植时只换 mkSlot 底下的读写实现（小程序 storage / App 本地库），上层不动。 */
 
@@ -1011,6 +1126,11 @@ const CONFIG = {
    只决定 DOM 界面的深/浅配色（根元素 html 上的 ui-light 类 + CSS 变量），
    3D 场景的颜色、光照、场景色调滤镜完全不碰。 */
 const THEME_KEY='ct2_theme';
+/* ---------- 小龙自定义（Issue #41） ----------
+   小龙的外观与个性配置存本机 ct2_dragon（DRAGON_KEY 写死，照其余各键的
+   治理先例）：性别/名字/体色/花纹/部件变体/配饰/性格一包 JSON，只存本机、
+   不上报；配置结构与参数化建模实现在下方小龙一节。 */
+const DRAGON_KEY='ct2_dragon';
 /* ---------- 建议回音（Issue #39） ----------
    玩家提交建议时领到的回执码、署名选择与「共建者」徽章只存本机 ct2_echo
    （ECHO_KEY 写死，照其余各键的治理先例）：匹配在本机完成，不绑任何身份。 */
@@ -1037,6 +1157,8 @@ const store = {
     farm:   mkSlot(()=>localStorage.getItem(FARM_KEY),     v=>localStorage.setItem(FARM_KEY, v)),
     vote:   mkSlot(()=>localStorage.getItem(VOTE_KEY),     v=>localStorage.setItem(VOTE_KEY, v)),
     theme:  mkSlot(()=>localStorage.getItem(THEME_KEY),    v=>localStorage.setItem(THEME_KEY, v)),
+    dragon: mkSlot(()=>localStorage.getItem(DRAGON_KEY),   v=>localStorage.setItem(DRAGON_KEY, v)),
+    bag:    mkSlot(()=>localStorage.getItem(BAG_KEY),      v=>localStorage.setItem(BAG_KEY, v)),
     echo:   mkSlot(()=>localStorage.getItem(ECHO_KEY),     v=>localStorage.setItem(ECHO_KEY, v)),
     codex:  mkSlot(()=>localStorage.getItem(CODEX_KEY),    v=>localStorage.setItem(CODEX_KEY, v))
 };
@@ -2546,7 +2668,7 @@ function createInterior(){
     document.getElementById('exitRoomBtn').addEventListener('click', exitRoom);
     // 室内不接管小龙开关：免得轨道/龙相机在屋里打架（出屋自动恢复可点）
     document.getElementById('dragonBtn').addEventListener('click', e=>{
-        if(Interior.active){ e.stopImmediatePropagation(); showHuntToast('先出屋，再操控小龙 🐉'); }
+        if(Interior.active){ e.stopImmediatePropagation(); showHuntToast('先出屋，再操控' + dragonCfg.name + ' 🐉'); }
     }, true);
     window.__interior = Interior;
     window.__roomDragon = false;
@@ -2586,7 +2708,7 @@ function enterRoom(){
             DragonCtl.yaw = HOUSE_ROT; DragonCtl.pitch = 0.3;
             DragonCtl.dist = Math.min(DragonCtl.dist, 3.1);
             DragonCtl.init = false;
-            showHuntToast('🐉 带着小龙进屋啦 — 点门或「回到院子」出去');
+            showHuntToast('🐉 带着' + dragonCfg.name + '进屋啦 — 点门或「回到院子」出去');
         } else {
             controls.setExternal(true);          // 轨道相机停手，室内参观镜头接管
             Interior.tgtGoal.copy(roomToWorld(0, 1.45, 0.15));
@@ -3091,9 +3213,16 @@ function onFarmCellTap(cell){
     }
     if(st.mature){
         farmState.harvest++;
+        const gotCrop=st.crop;
         delete farmState.cells[key];
         saveFarm(); renderPlayCrops(); updateStatus();
-        showHuntToast('🎉 收获了'+FARM_CROP_NAMES[st.crop]+'！已收获 '+farmState.harvest+' 个');
+        // #17：南瓜/玉米是小龙的食物，收获自动进背包（向日葵不入包，照旧只计数）
+        if(gotCrop==='pumpkin'||gotCrop==='corn'){
+            bagAdd(gotCrop);
+            showHuntToast('🎉 收获了'+FARM_CROP_NAMES[gotCrop]+'！放进背包啦，点小龙可以喂给它');
+        }else{
+            showHuntToast('🎉 收获了'+FARM_CROP_NAMES[gotCrop]+'！已收获 '+farmState.harvest+' 个');
+        }
         return;
     }
     if(!st.watered){
@@ -3148,6 +3277,7 @@ function farmRainCheck(){
 }
 function onFarmTap(ev){
     if(!farmState||!renderer||!camera) return;
+    if(dragonTapAt && performance.now()-dragonTapAt<80) return;   // 刚点中龙开菜单，这下不算点田
     const r=renderer.domElement.getBoundingClientRect();
     const nx=((ev.clientX-r.left)/Math.max(1,r.width))*2-1;
     const ny=-((ev.clientY-r.top)/Math.max(1,r.height))*2+1;
@@ -3668,11 +3798,114 @@ function createInsects(){
    眨眼、双足步态（双腿交替 + 双臂反向摆）、睡姿侧躺蜷起。行为走 AgentKit：白天
    散步/发呆，夜间走 GClock 阶段去篝火边睡；玩家接管后切换为双端操控
    （键鼠/点击/虚拟摇杆）+ 第一/第三人称相机。 */
-const DRG_BODY = 0xf6cd62;    // 奶黄（主色）
-const DRG_BELLY = 0xfff3d4;   // 奶油（肚皮/吻部/角/翅骨）
-const DRG_CORAL = 0xef8f4d;   // 珊瑚橙（背刺/耳鳍/尾尖）
-const DRG_WING = 0xf9b968;    // 翅膜浅橙
-const DRG_BLUSH = 0xf2a18e;   // 腮红
+const DRG_BODY = 0xf6cd62;    // 奶黄（主色，出厂默认）
+const DRG_BELLY = 0xfff3d4;   // 奶油（肚皮/吻部/角/翅骨，出厂默认）
+const DRG_CORAL = 0xef8f4d;   // 珊瑚橙（背刺/耳鳍/尾尖，出厂默认）
+const DRG_WING = 0xf9b968;    // 翅膜浅橙（出厂默认）
+const DRG_BLUSH = 0xf2a18e;   // 腮红（出厂默认）
+
+/* ---------- 小龙自定义（Issue #41）：外观与个性全归玩家 ----------
+   整套配置一包 JSON 存本机 store.dragon（键 ct2_dragon）。无存档时用
+   DRG_DEFAULT_CFG —— 与 #27/#47 定型版逐项一致（奶黄公龙、无花纹、无配饰、
+   性格「好奇」取的正是定型版原行为参数），老玩家打开毫无变化。
+   改任何一项：存档 → 按新配置整只重建模型（关节/枢轴结构与定型版同一套
+   建模代码，只是颜色/变体/配饰由参数决定）→ 文案称呼即时刷新，不重启页面。 */
+const DRG_PALETTES = {
+    milk:  {label:'奶黄',   body:0xf6cd62, belly:0xfff3d4, accent:0xef8f4d, wing:0xf9b968},
+    peach: {label:'蜜桃粉', body:0xf6bfce, belly:0xfff0f2, accent:0xe56b8c, wing:0xf9cede},
+    matcha:{label:'抹茶绿', body:0xa8cc7a, belly:0xf4f8dc, accent:0x5f9e52, wing:0xc4e2a4},
+    sky:   {label:'晴空蓝', body:0x9ecfec, belly:0xeaf7ff, accent:0x4a86c5, wing:0xc4e2f5},
+    grape: {label:'葡萄紫', body:0xc3aee0, belly:0xf3edff, accent:0x8266b8, wing:0xdbcdf2},
+    cocoa: {label:'可可棕', body:0xcfa06b, belly:0xf7e8d0, accent:0x9c5b33, wing:0xe6c491}
+};
+/* 性格参数表（走 AgentKit 既有行为量：散步半径、发呆时长、张望间隔、散步
+   速度、入睡阶段）。「好奇」一档 = 定型版原数值，老玩家行为零变化；
+   「慵懒」黄昏（golden）就去睡，「活泼」跑得远、发呆短、张望勤。 */
+const DRG_PERSONALITY = {
+    lively: {label:'活泼', desc:'爱跑爱看：散步范围大、发呆短、到处张望，入夜才睡',
+             roamMin:8, roamMax:26, idleMin:0.8, idleMax:2.4, lookMin:0.9, lookMax:2.2, speed:2.4, sleepAt:'night'},
+    curious:{label:'好奇', desc:'四处好奇：范围适中、爱张望（出厂默认，行为同定型版）',
+             roamMin:5, roamMax:25, idleMin:2.0, idleMax:6.5, lookMin:1.6, lookMax:4.4, speed:2.1, sleepAt:'night'},
+    lazy:   {label:'慵懒', desc:'慢悠悠：就在家附近转、发呆久、黄昏就犯困去睡',
+             roamMin:3, roamMax:12, idleMin:3.5, idleMax:8.5, lookMin:2.4, lookMax:5.4, speed:1.8, sleepAt:'golden'}
+};
+const DRG_DEFAULT_CFG = {
+    name:'小龙', gender:'male', personality:'curious', palette:'milk', colors:null,
+    pattern:'none', horn:'sharp', spike:'sharp', wingSize:1, tailTip:'leaf',
+    acc:{scarf:false, bell:false, hat:false, bow:false, glasses:false}
+};
+const DRG_ENUMS = {
+    gender:['male','female'], personality:['lively','curious','lazy'],
+    palette:['milk','peach','matcha','sky','grape','cocoa','custom'],
+    pattern:['none','spots','stripes'], horn:['sharp','bud','none'],
+    spike:['sharp','round'], tailTip:['leaf','ball','spike']
+};
+function drgIsHex(n){ return typeof n === 'number' && n >= 0 && n <= 0xffffff && Math.floor(n) === n; }
+/* 名字过滤：≤8 字（按字数不按字节）、剥掉符号滥用与空白、敏感词打码 */
+const DRG_NAME_BAD = ['傻逼','煞笔','操逼','你妈逼','妈的','贱人','去死吧','fuck','shit','bitch'];
+function sanitizeDragonName(s){
+    s = String(s == null ? '' : s).replace(/[<>&"'`\\\/\|@#~^*$%!?:;+=【】《》\s]+/g, '');
+    for(const w of DRG_NAME_BAD){
+        let idx = s.toLowerCase().indexOf(w);
+        while(idx >= 0){ s = s.slice(0, idx) + '··' + s.slice(idx + w.length); idx = s.toLowerCase().indexOf(w); }
+    }
+    const chars = [...s];
+    if(chars.length > 8) s = chars.slice(0, 8).join('');
+    return s || '小龙';
+}
+function drgLoadCfg(){
+    const c = JSON.parse(JSON.stringify(DRG_DEFAULT_CFG));
+    const raw = store.dragon.json(null);
+    if(!raw) return c;
+    for(const k of Object.keys(DRG_ENUMS)) if(DRG_ENUMS[k].indexOf(raw[k]) >= 0) c[k] = raw[k];
+    if(raw.wingSize === 1.35 || raw.wingSize === 1) c.wingSize = raw.wingSize;
+    if(raw.colors && drgIsHex(raw.colors.body) && drgIsHex(raw.colors.belly) && drgIsHex(raw.colors.accent))
+        c.colors = {body:raw.colors.body, belly:raw.colors.belly, accent:raw.colors.accent};
+    else c.colors = null;
+    if(c.palette !== 'custom') c.colors = null;          // 预设与自由色二选一，预设优先
+    if(raw.acc) for(const k of Object.keys(c.acc)) c.acc[k] = !!raw.acc[k];
+    c.name = sanitizeDragonName(raw.name);
+    return c;
+}
+let dragonCfg = drgLoadCfg();
+function dragonSaveCfg(){ store.dragon.save(dragonCfg); }
+function drgPers(){ return DRG_PERSONALITY[dragonCfg.personality] || DRG_PERSONALITY.curious; }
+/* 由配置算出本次建模用的全套颜色：预设整表取色；自由选色时翅膜由标志件
+   色向白色混 45% 自动派生（保证与身子协调）；腮红随性别变深浅（轻造型差异） */
+function drgLighten(hex, f){
+    const m = v => Math.round(v + (255 - v)*f);
+    return (m((hex >> 16) & 255) << 16) | (m((hex >> 8) & 255) << 8) | m(hex & 255);
+}
+function drgColorsOf(cfg){
+    const p = DRG_PALETTES[cfg.palette];
+    let c;
+    if(p && !cfg.colors) c = {body:p.body, belly:p.belly, accent:p.accent, wing:p.wing};
+    else {
+        const cc = cfg.colors || DRG_PALETTES.milk;
+        c = {body:cc.body, belly:cc.belly, accent:cc.accent, wing:drgLighten(cc.accent, 0.45)};
+    }
+    c.blush = cfg.gender === 'female' ? 0xef8268 : DRG_BLUSH;
+    c.blushScale = cfg.gender === 'female' ? 1.18 : 1;
+    return c;
+}
+function dragonPronoun(){ return dragonCfg.gender === 'female' ? '她' : '他'; }
+function dragonBtnText(active){
+    if(active) return '🙌 放手让' + dragonPronoun() + '玩';
+    return '🐉 操控' + dragonCfg.name;
+}
+function dragonShouldSleep(ph){
+    ph = ph || GClock.phase();
+    if(ph === 'night') return true;
+    return drgPers().sleepAt === 'golden' && ph === 'golden';   // 慵懒：黄昏就犯困
+}
+/* 小龙的叫声：程序合成两声（走既有 audioNote，无音频文件）；音调随性别——
+   她高些、他低些。没初始化音频时静默（浏览器手势策略下 actx 可能还没建）。 */
+function dragonCall(){
+    if(typeof actx === 'undefined' || !actx || audioMuted) return;
+    const base = dragonCfg.gender === 'female' ? 740 : 523;
+    audioNote(base, 0.16, 0.055, 'triangle', 0.02, aAmb);
+    setTimeout(()=>{ if(actx && !audioMuted) audioNote(base*1.335, 0.24, 0.05, 'triangle', 0.02, aAmb); }, 115);
+}
 
 /* 零件小帮手：缩放→旋转→平移→刷色，返回可进 mergePainted 的几何体 */
 function dgPart(geo, hex, x, y, z, o){
@@ -3685,171 +3918,300 @@ function dgPart(geo, hex, x, y, z, o){
     return ModelKit.paint(geo, hex);
 }
 
-function buildDragonModel(){
-    const paintMat = new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.9});
-    const root = new THREE.Group(); root.name = 'dragon';
-    /* lie：睡姿侧躺层——整个人绕髋部倒下侧的支点滚倒（支点补偿在 dragonAnimate 里算） */
-    const lie = new THREE.Group(); root.add(lie);
-    /* body：髋部枢轴（y=0.55）。躯干/头/双臂/双翅/尾都挂在它上面，
-       呼吸缩放、走路起伏与侧摆作用在这一层；双腿直接挂 lie，与髋同高。 */
-    const body = new THREE.Group(); body.position.y = 0.55; lie.add(body);
+function buildDragonModel(cfg){
+cfg = cfg || DRG_DEFAULT_CFG;
+const col = drgColorsOf(cfg);
+const BODY = col.body, BELLY = col.belly, CORAL = col.accent, WING = col.wing;
+const BLUSH = col.blush, BLUSHS = col.blushScale;
+const paintMat = new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.9});
+const root = new THREE.Group(); root.name = 'dragon';
+/* lie：睡姿侧躺层——整个人绕髋部倒下侧的支点滚倒（支点补偿在 dragonAnimate 里算） */
+const lie = new THREE.Group(); root.add(lie);
+/* body：髋部枢轴（y=0.55）。躯干/头/双臂/双翅/尾都挂在它上面，
+呼吸缩放、走路起伏与侧摆作用在这一层；双腿直接挂 lie，与髋同高。 */
+const body = new THREE.Group(); body.position.y = 0.55; lie.add(body);
 
-    /* 躯干（1 件合并：主球 + 髋部球 + 三片叠瓦状奶油腹甲 + 珊瑚背刺一排，大小渐变） */
-    const torsoMesh = new THREE.Mesh(ModelKit.mergePainted([
-        dgPart(new THREE.SphereGeometry(0.315, 18, 14), DRG_BODY, 0, 0.24, 0, {s:[1.02, 1.08, 0.78]}),
-        dgPart(new THREE.SphereGeometry(0.25, 16, 12), DRG_BODY, 0, -0.03, 0, {s:[1.08, 0.78, 0.80]}),
-        /* 脖颈基座：躯干顶端一圈隆起，与头组里的颈球上下夹住头-躯干交界，
-           转头/垂头时交界处始终有肉身过渡，不露缝 */
-        dgPart(new THREE.SphereGeometry(0.19, 14, 10), DRG_BODY, 0, 0.50, 0, {s:[1.08, 0.66, 1.0]}),
-        dgPart(new THREE.SphereGeometry(0.205, 14, 10), DRG_BELLY, 0, 0.33, 0.169, {s:[0.88, 0.52, 0.55]}),
-        dgPart(new THREE.SphereGeometry(0.215, 14, 10), DRG_BELLY, 0, 0.185, 0.173, {s:[0.90, 0.54, 0.55]}),
-        dgPart(new THREE.SphereGeometry(0.20, 14, 10), DRG_BELLY, 0, 0.045, 0.143, {s:[0.86, 0.52, 0.55]}),
-        /* 背刺：底盘沉根之外，每根刺根部再加一颗沿锥轴压扁的根包覆丘（半径比底盘大
-           0.025）——弧面背上平底盘总有一段边沿探出表面，包覆丘把整圈盘边吞进过渡
-           件里，刺像从一颗根丘上长出来（探针按底盘圆环对 躯干∪包覆丘 复测） */
-        dgPart(new THREE.ConeGeometry(0.075, 0.20, 6), DRG_CORAL, 0, 0.47, -0.174, {rx:0.35, s:[1, 1, 0.45]}),
-        dgPart(new THREE.SphereGeometry(0.10, 10, 8), DRG_CORAL, 0, 0.385, -0.205, {rx:0.35, s:[1, 0.5, 1]}),
-        dgPart(new THREE.ConeGeometry(0.085, 0.24, 6), DRG_CORAL, 0, 0.30, -0.208, {rx:0.22, s:[1, 1, 0.45]}),
-        dgPart(new THREE.SphereGeometry(0.11, 10, 8), DRG_CORAL, 0, 0.193, -0.232, {rx:0.22, s:[1, 0.5, 1]}),
-        dgPart(new THREE.ConeGeometry(0.075, 0.20, 6), DRG_CORAL, 0, 0.12, -0.183, {rx:0.10, s:[1, 1, 0.45]}),
-        dgPart(new THREE.SphereGeometry(0.10, 10, 8), DRG_CORAL, 0, 0.030, -0.192, {rx:0.10, s:[1, 0.5, 1]}),
-        dgPart(new THREE.ConeGeometry(0.06, 0.15, 6), DRG_CORAL, 0, -0.05, -0.165, {rx:-0.05, s:[1, 1, 0.45]}),
-        dgPart(new THREE.SphereGeometry(0.085, 10, 8), DRG_CORAL, 0, -0.115, -0.162, {rx:-0.05, s:[1, 0.5, 1]})
-    ]), paintMat);
-    torsoMesh.castShadow = true;
-    body.add(torsoMesh);
+/* 背刺造型：sharp = 定型版尖锥；round = 圆润短丘（同位置同底盘，根包覆丘不变） */
+const spikeGeo = (r, h, x, y, z, rx) => cfg.spike === 'round'
+? dgPart(new THREE.SphereGeometry(r*1.18, 10, 8), CORAL, x, y, z, {rx:rx, s:[1, 0.85, 0.55]})
+: dgPart(new THREE.ConeGeometry(r, h, 6), CORAL, x, y, z, {rx:rx, s:[1, 1, 0.45]});
+/* 横置圆环（条纹/围巾/项圈/帽带共用）：绕 Y 轴的环，可选椭圆缩放与前后倾 */
+function dgRing(r, tube, sx, sz, hex, x, y, z, tiltX){
+const g = new THREE.TorusGeometry(r, tube, 8, 26);
+g.rotateX(Math.PI/2 + (tiltX || 0));
+g.scale(sx, 1, sz);
+g.translate(x, y, z);
+return ModelKit.paint(g, hex);
+}
+/* 正对前方的圆环（眼镜框） */
+function dgRingZ(r, tube, hex, x, y, z){
+const g = new THREE.TorusGeometry(r, tube, 8, 22);
+g.translate(x, y, z);
+return ModelKit.paint(g, hex);
+}
 
-    /* 头（组原点设在面部下方，而不是脖子根）：一人称相机锚点取的就是 head 组原点
-       （相机代码注释「镜头放在头部中心」）。原点落在躯干正上方的脖子根时，低头会被
-       圆滚滚的胸口腹甲怼满画面；锚到面部下方（配合躯干前后向收薄），低头能看到
-       胸口腹甲，行走时交替前摆的脚尖也会从肚皮下探出来。子级几何按原点位移
-       反向平移，静止外观逐点一致。 */
-    const head = new THREE.Group(); head.position.set(0, 0.79, 0.15); body.add(head);
-    const skullMesh = new THREE.Mesh(ModelKit.mergePainted([
-        dgPart(new THREE.SphereGeometry(0.325, 18, 14), DRG_BODY, 0, -0.01, -0.13, {s:[1, 0.95, 0.94]}),
-        /* 颈球：挂在头组下缘、随头一起转，底部始终沉在躯干与脖颈基座里——
-           张望/低头/睡姿垂头时脖子不断开、不露空 */
-        dgPart(new THREE.SphereGeometry(0.195, 14, 10), DRG_BODY, 0, -0.26, -0.07, {s:[1, 0.79, 1]}),
-        /* 脑后颈窝肉：补颅骨后下缘与颈球之间的月牙空缺（探针实测睡姿该处颅底
-           距躯干/颈球最远 0.12）——一团随头转的后脑勺肉把空缺填实 */
-        dgPart(new THREE.SphereGeometry(0.15, 12, 9), DRG_BODY, 0, -0.15, -0.28, {s:[1.05, 0.9, 1]}),
-        dgPart(new THREE.SphereGeometry(0.165, 14, 10), DRG_BELLY, 0, -0.125, 0.095, {s:[1.28, 0.74, 0.95]}),
-        dgPart(new THREE.SphereGeometry(0.08, 10, 8), DRG_BLUSH, -0.225, -0.11, 0.085, {s:[1, 0.75, 0.45]}),
-        dgPart(new THREE.SphereGeometry(0.08, 10, 8), DRG_BLUSH,  0.225, -0.11, 0.085, {s:[1, 0.75, 0.45]}),
-        dgPart(new THREE.SphereGeometry(0.016, 6, 5), 0x33241a, -0.055, -0.085, 0.232),
-        dgPart(new THREE.SphereGeometry(0.016, 6, 5), 0x33241a,  0.055, -0.085, 0.232),
-        dgPart(new THREE.SphereGeometry(0.03, 8, 6), 0x33241a, 0, -0.21, 0.202, {s:[1.5, 0.3, 0.6]})
-    ]), paintMat);
-    skullMesh.castShadow = true;
-    head.add(skullMesh);
-    head.add(new THREE.Mesh(ModelKit.mergePainted([
-        /* 角：底盘加宽（0.082→0.09）做根部 flare。注：dgPart 的坐标是锥体形心，
-           底盘心还要沿锥轴往回 0.21——实测底盘深埋颅骨内（探针按真实底盘心复测），
-           高度保持原值不缩水 */
-        dgPart(new THREE.ConeGeometry(0.09, 0.42, 9), DRG_BELLY, -0.155, 0.305, -0.16, {rx:-0.30, rz:0.17}),
-        dgPart(new THREE.ConeGeometry(0.09, 0.42, 9), DRG_BELLY,  0.155, 0.305, -0.16, {rx:-0.30, rz:-0.17}),
-        dgPart(new THREE.ConeGeometry(0.07, 0.18, 6), DRG_CORAL, 0, 0.113, -0.385, {rx:0.55, s:[1, 1, 0.45]}),
-        /* 后脑刺根包覆丘：同背刺，吞掉底盘探出颅面的那段边沿 */
-        dgPart(new THREE.SphereGeometry(0.095, 10, 8), DRG_CORAL, 0, 0.044, -0.427, {rx:0.55, s:[1, 0.5, 1]})
-    ]), paintMat));
-    /* 耳鳍：左右各成一组（枢轴在鳍根）——睡姿侧躺时像动物压耳朵一样向上折拢到头顶，
-       否则倒下侧的鳍尖会被整组滚转压进地面（探针实测鳍尖 -0.18） */
-    function finMesh(sign){
-        return new THREE.Mesh(ModelKit.mergePainted([
-            dgPart(new THREE.ConeGeometry(0.13, 0.29, 7), DRG_CORAL, 0, 0, 0, {rz:-sign*1.15, s:[1, 1, 0.35]})
-        ]), paintMat);
-    }
-    const finL = new THREE.Group(); finL.position.set(-0.28, 0.13, -0.16); finL.add(finMesh(-1)); head.add(finL);
-    const finR = new THREE.Group(); finR.position.set(0.28, 0.13, -0.16); finR.add(finMesh(1)); head.add(finR);
-    const eyeMesh = new THREE.Mesh(ModelKit.merge([
-        new THREE.SphereGeometry(0.072, 12, 10).translate(-0.135, 0, 0.285),
-        new THREE.SphereGeometry(0.072, 12, 10).translate( 0.135, 0, 0.285)
-    ]), new THREE.MeshStandardMaterial({color:0x33241a, roughness:0.25}));
-    eyeMesh.position.set(0, 0.03, -0.13);
-    head.add(eyeMesh);
+/* 躯干（1 件合并：主球 + 髋部球 + 三片叠瓦状奶油腹甲 + 珊瑚背刺一排，大小渐变） */
+const torsoParts = [
+dgPart(new THREE.SphereGeometry(0.315, 18, 14), BODY, 0, 0.24, 0, {s:[1.02, 1.08, 0.78]}),
+dgPart(new THREE.SphereGeometry(0.25, 16, 12), BODY, 0, -0.03, 0, {s:[1.08, 0.78, 0.80]}),
+/* 脖颈基座：躯干顶端一圈隆起，与头组里的颈球上下夹住头-躯干交界，
+转头/垂头时交界处始终有肉身过渡，不露缝 */
+dgPart(new THREE.SphereGeometry(0.19, 14, 10), BODY, 0, 0.50, 0, {s:[1.08, 0.66, 1.0]}),
+dgPart(new THREE.SphereGeometry(0.205, 14, 10), BELLY, 0, 0.33, 0.169, {s:[0.88, 0.52, 0.55]}),
+dgPart(new THREE.SphereGeometry(0.215, 14, 10), BELLY, 0, 0.185, 0.173, {s:[0.90, 0.54, 0.55]}),
+dgPart(new THREE.SphereGeometry(0.20, 14, 10), BELLY, 0, 0.045, 0.143, {s:[0.86, 0.52, 0.55]}),
+/* 背刺：底盘沉根之外，每根刺根部再加一颗沿锥轴压扁的根包覆丘（半径比底盘大
+0.025）——弧面背上平底盘总有一段边沿探出表面，包覆丘把整圈盘边吞进过渡
+件里，刺像从一颗根丘上长出来（探针按底盘圆环对 躯干∪包覆丘 复测） */
+spikeGeo(0.075, 0.20, 0, 0.47, -0.174, 0.35),
+dgPart(new THREE.SphereGeometry(0.10, 10, 8), CORAL, 0, 0.385, -0.205, {rx:0.35, s:[1, 0.5, 1]}),
+spikeGeo(0.085, 0.24, 0, 0.30, -0.208, 0.22),
+dgPart(new THREE.SphereGeometry(0.11, 10, 8), CORAL, 0, 0.193, -0.232, {rx:0.22, s:[1, 0.5, 1]}),
+spikeGeo(0.075, 0.20, 0, 0.12, -0.183, 0.10),
+dgPart(new THREE.SphereGeometry(0.10, 10, 8), CORAL, 0, 0.030, -0.192, {rx:0.10, s:[1, 0.5, 1]}),
+spikeGeo(0.06, 0.15, 0, -0.05, -0.165, -0.05),
+dgPart(new THREE.SphereGeometry(0.085, 10, 8), CORAL, 0, -0.115, -0.162, {rx:-0.05, s:[1, 0.5, 1]})
+];
+/* 花纹·条纹：三道标志件色横环绕躯干（半径按躯干椭圆截面逐道算，半沉进
+表面像画上去的纹；腹甲在前、环在后，前面自然被腹甲盖住一截） */
+if(cfg.pattern === 'stripes'){
+torsoParts.push(dgRing(0.262, 0.030, 1.06, 0.80, CORAL, 0, 0.40, 0));
+torsoParts.push(dgRing(0.295, 0.030, 1.05, 0.80, CORAL, 0, 0.24, 0));
+torsoParts.push(dgRing(0.262, 0.030, 1.06, 0.80, CORAL, 0, 0.08, 0));
+}
+/* 花纹·斑点（躯干部分）：奶油色斑贴在背上（中心按椭球表面 0.94 倍埋入，
+只探出浅浅一层，像天生的花纹不像贴纸） */
+if(cfg.pattern === 'spots'){
+torsoParts.push(dgPart(new THREE.SphereGeometry(0.052, 10, 8), BELLY, -0.122, 0.409, -0.183, {s:[1, 1, 0.38]}));
+torsoParts.push(dgPart(new THREE.SphereGeometry(0.042, 10, 8), BELLY, 0.148, 0.311, -0.204, {s:[1, 1, 0.38]}));
+torsoParts.push(dgPart(new THREE.SphereGeometry(0.036, 8, 6), BELLY, -0.046, 0.168, -0.222, {s:[1, 1, 0.38]}));
+torsoParts.push(dgPart(new THREE.SphereGeometry(0.033, 8, 6), BELLY, 0.092, 0.480, -0.148, {s:[1, 1, 0.38]}));
+}
+const torsoMesh = new THREE.Mesh(ModelKit.mergePainted(torsoParts), paintMat);
+torsoMesh.castShadow = true;
+body.add(torsoMesh);
 
-    /* 双臂：枢轴在肩头，手臂垂在身侧（组带外倾角留出与躯干的间隙，摆臂不擦身）。
-       一件合并：肩头 + 手臂 + 圆手 + 朝前内侧的小拇指 */
-    function armMesh(sign){
-        return new THREE.Mesh(ModelKit.mergePainted([
-            /* 肩头关节球：加大到 0.108 并下沉到枢轴下——原 0.078 球与躯干侧面只是相切
-               （内缘 0.267 对躯干表面 0.267），看着像贴上去的；现在整颗球咬进躯干约 0.05，
-               摆臂/睡姿折臂时肩头始终是连在身上的关节球 */
-            dgPart(new THREE.SphereGeometry(0.108, 12, 9), DRG_BODY, 0, -0.04, 0),
-            dgPart(new THREE.CylinderGeometry(0.062, 0.052, 0.30, 10), DRG_BODY, 0, -0.16, 0),
-            dgPart(new THREE.SphereGeometry(0.068, 10, 8), DRG_BODY, 0, -0.345, 0.005, {s:[1, 1.15, 1]}),
-            dgPart(new THREE.SphereGeometry(0.028, 8, 6), DRG_BODY, -sign*0.055, -0.335, 0.032)
-        ]), paintMat);
-    }
-    const armL = new THREE.Group(); armL.position.set(-0.345, 0.44, 0.03);
-    armL.add(armMesh(-1)); armL.rotation.z = -0.14; armL.userData.baseZ = -0.14; body.add(armL);
-    const armR = new THREE.Group(); armR.position.set(0.345, 0.44, 0.03);
-    armR.add(armMesh(1)); armR.rotation.z = 0.14; armR.userData.baseZ = 0.14; body.add(armR);
+/* 头（组原点设在面部下方，而不是脖子根）：一人称相机锚点取的就是 head 组原点
+（相机代码注释「镜头放在头部中心」）。原点落在躯干正上方的脖子根时，低头会被
+圆滚滚的胸口腹甲怼满画面；锚到面部下方（配合躯干前后向收薄），低头能看到
+胸口腹甲，行走时交替前摆的脚尖也会从肚皮下探出来。子级几何按原点位移
+反向平移，静止外观逐点一致。 */
+const head = new THREE.Group(); head.position.set(0, 0.79, 0.15); body.add(head);
+const skullParts = [
+dgPart(new THREE.SphereGeometry(0.325, 18, 14), BODY, 0, -0.01, -0.13, {s:[1, 0.95, 0.94]}),
+/* 颈球：挂在头组下缘、随头一起转，底部始终沉在躯干与脖颈基座里——
+张望/低头/睡姿垂头时脖子不断开、不露空 */
+dgPart(new THREE.SphereGeometry(0.195, 14, 10), BODY, 0, -0.26, -0.07, {s:[1, 0.79, 1]}),
+/* 脑后颈窝肉：补颅骨后下缘与颈球之间的月牙空缺（探针实测睡姿该处颅底
+距躯干/颈球最远 0.12）——一团随头转的后脑勺肉把空缺填实 */
+dgPart(new THREE.SphereGeometry(0.15, 12, 9), BODY, 0, -0.15, -0.28, {s:[1.05, 0.9, 1]}),
+dgPart(new THREE.SphereGeometry(0.165, 14, 10), BELLY, 0, -0.125, 0.095, {s:[1.28, 0.74, 0.95]}),
+dgPart(new THREE.SphereGeometry(0.08, 10, 8), BLUSH, -0.225, -0.11, 0.085, {s:[BLUSHS, 0.75*BLUSHS, 0.45]}),
+dgPart(new THREE.SphereGeometry(0.08, 10, 8), BLUSH, 0.225, -0.11, 0.085, {s:[BLUSHS, 0.75*BLUSHS, 0.45]}),
+dgPart(new THREE.SphereGeometry(0.016, 6, 5), 0x33241a, -0.055, -0.085, 0.232),
+dgPart(new THREE.SphereGeometry(0.016, 6, 5), 0x33241a, 0.055, -0.085, 0.232),
+dgPart(new THREE.SphereGeometry(0.03, 8, 6), 0x33241a, 0, -0.21, 0.202, {s:[1.5, 0.3, 0.6]})
+];
+/* 花纹·斑点（头部部分）：两颗奶油斑落在头顶后侧 */
+if(cfg.pattern === 'spots'){
+skullParts.push(dgPart(new THREE.SphereGeometry(0.046, 10, 8), BELLY, 0.162, 0.206, -0.268, {s:[1, 1, 0.4]}));
+skullParts.push(dgPart(new THREE.SphereGeometry(0.037, 8, 6), BELLY, -0.223, 0.134, -0.281, {s:[1, 1, 0.4]}));
+}
+const skullMesh = new THREE.Mesh(ModelKit.mergePainted(skullParts), paintMat);
+skullMesh.castShadow = true;
+head.add(skullMesh);
+/* 角（样式变体）：sharp = 定型版尖角；bud = 短圆芽角（锥 + 球尖）；
+none = 不长角。后脑刺与根包覆丘恒有（跟背刺同风格切换） */
+const hornParts = [];
+if(cfg.horn === 'sharp'){
+hornParts.push(dgPart(new THREE.ConeGeometry(0.09, 0.42, 9), BELLY, -0.155, 0.305, -0.16, {rx:-0.30, rz:0.17}));
+hornParts.push(dgPart(new THREE.ConeGeometry(0.09, 0.42, 9), BELLY, 0.155, 0.305, -0.16, {rx:-0.30, rz:-0.17}));
+} else if(cfg.horn === 'bud'){
+hornParts.push(dgPart(new THREE.ConeGeometry(0.105, 0.26, 9), BELLY, -0.15, 0.235, -0.155, {rx:-0.30, rz:0.17}));
+hornParts.push(dgPart(new THREE.ConeGeometry(0.105, 0.26, 9), BELLY, 0.15, 0.235, -0.155, {rx:-0.30, rz:-0.17}));
+hornParts.push(dgPart(new THREE.SphereGeometry(0.052, 10, 8), BELLY, -0.178, 0.35, -0.198));
+hornParts.push(dgPart(new THREE.SphereGeometry(0.052, 10, 8), BELLY, 0.178, 0.35, -0.198));
+}
+hornParts.push(spikeGeo(0.07, 0.18, 0, 0.113, -0.385, 0.55));
+/* 后脑刺根包覆丘：同背刺，吞掉底盘探出颅面的那段边沿 */
+hornParts.push(dgPart(new THREE.SphereGeometry(0.095, 10, 8), CORAL, 0, 0.044, -0.427, {rx:0.55, s:[1, 0.5, 1]}));
+head.add(new THREE.Mesh(ModelKit.mergePainted(hornParts), paintMat));
+/* 耳鳍：左右各成一组（枢轴在鳍根）——睡姿侧躺时像动物压耳朵一样向上折拢到头顶，
+否则倒下侧的鳍尖会被整组滚转压进地面（探针实测鳍尖 -0.18） */
+function finMesh(sign){
+return new THREE.Mesh(ModelKit.mergePainted([
+dgPart(new THREE.ConeGeometry(0.13, 0.29, 7), CORAL, 0, 0, 0, {rz:-sign*1.15, s:[1, 1, 0.35]})
+]), paintMat);
+}
+const finL = new THREE.Group(); finL.position.set(-0.28, 0.13, -0.16); finL.add(finMesh(-1)); head.add(finL);
+const finR = new THREE.Group(); finR.position.set(0.28, 0.13, -0.16); finR.add(finMesh(1)); head.add(finR);
+const eyeMesh = new THREE.Mesh(ModelKit.merge([
+new THREE.SphereGeometry(0.072, 12, 10).translate(-0.135, 0, 0.285),
+new THREE.SphereGeometry(0.072, 12, 10).translate( 0.135, 0, 0.285)
+]), new THREE.MeshStandardMaterial({color:0x33241a, roughness:0.25}));
+eyeMesh.position.set(0, 0.03, -0.13);
+head.add(eyeMesh);
+/* 睫毛（女性轻造型差异）：每只眼上外侧三根小睫，根部埋进眼球上缘 */
+let lashMesh = null;
+if(cfg.gender === 'female'){
+const lp = [];
+for(const sgn of [-1, 1]){
+lp.push(dgPart(new THREE.BoxGeometry(0.016, 0.050, 0.010), 0x33241a, sgn*0.158, 0.105, 0.185, {rz:-sgn*0.30}));
+lp.push(dgPart(new THREE.BoxGeometry(0.016, 0.052, 0.010), 0x33241a, sgn*0.182, 0.092, 0.180, {rz:-sgn*0.60}));
+lp.push(dgPart(new THREE.BoxGeometry(0.016, 0.048, 0.010), 0x33241a, sgn*0.200, 0.068, 0.168, {rz:-sgn*0.90}));
+}
+lashMesh = new THREE.Mesh(ModelKit.mergePainted(lp), paintMat);
+head.add(lashMesh);
+}
 
-    /* 双腿：枢轴在髋部（与 body 同高、挂 lie 层），腿筒 + 踝关节球 + 圆头脚 + 三个奶油脚趾。
-       【连接修复】原腿筒下端（-0.33）与脚背（-0.412）之间有 0.082 的空气间隙——脚是悬空
-       吊在腿下的一块，迈步时看着像掉在地上。这次腿筒加长到 -0.45 扎进脚里，再加一颗踝
-       关节球（-0.435）把腿筒下端与脚后跟整圈包住：腿-踝-脚三段两两重叠成一体，
-       脚的位置/触地高度（底 -0.538）一丝不动，步态与防沉地结论不回退 */
-    function legMesh(){
-        return new THREE.Mesh(ModelKit.mergePainted([
-            dgPart(new THREE.CylinderGeometry(0.088, 0.10, 0.46, 10), DRG_BODY, 0, -0.22, 0),
-            dgPart(new THREE.SphereGeometry(0.102, 12, 9), DRG_BODY, 0, -0.435, 0.03, {s:[1, 0.85, 1.15]}),
-            dgPart(new THREE.SphereGeometry(0.115, 12, 9), DRG_BODY, 0, -0.475, 0.075, {s:[1, 0.55, 1.35]}),
-            dgPart(new THREE.SphereGeometry(0.032, 8, 6), DRG_BELLY, -0.055, -0.478, 0.20),
-            dgPart(new THREE.SphereGeometry(0.034, 8, 6), DRG_BELLY, 0, -0.472, 0.21),
-            dgPart(new THREE.SphereGeometry(0.032, 8, 6), DRG_BELLY, 0.055, -0.478, 0.20)
-        ]), paintMat);
-    }
-    const legL = new THREE.Group(); legL.position.set(-0.14, 0.55, 0); legL.add(legMesh()); lie.add(legL);
-    const legR = new THREE.Group(); legR.position.set(0.14, 0.55, 0); legR.add(legMesh()); lie.add(legR);
+/* 双臂：枢轴在肩头，手臂垂在身侧（组带外倾角留出与躯干的间隙，摆臂不擦身）。
+一件合并：肩头 + 手臂 + 圆手 + 朝前内侧的小拇指 */
+function armMesh(sign){
+return new THREE.Mesh(ModelKit.mergePainted([
+/* 肩头关节球：加大到 0.108 并下沉到枢轴下——原 0.078 球与躯干侧面只是相切
+（内缘 0.267 对躯干表面 0.267），看着像贴上去的；现在整颗球咬进躯干约 0.05，
+摆臂/睡姿折臂时肩头始终是连在身上的关节球 */
+dgPart(new THREE.SphereGeometry(0.108, 12, 9), BODY, 0, -0.04, 0),
+dgPart(new THREE.CylinderGeometry(0.062, 0.052, 0.30, 10), BODY, 0, -0.16, 0),
+dgPart(new THREE.SphereGeometry(0.068, 10, 8), BODY, 0, -0.345, 0.005, {s:[1, 1.15, 1]}),
+dgPart(new THREE.SphereGeometry(0.028, 8, 6), BODY, -sign*0.055, -0.335, 0.032)
+]), paintMat);
+}
+const armL = new THREE.Group(); armL.position.set(-0.345, 0.44, 0.03);
+armL.add(armMesh(-1)); armL.rotation.z = -0.14; armL.userData.baseZ = -0.14; body.add(armL);
+const armR = new THREE.Group(); armR.position.set(0.345, 0.44, 0.03);
+armR.add(armMesh(1)); armR.rotation.z = 0.14; armR.userData.baseZ = 0.14; body.add(armR);
 
-    /* 背上小翅膀：叶形膜 + 奶油翅骨，一侧一件（构造沿用 build 1 的合批法，尺寸按人形收小） */
-    function wingMesh(sign){
-        const mem = new THREE.SphereGeometry(0.42, 12, 9);
-        mem.scale(1.05, 0.10, 0.55); mem.translate(sign*0.26, 0, -0.08);
-        const spar = new THREE.CylinderGeometry(0.024, 0.04, 0.62, 6);
-        spar.rotateZ(sign*1.15); spar.rotateY(sign*0.35); spar.translate(sign*0.22, 0.03, 0.10);
-        return new THREE.Mesh(ModelKit.mergePainted([
-            ModelKit.paint(mem, DRG_WING), ModelKit.paint(spar, DRG_BELLY)
-        ]), paintMat);
-    }
-    const wingL = new THREE.Group(); wingL.position.set(-0.15, 0.42, -0.20);
-    wingL.add(wingMesh(-1)); wingL.rotation.z = -0.22; wingL.userData.base = -0.22; body.add(wingL);
-    const wingR = new THREE.Group(); wingR.position.set(0.15, 0.42, -0.20);
-    wingR.add(wingMesh(1)); wingR.rotation.z = 0.22; wingR.userData.base = 0.22; body.add(wingR);
+/* 双腿：枢轴在髋部（与 body 同高、挂 lie 层），腿筒 + 踝关节球 + 圆头脚 + 三个奶油脚趾。
+原腿筒下端（-0.33）与脚背（-0.412）之间有 0.082 的空气间隙——脚是悬空
+吊在腿下的一块，迈步时看着像掉在地上。这次腿筒加长到 -0.45 扎进脚里，再加一颗踝
+关节球（-0.435）把腿筒下端与脚后跟整圈包住：腿-踝-脚三段两两重叠成一体，
+脚的位置/触地高度（底 -0.538）一丝不动，步态与防沉地结论不回退 */
+function legMesh(){
+return new THREE.Mesh(ModelKit.mergePainted([
+dgPart(new THREE.CylinderGeometry(0.088, 0.10, 0.46, 10), BODY, 0, -0.22, 0),
+dgPart(new THREE.SphereGeometry(0.102, 12, 9), BODY, 0, -0.435, 0.03, {s:[1, 0.85, 1.15]}),
+dgPart(new THREE.SphereGeometry(0.115, 12, 9), BODY, 0, -0.475, 0.075, {s:[1, 0.55, 1.35]}),
+dgPart(new THREE.SphereGeometry(0.032, 8, 6), BELLY, -0.055, -0.478, 0.20),
+dgPart(new THREE.SphereGeometry(0.034, 8, 6), BELLY, 0, -0.472, 0.21),
+dgPart(new THREE.SphereGeometry(0.032, 8, 6), BELLY, 0.055, -0.478, 0.20)
+]), paintMat);
+}
+const legL = new THREE.Group(); legL.position.set(-0.14, 0.55, 0); legL.add(legMesh()); lie.add(legL);
+const legR = new THREE.Group(); legR.position.set(0.14, 0.55, 0); legR.add(legMesh()); lie.add(legR);
 
-    /* 三节渐细长尾：自尾根下垂拖在身后（droop 为各节基准俯角，存在 userData 里给
-       dragonAnimate 叠加摆动/睡姿压尾），每节背上一根小背刺，末节带珊瑚色竖扁尾尖 */
-    function tailSeg(rTip, rBase, len, spikeR, spikeH, jointR, rootMound){
-        const parts = [ dgPart(new THREE.CylinderGeometry(rTip, rBase, len, 10), DRG_BODY, 0, 0, -len/2, {rx:-Math.PI/2}) ];
-        if(spikeR) parts.push(dgPart(new THREE.ConeGeometry(spikeR, spikeH, 6), DRG_CORAL, 0, (rTip + rBase)*0.4, -len/2, {rx:0.3, s:[1, 1, 0.45]}));
-        /* 关节包覆球：长在本节末端、套着下一节的根部——两节相对摆动时接头始终被球包住，
-           不会像两片圆盘对顶那样在弯侧张开楔口 */
-        if(jointR) parts.push(dgPart(new THREE.SphereGeometry(jointR, 10, 8), DRG_BODY, 0, 0, -len));
-        /* 尾根丘：第一节根部的肉丘，跨在躯干后表面两侧，尾巴怎么摆根部都不脱开 */
-        if(rootMound) parts.push(dgPart(new THREE.SphereGeometry(0.125, 12, 9), DRG_BODY, 0, 0, 0.03, {s:[1.05, 0.95, 0.75]}));
-        return new THREE.Mesh(ModelKit.mergePainted(parts), paintMat);
-    }
-    /* 尾根：原位（z=-0.21）底盘与躯干后表面只是相切——整组内嵌 0.055 扎进髋部，
-       再加尾根丘包覆，根部成一体（总尾长随之短 0.055，垂地余量复核见探针） */
-    const tail1 = new THREE.Group(); tail1.position.set(0, -0.04, -0.155);
-    tail1.add(tailSeg(0.082, 0.105, 0.32, 0.055, 0.13, 0.084, true)); tail1.userData.droop = -0.22; body.add(tail1);
-    const tail2 = new THREE.Group(); tail2.position.set(0, 0, -0.32);
-    tail2.add(tailSeg(0.06, 0.082, 0.28, 0.045, 0.11, 0.062, false)); tail2.userData.droop = -0.14; tail1.add(tail2);
-    const tail3 = new THREE.Group(); tail3.position.set(0, 0, -0.28);
-    tail3.add(new THREE.Mesh(ModelKit.mergePainted([
-        dgPart(new THREE.CylinderGeometry(0.038, 0.06, 0.24, 10), DRG_BODY, 0, 0, -0.12, {rx:-Math.PI/2}),
-        dgPart(new THREE.ConeGeometry(0.115, 0.30, 7), DRG_CORAL, 0, 0.02, -0.335, {rx:-Math.PI/2, s:[0.35, 1, 1]})
-    ]), paintMat));
-    tail3.userData.droop = -0.06; tail2.add(tail3);
+/* 背上小翅膀：叶形膜 + 奶油翅骨，一侧一件（构造沿用 build 1 的合批法，尺寸按人形收小）；
+大小变体只缩放整个翅组（枢轴在翅根，长大是往外上方展开，不碰背） */
+function wingMesh(sign){
+const mem = new THREE.SphereGeometry(0.42, 12, 9);
+mem.scale(1.05, 0.10, 0.55); mem.translate(sign*0.26, 0, -0.08);
+const spar = new THREE.CylinderGeometry(0.024, 0.04, 0.62, 6);
+spar.rotateZ(sign*1.15); spar.rotateY(sign*0.35); spar.translate(sign*0.22, 0.03, 0.10);
+return new THREE.Mesh(ModelKit.mergePainted([
+ModelKit.paint(mem, WING), ModelKit.paint(spar, BELLY)
+]), paintMat);
+}
+const wingL = new THREE.Group(); wingL.position.set(-0.15, 0.42, -0.20);
+wingL.add(wingMesh(-1)); wingL.rotation.z = -0.22; wingL.userData.base = -0.22; body.add(wingL);
+const wingR = new THREE.Group(); wingR.position.set(0.15, 0.42, -0.20);
+wingR.add(wingMesh(1)); wingR.rotation.z = 0.22; wingR.userData.base = 0.22; body.add(wingR);
+wingL.scale.setScalar(cfg.wingSize); wingR.scale.setScalar(cfg.wingSize);
 
-    return { group: root, parts: {
-        body: body, bodyBaseY: 0.55, lie: lie, head: head, eyes: eyeMesh, finL: finL, finR: finR,
-        armL: armL, armR: armR, legL: legL, legR: legR,
-        wingL: wingL, wingR: wingR,
-        tail: [tail1, tail2, tail3]
-    } };
+/* 三节渐细长尾：自尾根下垂拖在身后（droop 为各节基准俯角，存在 userData 里给
+dragonAnimate 叠加摆动/睡姿压尾），每节背上一根小背刺，末节带尾尖（样式变体） */
+function tailSeg(rTip, rBase, len, spikeR, spikeH, jointR, rootMound){
+const parts = [ dgPart(new THREE.CylinderGeometry(rTip, rBase, len, 10), BODY, 0, 0, -len/2, {rx:-Math.PI/2})];
+if(spikeR) parts.push(spikeGeo(spikeR, spikeH, 0, (rTip + rBase)*0.4, -len/2, 0.3));
+/* 关节包覆球：长在本节末端、套着下一节的根部——两节相对摆动时接头始终被球包住，
+不会像两片圆盘对顶那样在弯侧张开楔口 */
+if(jointR) parts.push(dgPart(new THREE.SphereGeometry(jointR, 10, 8), BODY, 0, 0, -len));
+/* 尾根丘：第一节根部的肉丘，跨在躯干后表面两侧，尾巴怎么摆根部都不脱开 */
+if(rootMound) parts.push(dgPart(new THREE.SphereGeometry(0.125, 12, 9), BODY, 0, 0, 0.03, {s:[1.05, 0.95, 0.75]}));
+return new THREE.Mesh(ModelKit.mergePainted(parts), paintMat);
+}
+/* 尾根：原位（z=-0.21）底盘与躯干后表面只是相切——整组内嵌 0.055 扎进髋部，
+再加尾根丘包覆，根部成一体（总尾长随之短 0.055，垂地余量复核见探针） */
+const tail1 = new THREE.Group(); tail1.position.set(0, -0.04, -0.155);
+tail1.add(tailSeg(0.082, 0.105, 0.32, 0.055, 0.13, 0.084, true)); tail1.userData.droop = -0.22; body.add(tail1);
+const tail2 = new THREE.Group(); tail2.position.set(0, 0, -0.32);
+tail2.add(tailSeg(0.06, 0.082, 0.28, 0.045, 0.11, 0.062, false)); tail2.userData.droop = -0.14; tail1.add(tail2);
+const tail3 = new THREE.Group(); tail3.position.set(0, 0, -0.28);
+/* 尾巴尖变体：leaf = 定型版竖扁叶尖；ball = 圆球尾尖；spike = 细长尖刺 */
+const tipParts = [ dgPart(new THREE.CylinderGeometry(0.038, 0.06, 0.24, 10), BODY, 0, 0, -0.12, {rx:-Math.PI/2})];
+if(cfg.tailTip === 'ball')
+tipParts.push(dgPart(new THREE.SphereGeometry(0.105, 12, 9), CORAL, 0, 0.01, -0.27));
+else if(cfg.tailTip === 'spike')
+tipParts.push(dgPart(new THREE.ConeGeometry(0.075, 0.44, 7), CORAL, 0, 0.01, -0.42, {rx:-Math.PI/2, s:[0.4, 1, 1]}));
+else
+tipParts.push(dgPart(new THREE.ConeGeometry(0.115, 0.30, 7), CORAL, 0, 0.02, -0.335, {rx:-Math.PI/2, s:[0.35, 1, 1]}));
+tail3.add(new THREE.Mesh(ModelKit.mergePainted(tipParts), paintMat));
+tail3.userData.droop = -0.06; tail2.add(tail3);
+
+/* ---------- 配饰（#41）：程序小件、各自一件合并网格、只在启用时建 ----------
+接合规矩与本体一致：每件都半沉进身体表面长出来，不许浮着贴着。
+围巾/铃铛挂 body 组（脖颈基座与胸前腹甲）——第一人称低头正好能看见；
+帽子/蝴蝶结/眼镜挂 head 组（一人称藏头时随头一起藏，合乎实情）。 */
+const accParts = {};
+if(cfg.acc.scarf){
+const flap = new THREE.SphereGeometry(0.09, 10, 8);
+flap.scale(0.48, 0.9, 0.17); flap.translate(0.085, 0.29, 0.26);
+accParts.scarf = new THREE.Mesh(ModelKit.mergePainted([
+/* 环抱脖颈基座一圈：内缘整圈咬进颈球/基座里 */
+dgRing(0.185, 0.034, 1, 1, 0xd84a35, 0, 0.505, 0.005, -0.20),
+ModelKit.paint(flap, 0xd84a35),
+dgPart(new THREE.SphereGeometry(0.042, 8, 6), 0xd84a35, 0.08, 0.395, 0.215)
+]), paintMat);
+accParts.scarf.castShadow = true;
+body.add(accParts.scarf);
+}
+if(cfg.acc.bell){
+accParts.bell = new THREE.Mesh(ModelKit.mergePainted([
+/* 项圈前弧沉进胸口、只露前段；铃铛半沉进腹甲面，吊环连着项圈 */
+dgRing(0.15, 0.017, 1, 1, 0x8a4b2a, 0, 0.472, 0.028, -0.30),
+dgRing(0.020, 0.008, 1, 1, 0x8a4b2a, 0, 0.398, 0.228, 0.3),
+dgPart(new THREE.SphereGeometry(0.052, 12, 9), 0xf2b233, 0, 0.345, 0.243),
+dgPart(new THREE.SphereGeometry(0.016, 6, 5), 0x8a4b2a, 0, 0.322, 0.288)
+]), paintMat);
+body.add(accParts.bell);
+}
+if(cfg.acc.hat){
+accParts.hat = new THREE.Mesh(ModelKit.mergePainted([
+/* 草帽：宽檐压住颅顶、帽筒半沉进头顶，帽带是标志件色 */
+dgPart(new THREE.CylinderGeometry(0.175, 0.185, 0.02, 16), 0xe8c877, 0.02, 0.27, -0.055, {rz:0.05}),
+dgPart(new THREE.SphereGeometry(0.128, 14, 10), 0xe8c877, 0.02, 0.28, -0.055, {s:[1, 0.60, 1]}),
+dgRing(0.128, 0.015, 1, 1, CORAL, 0.02, 0.272, -0.055, 0)
+]), paintMat);
+accParts.hat.castShadow = true;
+head.add(accParts.hat);
+}
+if(cfg.acc.bow){
+accParts.bow = new THREE.Mesh(ModelKit.mergePainted([
+/* 蝴蝶结：结心半沉进颅侧，两片结翼根部都扎进结心里 */
+dgPart(new THREE.SphereGeometry(0.034, 8, 6), 0xe56b8c, -0.225, 0.19, 0.02),
+dgPart(new THREE.ConeGeometry(0.058, 0.12, 8), 0xe56b8c, -0.278, 0.212, 0.02, {rz:1.25, s:[1, 1, 0.42]}),
+dgPart(new THREE.ConeGeometry(0.058, 0.12, 8), 0xe56b8c, -0.272, 0.148, 0.02, {rz:1.95, s:[1, 1, 0.42]})
+]), paintMat);
+head.add(accParts.bow);
+}
+if(cfg.acc.glasses){
+accParts.glasses = new THREE.Mesh(ModelKit.mergePainted([
+/* 眼镜：双环罩在眼球前方（眼球微凸、环不碰眼），镜腿向后扎进颅侧 */
+dgRingZ(0.088, 0.013, 0x2b2320, -0.135, 0.03, 0.205),
+dgRingZ(0.088, 0.013, 0x2b2320, 0.135, 0.03, 0.205),
+dgPart(new THREE.BoxGeometry(0.075, 0.016, 0.016), 0x2b2320, 0, 0.052, 0.205),
+dgPart(new THREE.CylinderGeometry(0.011, 0.011, 0.27, 6), 0x2b2320, -0.238, 0.045, 0.075, {rx:Math.PI/2}),
+dgPart(new THREE.CylinderGeometry(0.011, 0.011, 0.27, 6), 0x2b2320, 0.238, 0.045, 0.075, {rx:Math.PI/2})
+]), paintMat);
+head.add(accParts.glasses);
+}
+
+return { group: root, parts: {
+body: body, bodyBaseY: 0.55, lie: lie, head: head, eyes: eyeMesh, finL: finL, finR: finR,
+armL: armL, armR: armR, legL: legL, legR: legR,
+wingL: wingL, wingR: wingR,
+tail: [tail1, tail2, tail3],
+lashes: lashMesh, acc: accParts
+}};
 }
 
 /* ---------- 小龙的家与睡点 ---------- */
@@ -3893,8 +4255,9 @@ function dragonWalkTo(a, tx, tz, speed, dt){
     return false;
 }
 function dragonPickTarget(a){
+    const P = drgPers();   // #41：散步半径随性格（活泼跑远、慵懒在家门口转）
     for(let i = 0; i < 12; i++){
-        const ang = Math.random()*Math.PI*2, r = 5 + Math.random()*20;
+        const ang = Math.random()*Math.PI*2, r = P.roamMin + Math.random()*(P.roamMax - P.roamMin);
         const x = DRAGON_HOME.x + Math.cos(ang)*r, z = DRAGON_HOME.z + Math.sin(ang)*r;
         if(Math.hypot(x, z) > 55) continue;
         if(WalkMap.isWalkable(x, z)) return {x:x, z:z};
@@ -3956,9 +4319,15 @@ function dragonAnimate(a, dt, t){
     P.tail[0].rotation.x = P.tail[0].userData.droop - pose*0.30;
     P.tail[1].rotation.x = P.tail[1].userData.droop - pose*0.26;
     P.tail[2].rotation.x = P.tail[2].userData.droop - pose*0.18;
-    P.tail[0].rotation.y = Math.sin(t*1.4)*0.10 + Math.sin(wp*0.5)*0.14*moving;
-    P.tail[1].rotation.y = Math.sin(t*1.4 - 0.7)*0.12 + Math.sin(wp*0.5 - 0.6)*0.16*moving;
-    P.tail[2].rotation.y = Math.sin(t*1.4 - 1.4)*0.14;
+    // 开心信号（#16/#17）：互动/吃饱后 happyT 倒数期间尾巴摆得更快更欢——
+    // 相位走累计量 tailT，提速时相位连续不跳变；幅度同步放大
+    a.happyT = Math.max(0, (a.happyT || 0) - dt);
+    const happyK = a.happyT > 0 ? 1 : 0;
+    a.tailT = (a.tailT || 0) + dt*(1 + 1.15*happyK);
+    const tailAmp = 1 + 0.5*happyK, tt = a.tailT;
+    P.tail[0].rotation.y = (Math.sin(tt*1.4)*0.10 + Math.sin(wp*0.5)*0.14*moving)*tailAmp;
+    P.tail[1].rotation.y = (Math.sin(tt*1.4 - 0.7)*0.12 + Math.sin(wp*0.5 - 0.6)*0.16*moving)*tailAmp;
+    P.tail[2].rotation.y = Math.sin(tt*1.4 - 1.4)*0.14*tailAmp;
     // 翅膀：步态轻扇 + 待机微扇（同 build 1）；睡着向后折拢贴背
     const wf = Math.sin(wp)*0.10*moving + Math.sin(t*2.2)*0.02;
     P.wingL.rotation.z = P.wingL.userData.base + wf - pose*0.85;  // 睡姿：倒下侧翅膀上掀离开地面
@@ -3975,10 +4344,51 @@ function dragonAnimate(a, dt, t){
         DRG_LIE_PIVOT.x - (DRG_LIE_PIVOT.x*cx - DRG_LIE_PIVOT.y*sx),
         DRG_LIE_PIVOT.y - (DRG_LIE_PIVOT.x*sx + DRG_LIE_PIVOT.y*cx) - pose*DRG_LIE_SINK,
         0);
-    // 待机转头张望（玩家操控时由相机接管头部，见操控节）
+    /* 互动叠加（#16/#17）：在既有动画全部算完之后加算，只用已被关节验收过的
+       量程（垂头 ≤ 睡姿的 0.30、摆臂/转身走独立枢轴），不新增任何关节位移。
+       手势由 a.gesture 驱动（pat/wave/spin），啃食由 state==='eat' 驱动。 */
+    if(a.gesture){
+        const g = a.gesture;
+        g.t += dt;
+        const gp = Math.min(1, g.t/(a.gestureDur || 1.6)), genv = Math.sin(gp*Math.PI);
+        if(g.kind === 'pat'){
+            P.head.rotation.x += 0.22*genv;                       // 眯眼垂头享受（睡姿垂头 0.30 之内）
+            P.body.rotation.z += Math.sin(t*2.4)*0.05*genv;       // 身体轻轻晃
+            P.eyes.scale.y = 0.16;                                // 眯眼（盖过本帧眨眼结果，结束时复位）
+            if(gp > 0.45 && !g._h2){ g._h2 = 1; spawnHearts(6); }
+        } else if(g.kind === 'wave'){
+            P.armR.rotation.z = P.armR.userData.baseZ + 2.05*genv;  // 右臂抬到头侧（肩关节球原地转，不脱窝）
+            P.armR.rotation.x += Math.sin(t*17)*0.28*genv;          // 小幅摆手
+            P.lie.position.y += 0.12*Math.sin(gp*Math.PI);          // 顺带蹦一下（整组升降，脚不穿地）
+        } else if(g.kind === 'spin'){
+            const ge = gp < .5 ? 2*gp*gp : 1 - Math.pow(-2*gp + 2, 2)/2;
+            P.lie.rotation.y = -Math.PI*2*ge;                       // 整组绕自身竖轴转一圈，不动 group 朝向状态
+        }
+        if(gp >= 1){
+            a.gesture = null;
+            P.lie.rotation.y = 0;
+            if(pose < 0.5) P.eyes.scale.y = 1;
+            a.happyT = Math.max(a.happyT || 0, 5);                 // 玩完开心一会儿（尾巴信号）
+        }
+    }
+    if(a.state === 'eat'){
+        // 啃食：垂头 0.24 + 咀嚼起伏 0.05（峰值 0.29，仍在睡姿验收过的颈量程内），
+        // 头部 2% 咀嚼微缩放当腮帮鼓动（颈球随头同缩放、始终沉在脖颈基座里，不断链）
+        const eet = Math.min(1, (a.eatT || 0)*2.5);
+        const chew = Math.sin(t*7.5);
+        P.head.rotation.x += (0.24 + chew*0.05)*eet;
+        P.body.rotation.x += 0.10*eet;
+        const hs = 1 + chew*0.02*eet;
+        P.head.scale.set(hs, hs, hs);
+    } else {
+        P.head.scale.set(1, 1, 1);
+    }
+    if(happyK && moving < 0.3 && pose < 0.5)
+        P.body.position.y += Math.abs(Math.sin(t*5.2))*0.02;   // 开心时原地小蹦跶（只抬 body 层，同呼吸浮动一处）
+    // 待机转头张望（玩家操控时由相机接管头部，见操控节）；间隔随性格（#41）
     if(a.mode !== 'player'){
         a.lookYawT -= dt;
-        if(a.lookYawT <= 0){ a.lookYawT = 1.6 + Math.random()*2.8; a.lookYaw = (Math.random() - 0.5)*1.1; }
+        if(a.lookYawT <= 0){ const lp = drgPers(); a.lookYawT = lp.lookMin + Math.random()*(lp.lookMax - lp.lookMin); a.lookYaw = (Math.random() - 0.5)*1.1; }
         P.head.rotation.y += (a.lookYaw*(1 - pose) - P.head.rotation.y) * Math.min(1, dt*3);
     }
 }
@@ -4020,36 +4430,40 @@ const DRAGON_DEF = {
     name: 'dragon', initial: 'idle',
     onPhase(ph){
         if(!dragonAgent || dragonAgent.mode === 'player') return;
-        if(ph === 'night' && dragonAgent.state !== 'sleep' && dragonAgent.state !== 'sleepGo')
+        // 入夜只从散步/发呆切去睡觉：互动（play）、进食（eatGo/eat）、跟随（follow）
+        // 不被阶段切换硬打断——follow 自己查夜、play/eat 结束后经 idle 的夜查去睡
+        if(dragonShouldSleep(ph) && (dragonAgent.state === 'idle' || dragonAgent.state === 'roam'))
             AgentKit.setState(dragonAgent, 'sleepGo');
-        if(ph !== 'night' && (dragonAgent.state === 'sleep' || dragonAgent.state === 'sleepGo'))
+        if(!dragonShouldSleep(ph) && (dragonAgent.state === 'sleep' || dragonAgent.state === 'sleepGo'))
             AgentKit.setState(dragonAgent, 'idle');
     },
     states: {
         idle: { update(a, dt, t){
             a.moveAmt = Math.max(0, a.moveAmt - dt*4);
             dragonAnimate(a, dt, t);
-            if(GClock.phase() === 'night'){ AgentKit.setState(a, 'sleepGo'); return; }
+            if(dragonShouldSleep()){ AgentKit.setState(a, 'sleepGo'); return; }
             a.idleT -= dt;
             if(a.idleT <= 0){
                 a.target = dragonPickTarget(a);
-                if(a.target) AgentKit.setState(a, 'roam'); else a.idleT = 2;
+                if(a.target) AgentKit.setState(a, 'roam'); else a.idleT = drgPers().idleMin;
             }
         } },
         roam: { update(a, dt, t){
-            if(GClock.phase() === 'night'){ AgentKit.setState(a, 'sleepGo'); return; }
+            if(dragonShouldSleep()){ AgentKit.setState(a, 'sleepGo'); return; }
             if(!a.target){ a.idleT = 1; AgentKit.setState(a, 'idle'); return; }
             const p = a.group.position;
             if(Math.hypot(a.target.x - p.x, a.target.z - p.z) < 0.35){
-                a.target = null; a.idleT = 2 + Math.random()*4.5; AgentKit.setState(a, 'idle'); return;
+                // 发呆时长随性格（#41）：活泼稍歇就走，慵懒能坐很久
+                const P = drgPers();
+                a.target = null; a.idleT = P.idleMin + Math.random()*(P.idleMax - P.idleMin); AgentKit.setState(a, 'idle'); return;
             }
-            const moved = dragonWalkTo(a, a.target.x, a.target.z, 2.1, dt);
+            const moved = dragonWalkTo(a, a.target.x, a.target.z, drgPers().speed, dt);
             a.moveAmt += ((moved ? 1 : 0) - a.moveAmt) * Math.min(1, dt*6);
-            if(!moved){ a.target = null; a.idleT = 1.2; AgentKit.setState(a, 'idle'); }
+            if(!moved){ a.target = null; a.idleT = Math.max(0.6, drgPers().idleMin*0.6); AgentKit.setState(a, 'idle'); }
             dragonAnimate(a, dt, t);
         } },
         sleepGo: { update(a, dt, t){
-            if(GClock.phase() !== 'night'){ AgentKit.setState(a, 'idle'); return; }
+            if(!dragonShouldSleep()){ AgentKit.setState(a, 'idle'); return; }
             const p = a.group.position;
             if(Math.hypot(DRAGON_SLEEP.x - p.x, DRAGON_SLEEP.z - p.z) < 0.4){ AgentKit.setState(a, 'sleep'); return; }
             const moved = dragonWalkTo(a, DRAGON_SLEEP.x, DRAGON_SLEEP.z, 2.4, dt);
@@ -4064,13 +4478,126 @@ const DRAGON_DEF = {
         player: { update(a, dt, t){
             dragonPlayerMove(a, dt);
             dragonAnimate(a, dt, t);
+        } },
+        /* 互动演出（#16）：站定播手势（手势本身在 dragonAnimate 的叠加层里），
+           播完回 returnState（idle 或 follow）；手势中途入夜也不打断（≤1.8 秒） */
+        play: { update(a, dt, t){
+            a.moveAmt = Math.max(0, a.moveAmt - dt*5);
+            // 演出时面向访客（轨道相机注视点），转圈走 lie 层不与这里打架
+            dragonFace(a, Math.atan2(controls.target.x - a.group.position.x, controls.target.z - a.group.position.z), dt);
+            if(!a.gesture){
+                if(a.returnState === 'follow' && a.followT > 0) AgentKit.setState(a, 'follow');
+                else { a.idleT = 1.5; AgentKit.setState(a, 'idle'); }
+            }
+            dragonAnimate(a, dt, t);
+        } },
+        /* 去吃东西（#17）：走向放在地上的食物；够不着（被地形卡住或超时）时
+           近处就凑合吃、远处就退还背包，不死磕、不丢食物 */
+        eatGo: { update(a, dt, t){
+            if(!a.foodPos){ AgentKit.setState(a, 'idle'); return; }
+            const p = a.group.position;
+            const d = Math.hypot(a.foodPos.x - p.x, a.foodPos.z - p.z);
+            if(d < 0.55){ a.eatT = 0; AgentKit.setState(a, 'eat'); return; }
+            const moved = dragonWalkTo(a, a.foodPos.x, a.foodPos.z, 2.6, dt);
+            a.moveAmt += ((moved ? 1 : 0) - a.moveAmt) * Math.min(1, dt*6);
+            a.eatWait += dt;
+            if((!moved || a.eatWait > 7) && d >= 0.55){
+                if(d < 1.8){ a.eatT = 0; AgentKit.setState(a, 'eat'); return; }
+                bagAdd(foodKind); removeFood();
+                a.idleT = 1.5;
+                AgentKit.setState(a, 'idle');
+                showHuntToast('🐉 它够不着那口吃的，食物先收回背包啦');
+                return;
+            }
+            dragonAnimate(a, dt, t);
+        } },
+        /* 吃东西（#17）：低头啃食约 2.4 秒（动作在 dragonAnimate 叠加层），
+           食物同步缩小；吃完记账（喂食次数）、开心、转入跟随 */
+        eat: { update(a, dt, t){
+            a.eatT += dt;
+            a.moveAmt = Math.max(0, a.moveAmt - dt*5);
+            if(a.foodPos) dragonFace(a, Math.atan2(a.foodPos.x - a.group.position.x, a.foodPos.z - a.group.position.z), dt);
+            if(foodMesh) foodMesh.scale.setScalar(Math.max(0.2, 1 - 0.72*(a.eatT/2.4)));
+            dragonAnimate(a, dt, t);
+            if(a.eatT >= 2.4){
+                removeFood();
+                const b = bagEnsure(); b.fed++; saveBag();
+                a.happyT = 8;
+                a.followT = FOLLOW_DUR;
+                updateStatus();
+                showHuntToast('😋 吃饱啦！小龙想跟着你玩一会儿（喂食 ' + b.fed + ' 次）');
+                AgentKit.setState(a, 'follow');
+            }
+        } },
+        /* 跟随（#17）：非接管时跟着轨道相机注视点（参观主体）走，保持 2~4 单位——
+           太远走向主体外侧 3 单位处，太近就站住看着主体。结束条件：计时到点、
+           玩家接管（dragonTakeover 里清 followT 并切 player）、入夜（去睡觉）。
+           玩家进屋参观期间不跟进屋：锚点换成门口外侧，在门口等，出屋后自动续跟。 */
+        follow: { update(a, dt, t){
+            if(GClock.phase() === 'night'){ a.followT = 0; AgentKit.setState(a, 'sleepGo'); return; }
+            a.followT -= dt;
+            if(a.followT <= 0){
+                a.followT = 0; a.idleT = 1;
+                AgentKit.setState(a, 'idle');
+                showHuntToast('🐉 小龙玩够啦，自己去溜达了');
+                return;
+            }
+            let ax, az;
+            if(Interior.active){
+                const dw = roomToWorld(0, 0, 3.4);
+                ax = dw.x + HOUSE_F.x*1.8; az = dw.z + HOUSE_F.z*1.8;
+            } else { ax = controls.target.x; az = controls.target.z; }
+            const p = a.group.position;
+            const d = Math.hypot(ax - p.x, az - p.z);
+            if(d > 4.2){
+                /* 绕障：直线被树/石头挡住时 dragonWalkTo 只会贴墙滑、会卡进凹角
+                   （实测卡在距锚点 7.3 的树丛口袋里）——堵住超过 0.7 秒就立一个
+                   侧向绕行点（左右交替试），绕过去再回正轨 */
+                let tx, tz;
+                if(a.followDetour){
+                    tx = a.followDetour.x; tz = a.followDetour.z;
+                    a.followDetour.t -= dt;
+                    if(Math.hypot(tx - p.x, tz - p.z) < 0.6 || a.followDetour.t <= 0){
+                        a.followDetour = null; a.followStuck = 0;
+                    }
+                }
+                if(!a.followDetour){
+                    const ux = (p.x - ax)/d, uz = (p.z - az)/d;
+                    tx = ax + ux*3.0; tz = az + uz*3.0;
+                    if(!WalkMap.isWalkable(tx, tz)){ tx = ax; tz = az; }
+                }
+                const moved = dragonWalkTo(a, tx, tz, 2.6, dt);
+                a.moveAmt += ((moved ? 1 : 0) - a.moveAmt) * Math.min(1, dt*6);
+                if(moved) a.followStuck = Math.max(0, (a.followStuck || 0) - dt*2);
+                else{
+                    a.moveAmt = Math.max(0, a.moveAmt - dt*4);
+                    a.followStuck = (a.followStuck || 0) + dt;
+                    if(a.followStuck > 0.7 && !a.followDetour){
+                        const px2 = -(az - p.z)/d, pz2 = (ax - p.x)/d;   // 朝锚点方向的垂直向
+                        a.followSide = -(a.followSide || 1);
+                        for(const s of [a.followSide, -a.followSide]){
+                            const cx2 = p.x + px2*s*3.2 + (ax - p.x)/d*0.8;
+                            const cz2 = p.z + pz2*s*3.2 + (az - p.z)/d*0.8;
+                            if(Math.hypot(cx2, cz2) < 57 && WalkMap.isWalkable(cx2, cz2)){
+                                a.followDetour = {x:cx2, z:cz2, t:3};
+                                break;
+                            }
+                        }
+                        a.followStuck = 0;
+                    }
+                }
+            } else {
+                a.moveAmt = Math.max(0, a.moveAmt - dt*4);
+                if(d > 1.2) dragonFace(a, Math.atan2(ax - p.x, az - p.z), dt);
+            }
+            dragonAnimate(a, dt, t);
         } }
     }
 };
 
 function createDragon(){
     DRAGON_SLEEP = pickDragonSleep();
-    const m = ModelKit.dragon();
+    const m = ModelKit.dragon(dragonCfg);
     const g = m.group;
     g.position.set(DRAGON_HOME.x, terrainH(DRAGON_HOME.x, DRAGON_HOME.z), DRAGON_HOME.z);
     g.rotation.y = -0.7;
@@ -4079,13 +4606,22 @@ function createDragon(){
         group: g, parts: m.parts,
         target: null, idleT: 1.5, moveAmt: 0, walkPhase: 0,
         blinkT: 2 + Math.random()*2, blinkPh: -1,
-        lookYaw: 0, lookYawT: 0, pose: 0, mode: 'auto', moveTarget: null
+        lookYaw: 0, lookYawT: 0, pose: 0, mode: 'auto', moveTarget: null,
+        // #16/#17：互动手势、开心计时、尾巴相位、跟随计时、进食计时与回程状态
+        gesture: null, gestureDur: 0, happyT: 0, tailT: 0,
+        followT: 0, eatT: 0, eatWait: 0, returnState: 'idle', foodPos: null,
+        followStuck: 0, followDetour: null, followSide: 1
     });
 }
 function dragonStateLabel(){
     if(!dragonAgent) return '-';
-    if(dragonAgent.mode === 'player') return DragonCtl.fp ? '操控·一人称' : '操控·三人称';
-    return {roam:'散步', idle:'发呆', sleepGo:'去睡觉', sleep:'睡觉中'}[dragonAgent.state] || dragonAgent.state;
+    const a = dragonAgent;
+    if(a.mode === 'player') return DragonCtl.fp ? '操控·一人称' : '操控·三人称';
+    let s = {roam:'散步', idle:'发呆', sleepGo:'去睡觉', sleep:'睡觉中',
+             play:'互动中', eatGo:'去吃东西', eat:'吃东西', follow:'跟着你'}[a.state] || a.state;
+    if(a.state === 'follow') s += ' · ' + Math.max(0, Math.ceil(a.followT)) + '秒';
+    if(a.happyT > 0 && a.state !== 'sleep' && a.state !== 'sleepGo') s += ' · 开心';
+    return s;
 }
 
 /* ---------- 接管 / 放手 ---------- */
@@ -4094,6 +4630,16 @@ function dragonTakeover(){
     DragonCtl.active = true;
     dragonAgent.mode = 'player';
     dragonAgent.moveTarget = null;
+    // 接管即散场（#16/#17 互斥规矩）：跟随结束、手势复位、没吃完的食物退回背包
+    dragonAgent.followT = 0;
+    if(dragonAgent.gesture){
+        dragonAgent.gesture = null;
+        dragonAgent.parts.lie.rotation.y = 0;
+        dragonAgent.parts.eyes.scale.y = 1;
+        dragonAgent.parts.head.scale.set(1, 1, 1);
+    }
+    if(foodMesh){ bagAdd(foodKind); removeFood(); }
+    hideDragonMenu();
     AgentKit.setState(dragonAgent, 'player');
     // 互斥规矩：操控优先——巡游自动停、视角锁定自动解（与巡游/锁定互斥的既有口径一致）
     if(wx.orbit){
@@ -4109,11 +4655,12 @@ function dragonTakeover(){
     DragonCtl.yaw = dragonAgent.group.rotation.y + Math.PI;
     DragonCtl.pitch = 0.34; DragonCtl.dist = 5.4; DragonCtl.init = false;
     const b = document.getElementById('dragonBtn');
-    b.textContent = '🙌 放手让它玩'; b.classList.add('on');
+    b.textContent = dragonBtnText(true); b.classList.add('on');
     const vb = document.getElementById('viewBtn');
     vb.style.display = '';
     vb.textContent = DragonCtl.fp ? '👁️ 第一人称' : '👁️ 第三人称';
     if(IS_TOUCH) document.getElementById('joy').classList.add('on');
+    dragonCall();   // #41：接管时叫一声（音调随性别），没开声音时静默
 }
 function dragonRelease(){
     if(!DragonCtl.active) return;
@@ -4130,7 +4677,7 @@ function dragonRelease(){
     controls.target.copy(DragonCtl.savedTarget);
     controls.setExternal(false);
     const b = document.getElementById('dragonBtn');
-    b.textContent = '🐉 操控小龙'; b.classList.remove('on');
+    b.textContent = dragonBtnText(false); b.classList.remove('on');
     document.getElementById('viewBtn').style.display = 'none';
     document.getElementById('joy').classList.remove('on');
 }
@@ -4146,6 +4693,36 @@ function dragonToggleView(){
         : Math.max(-0.12, Math.min(1.15, -DragonCtl.pitch));
     if(dragonAgent) dragonAgent.parts.head.visible = !DragonCtl.fp;   // 一人称藏头（龙眼视角惯例），低头看身体不受影响
     document.getElementById('viewBtn').textContent = DragonCtl.fp ? '👁️ 第一人称' : '👁️ 第三人称';
+}
+
+/* ---------- 定制生效：存档 + 整只重建 + 文案刷新（#41） ----------
+   重建只换模型组：位置/朝向/行为状态都在 AgentKit 的 agent 身上（group/parts
+   只是引用），换完下一帧 dragonAnimate 就按新零件继续演，姿势不断片。
+   旧几何逐件 dispose，不留显存垃圾。 */
+function rebuildDragonModel(){
+    const a = dragonAgent;
+    if(!a) return;
+    const old = a.group, parent = old.parent;
+    const m = ModelKit.dragon(dragonCfg);
+    m.group.position.copy(old.position);
+    m.group.rotation.copy(old.rotation);
+    if(parent) parent.remove(old);
+    (parent || scene).add(m.group);
+    a.group = m.group; a.parts = m.parts;
+    a.parts.head.visible = !(DragonCtl.active && DragonCtl.fp);   // 一人称藏头状态别被重建冲掉
+    old.traverse(o => {
+        if(o.geometry) o.geometry.dispose();
+        if(o.material) o.material.dispose();
+    });
+}
+function dragonRefreshLabels(){
+    const b = document.getElementById('dragonBtn');
+    if(b) b.textContent = dragonBtnText(DragonCtl.active);
+}
+function applyDragonCfg(rebuild){
+    dragonSaveCfg();
+    if(rebuild !== false) rebuildDragonModel();
+    dragonRefreshLabels();
 }
 
 /* ---------- 人称相机（每帧在 AgentKit 之后、轨道相机之前调用） ---------- */
@@ -4274,6 +4851,396 @@ function setupDragonControls(){
     };
     joy.addEventListener('pointerup', joyEnd);
     joy.addEventListener('pointercancel', joyEnd);
+    setupDragonInteract();   // #16/#17：互动菜单、爱心粒子、背包、点龙开菜单
+}
+
+/* ==================== 小龙互动与喂食跟随（Issue #16 / #17） ====================
+   互动（#16）：点小龙或底部「🤚 互动」开菜单——摸头（眯眼垂头＋爱心粒子）、
+   打招呼（抬臂摆手＋小蹦）、转圈（整组绕竖轴一圈）。动作全部走 dragonAnimate
+   尾部的叠加层，只用关节验收过的量程，不动模型结构。玩完进入开心状态
+   （happyT：尾巴摆速/幅度提升＋原地小蹦，状态栏可见）。
+   喂食（#17）：农场收获的南瓜/玉米自动进背包（ct2_bag，本件唯一新增键，
+   治理同 ct2_farm 先例）；喂食时把食物放在龙面前地上，龙自己走过去
+   （eatGo→eat，低头啃食＋食物缩小），吃完 fed+1、开心、跟随 90 秒（follow：
+   锚点=轨道相机注视点，保持 2~4 单位；玩家进屋时在门口等、出屋续跟；
+   接管或入夜结束跟随）。
+   互斥规矩：接管中触发互动时移动输入优先——有移动输入就不起手势；
+   接管动作本身会散场（跟随结束、手势复位、未吃完的食物退回背包）。 */
+const BAG_KEY='ct2_bag';
+const FOLLOW_DUR=90;          // 喂食后跟随秒数
+let bagState=null;            // {pumpkin, corn, fed}：背包食物数与累计喂食次数（亲近程度）
+function loadBag(){
+    const b=store.bag.json({pumpkin:0, corn:0, fed:0});
+    if(typeof b.pumpkin!=='number') b.pumpkin=0;
+    if(typeof b.corn!=='number') b.corn=0;
+    if(typeof b.fed!=='number') b.fed=0;
+    return b;
+}
+function bagEnsure(){ if(!bagState) bagState=loadBag(); return bagState; }
+function saveBag(){ store.bag.save(bagEnsure()); }
+function bagAdd(crop){
+    const b=bagEnsure();
+    if(crop==='pumpkin') b.pumpkin++;
+    else if(crop==='corn') b.corn++;
+    else return;
+    saveBag(); updateStatus();
+}
+
+/* ---------- 爱心粒子（摸头）：一个 Points 池反复用，共 1 次绘制 ---------- */
+const HEART_N=14;
+let heartPts=null, heartData=null;
+function buildHearts(){
+    const cv=document.createElement('canvas'); cv.width=cv.height=64;
+    const cx=cv.getContext('2d');
+    cx.fillStyle='#ff6f91';
+    cx.beginPath();
+    cx.moveTo(32,56);
+    cx.bezierCurveTo(4,34, 8,10, 22,10);
+    cx.bezierCurveTo(28,10, 32,15, 32,21);
+    cx.bezierCurveTo(32,15, 36,10, 42,10);
+    cx.bezierCurveTo(56,10, 60,34, 32,56);
+    cx.fill();
+    const geo=new THREE.BufferGeometry();
+    const pos=new Float32Array(HEART_N*3);
+    heartData=[];
+    for(let i=0;i<HEART_N;i++){ pos[i*3+1]=-999; heartData.push({life:0, max:1, x:0, y:-999, z:0, vx:0, vz:0, ph:0}); }
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const mat=new THREE.PointsMaterial({size:0.34, map:new THREE.CanvasTexture(cv),
+        transparent:true, depthWrite:false, opacity:0.95});
+    heartPts=new THREE.Points(geo, mat);
+    heartPts.frustumCulled=false;
+    heartPts.visible=false;
+    scene.add(heartPts);
+}
+const _heartV=new THREE.Vector3();
+function spawnHearts(n){
+    if(!heartPts || !dragonAgent) return;
+    dragonAgent.parts.head.getWorldPosition(_heartV);
+    let spawned=0;
+    for(let i=0;i<HEART_N && spawned<n;i++){
+        const d=heartData[i];
+        if(d.life>0) continue;
+        d.max=1.0+Math.random()*0.5; d.life=d.max;
+        d.x=_heartV.x+(Math.random()-0.5)*0.55;
+        d.y=_heartV.y+0.28+Math.random()*0.15;
+        d.z=_heartV.z+(Math.random()-0.5)*0.55;
+        d.vx=(Math.random()-0.5)*0.22; d.vz=(Math.random()-0.5)*0.22;
+        d.ph=Math.random()*6.28;
+        spawned++;
+    }
+    if(spawned) heartPts.visible=true;
+}
+function updateDragonFx(dt, t){
+    if(!heartPts || !heartPts.visible) return;
+    const attr=heartPts.geometry.getAttribute('position');
+    let any=false;
+    for(let i=0;i<HEART_N;i++){
+        const d=heartData[i];
+        if(d.life>0){
+            any=true;
+            d.life-=dt;
+            if(d.life<=0){ d.y=-999; }
+            else{
+                d.y+=dt*0.55; d.x+=d.vx*dt+Math.sin(t*3+d.ph)*0.08*dt; d.z+=d.vz*dt;
+                if(d.life<0.22) d.y-=dt*0.9;      // 消失前下坠，代替逐粒透明度
+            }
+        }
+        attr.setXYZ(i, d.x, d.y, d.z);
+    }
+    attr.needsUpdate=true;
+    if(!any) heartPts.visible=false;
+}
+
+/* ---------- 食物（放在地上的南瓜/玉米，各 1 件合并几何，按需建、用完销毁） ---------- */
+let foodMesh=null, foodKind=null;
+function buildFoodMesh(kind){
+    let geos;
+    if(kind==='pumpkin'){
+        geos=[
+            dgPart(new THREE.SphereGeometry(0.17, 14, 10), 0xe07b24, 0, 0.125, 0, {s:[1, 0.78, 1]}),
+            dgPart(new THREE.CylinderGeometry(0.03, 0.045, 0.10, 6), PALETTE.stem, 0, 0.275, 0, {rz:0.25}),
+            dgPart(new THREE.SphereGeometry(0.09, 8, 6), PALETTE.leaf, 0.10, 0.03, 0.05, {s:[1, 0.25, 1]})
+        ];
+    }else{
+        geos=[
+            dgPart(new THREE.CylinderGeometry(0.068, 0.095, 0.46, 8), 0xf2c230, 0, 0.09, 0, {rz:1.45}),
+            dgPart(new THREE.ConeGeometry(0.068, 0.17, 8), 0xf7d774, -0.285, 0.125, 0, {rz:1.45}),
+            dgPart(new THREE.ConeGeometry(0.09, 0.30, 6), PALETTE.leaf, 0.22, 0.05, 0.02, {rz:-1.1, s:[1, 1, 0.3]})
+        ];
+    }
+    const m=new THREE.Mesh(ModelKit.mergePainted(geos),
+        new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.9}));
+    m.castShadow=true;
+    m.name='dragonFood';
+    return m;
+}
+function removeFood(){
+    if(foodMesh){
+        scene.remove(foodMesh);
+        if(foodMesh.geometry) foodMesh.geometry.dispose();
+        foodMesh=null;
+    }
+    foodKind=null;
+    if(dragonAgent) dragonAgent.foodPos=null;
+}
+/* 把食物放在龙正前方一块能落脚的地上（候选点逐个问 WalkMap） */
+function placeFood(kind){
+    removeFood();
+    foodMesh=buildFoodMesh(kind); foodKind=kind;
+    const a=dragonAgent, p=a.group.position, ry=a.group.rotation.y;
+    const fx=Math.sin(ry), fz=Math.cos(ry);
+    const cand=[
+        [p.x+fx*1.15, p.z+fz*1.15],
+        [p.x+fx*0.95+fz*0.6, p.z+fz*0.95-fx*0.6],
+        [p.x+fx*0.95-fz*0.6, p.z+fz*0.95+fx*0.6],
+        [p.x-fx*0.9, p.z-fz*0.9],
+        [p.x, p.z]
+    ];
+    let spot=null;
+    for(const c of cand){
+        if(Math.hypot(c[0], c[1])<57 && WalkMap.isWalkable(c[0], c[1])){ spot=c; break; }
+    }
+    if(!spot) spot=[p.x, p.z];
+    a.foodPos={x:spot[0], z:spot[1]};
+    foodMesh.position.set(spot[0], terrainH(spot[0], spot[1]), spot[1]);
+    scene.add(foodMesh);
+}
+
+/* ---------- 互动触发 ---------- */
+function dragonBusy(){
+    if(!dragonAgent) return true;
+    const s=dragonAgent.state;
+    return s==='play' || s==='eatGo' || s==='eat';
+}
+function dragonGesture(kind){
+    const a=dragonAgent; if(!a) return;
+    if(a.mode==='player'){
+        // 接管中：移动输入优先——正在动（按键/摇杆/步态未停）就不起手势
+        const moving = a.moveAmt>0.25 || DragonCtl.keys.size>0 ||
+            Math.abs(DragonCtl.joy.x)>0.2 || Math.abs(DragonCtl.joy.y)>0.2;
+        if(moving){ showHuntToast('🏃 移动中呢，先停下来再和它玩'); return; }
+        if(a.gesture) return;
+        a.gesture={kind:kind, t:0};
+        a.gestureDur = kind==='spin' ? 1.1 : (kind==='pat' ? 1.8 : 1.6);
+        if(kind==='pat') spawnHearts(9);
+        hideDragonMenu();
+        return;
+    }
+    if(a.state==='sleep' || a.state==='sleepGo'){ showHuntToast('💤 它睡着了，别吵它'); return; }
+    if(dragonBusy()) return;
+    a.returnState = (a.state==='follow') ? 'follow' : 'idle';
+    a.gesture={kind:kind, t:0};
+    a.gestureDur = kind==='spin' ? 1.1 : (kind==='pat' ? 1.8 : 1.6);
+    if(kind==='pat') spawnHearts(9);
+    hideDragonMenu();
+    AgentKit.setState(a, 'play');
+}
+function dragonFeed(kind){
+    const a=dragonAgent, b=bagEnsure(); if(!a) return;
+    if(a.mode==='player'){ showHuntToast('🐉 操控它的时候没法喂，先放手让它自己玩吧'); return; }
+    if(a.state==='sleep' || a.state==='sleepGo'){ showHuntToast('💤 它睡着了，等它醒了再喂'); return; }
+    if(dragonBusy()) return;
+    if(kind==='pumpkin' ? b.pumpkin<=0 : b.corn<=0){
+        showHuntToast('🎒 背包里没有' + (kind==='pumpkin' ? '南瓜' : '玉米') + '啦，去农田收获一些吧');
+        return;
+    }
+    if(kind==='pumpkin') b.pumpkin--; else b.corn--;
+    saveBag(); updateStatus();
+    a.returnState = (a.state==='follow') ? 'follow' : 'idle';
+    a.eatWait = 0;
+    placeFood(kind);
+    hideDragonMenu();
+    AgentKit.setState(a, 'eatGo');
+}
+
+/* ---------- 互动菜单 ---------- */
+function refreshDragonMenu(){
+    const b=bagEnsure();
+    const fp=document.getElementById('dmFeedP'), fc=document.getElementById('dmFeedC');
+    if(fp){ fp.textContent='🎃 喂南瓜 ×'+b.pumpkin; fp.disabled=b.pumpkin<=0; }
+    if(fc){ fc.textContent='🌽 喂玉米 ×'+b.corn; fc.disabled=b.corn<=0; }
+    const hint=document.getElementById('dmHint');
+    if(hint) hint.textContent='已喂 '+b.fed+' 次 · 喂饱后它会跟着你玩一阵';
+}
+function hideDragonMenu(){
+    const m=document.getElementById('dragonMenu');
+    if(m) m.style.display='none';
+}
+function toggleDragonMenu(){
+    const m=document.getElementById('dragonMenu'); if(!m) return;
+    if(m.style.display==='none'){ refreshDragonMenu(); m.style.display=''; }
+    else m.style.display='none';
+}
+/* 点中龙本体 = 开/关菜单（与农田点按同款轻点判定）；点别处则顺手收起菜单 */
+let dragonTapState=null, dragonTapAt=-100000;
+function bindDragonTap(){
+    const el=renderer.domElement;
+    el.addEventListener('pointerdown', e=>{
+        dragonTapState={x:e.clientX, y:e.clientY, t:performance.now()};
+    });
+    el.addEventListener('pointerup', e=>{
+        if(!dragonTapState) return;
+        const dx=e.clientX-dragonTapState.x, dy=e.clientY-dragonTapState.y;
+        const dur=performance.now()-dragonTapState.t;
+        dragonTapState=null;
+        if(dx*dx+dy*dy>=36 || dur>=500) return;
+        if(!dragonAgent || DragonCtl.active || Interior.active) return;
+        const r=el.getBoundingClientRect();
+        _dgNdc.set(((e.clientX-r.left)/r.width)*2-1, -((e.clientY-r.top)/r.height)*2+1);
+        _dgRay.setFromCamera(_dgNdc, camera);
+        if(_dgRay.intersectObject(dragonAgent.group, true).length){
+            dragonTapAt=performance.now();
+            toggleDragonMenu();
+        }else{
+            hideDragonMenu();
+        }
+    });
+}
+function setupDragonInteract(){
+    buildHearts();
+    bagEnsure();
+    document.getElementById('actBtn').addEventListener('click', toggleDragonMenu);
+    document.getElementById('dmPat').addEventListener('click', ()=>dragonGesture('pat'));
+    document.getElementById('dmWave').addEventListener('click', ()=>dragonGesture('wave'));
+    document.getElementById('dmSpin').addEventListener('click', ()=>dragonGesture('spin'));
+    document.getElementById('dmFeedP').addEventListener('click', ()=>dragonFeed('pumpkin'));
+    document.getElementById('dmFeedC').addEventListener('click', ()=>dragonFeed('corn'));
+    document.getElementById('dmClose').addEventListener('click', hideDragonMenu);
+    bindDragonTap();
+}
+
+/* ---------- 小龙定制面板（Issue #41） ----------
+   面板里每个控件都直连 dragonCfg：改动 → applyDragonCfg（存档 + 整只重建
+   + 文案刷新）→ 回刷面板选中态。名字与颜色输入在编辑中不整刷面板，
+   避免打断输入；其余按钮式选项整刷无妨。 */
+let dgOpen = false;
+function openDragonCustom(){
+    if(dgOpen) return;
+    dgOpen = true;
+    refreshDragonPanel();
+    document.getElementById('dragonMask').classList.add('on');
+    const panel = document.getElementById('modPanel');
+    if(panel) panel.classList.remove('on');
+}
+function closeDragonCustom(){
+    if(!dgOpen) return;
+    dgOpen = false;
+    document.getElementById('dragonMask').classList.remove('on');
+}
+function dgHexInput(n){ return '#' + ('000000' + (n >>> 0).toString(16)).slice(-6); }
+function dgNumInput(s){ const n = parseInt(String(s).replace('#', ''), 16); return n === n ? (n & 0xffffff) : 0; }
+function dgOptRow(id, opts, get, set){
+    const box = document.getElementById(id);
+    if(!box) return;
+    box.textContent = '';
+    opts.forEach(o => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.textContent = o.label; b.dataset.v = o.v;
+        if(get() === o.v) b.classList.add('on');
+        b.addEventListener('click', () => set(o.v));
+        box.appendChild(b);
+    });
+}
+function refreshDragonPanel(){
+    const c = dragonCfg;
+    const nameEl = document.getElementById('dgName');
+    if(nameEl && document.activeElement !== nameEl) nameEl.value = c.name;
+    dgOptRow('dgGender', [{v:'male', label:'♂ 他'}, {v:'female', label:'♀ 她'}],
+        () => c.gender, v => {
+            c.gender = v;
+            // 性别带一套默认配色（之后照样能改）：他 = 奶黄，她 = 蜜桃粉
+            c.palette = v === 'female' ? 'peach' : 'milk'; c.colors = null;
+            applyDragonCfg(true); refreshDragonPanel();
+        });
+    dgOptRow('dgPers', Object.keys(DRG_PERSONALITY).map(k => ({v:k, label:DRG_PERSONALITY[k].label})),
+        () => c.personality, v => { c.personality = v; applyDragonCfg(false); refreshDragonPanel(); });
+    const pd = document.getElementById('dgPersDesc');
+    if(pd) pd.textContent = drgPers().desc + '。';
+    // 体色预设色板
+    const pal = document.getElementById('dgPal');
+    if(pal){
+        pal.textContent = '';
+        Object.keys(DRG_PALETTES).forEach(k => {
+            const p = DRG_PALETTES[k];
+            const b = document.createElement('button');
+            b.type = 'button'; b.dataset.v = k;
+            if(c.palette === k) b.classList.add('on');
+            [p.body, p.belly, p.accent].forEach(hex => {
+                const i = document.createElement('i');
+                i.style.background = dgHexInput(hex);
+                b.appendChild(i);
+            });
+            b.appendChild(document.createTextNode(p.label));
+            b.addEventListener('click', () => { c.palette = k; c.colors = null; applyDragonCfg(true); refreshDragonPanel(); });
+            pal.appendChild(b);
+        });
+        const cb = document.createElement('button');
+        cb.type = 'button'; cb.dataset.v = 'custom';
+        cb.textContent = '🎨 自选';
+        if(c.palette === 'custom') cb.classList.add('on');
+        pal.appendChild(cb);
+    }
+    const col = drgColorsOf(c);
+    const setCol = (id, n) => { const el = document.getElementById(id); if(el && document.activeElement !== el) el.value = dgHexInput(n); };
+    setCol('dgColBody', col.body); setCol('dgColBelly', col.belly); setCol('dgColAccent', col.accent);
+    dgOptRow('dgPattern', [{v:'none', label:'无花纹'}, {v:'spots', label:'斑点'}, {v:'stripes', label:'条纹'}],
+        () => c.pattern, v => { c.pattern = v; applyDragonCfg(true); refreshDragonPanel(); });
+    dgOptRow('dgHorn', [{v:'sharp', label:'尖角'}, {v:'bud', label:'芽角'}, {v:'none', label:'无角'}],
+        () => c.horn, v => { c.horn = v; applyDragonCfg(true); refreshDragonPanel(); });
+    dgOptRow('dgSpike', [{v:'sharp', label:'尖刺'}, {v:'round', label:'圆刺'}],
+        () => c.spike, v => { c.spike = v; applyDragonCfg(true); refreshDragonPanel(); });
+    dgOptRow('dgWing', [{v:'1', label:'小翅膀'}, {v:'1.35', label:'大翅膀'}],
+        () => String(c.wingSize), v => { c.wingSize = parseFloat(v); applyDragonCfg(true); refreshDragonPanel(); });
+    dgOptRow('dgTail', [{v:'leaf', label:'叶尖'}, {v:'ball', label:'圆球'}, {v:'spike', label:'尖刺'}],
+        () => c.tailTip, v => { c.tailTip = v; applyDragonCfg(true); refreshDragonPanel(); });
+    dgOptRow('dgAcc', [
+        {v:'scarf', label:'🧣 围巾'}, {v:'bell', label:'🔔 铃铛'}, {v:'hat', label:'👒 草帽'},
+        {v:'bow', label:'🎀 蝴蝶结'}, {v:'glasses', label:'👓 眼镜'}
+    ], () => c.acc.__never, v => { c.acc[v] = !c.acc[v]; applyDragonCfg(true); refreshDragonPanel(); });
+    // 配饰是多选开关：dgOptRow 的单选高亮不适用，这里按 acc 逐个回刷
+    const accBox = document.getElementById('dgAcc');
+    if(accBox) for(const b of accBox.children) b.classList.toggle('on', !!c.acc[b.dataset.v]);
+}
+function setupDragonCustom(){
+    const entry = document.getElementById('dragonCustomBtn');
+    if(entry) entry.addEventListener('click', openDragonCustom);
+    const mask = document.getElementById('dragonMask');
+    if(!mask) return;
+    document.getElementById('dgX').addEventListener('click', closeDragonCustom);
+    document.getElementById('dgOk').addEventListener('click', closeDragonCustom);
+    mask.addEventListener('click', e => { if(e.target === mask) closeDragonCustom(); });
+    document.addEventListener('keydown', e => {
+        if(e.key === 'Escape' && dgOpen){ closeDragonCustom(); e.stopPropagation(); }
+    }, true);
+    const nameEl = document.getElementById('dgName');
+    if(nameEl) nameEl.addEventListener('change', () => {
+        dragonCfg.name = sanitizeDragonName(nameEl.value);
+        nameEl.value = dragonCfg.name;
+        applyDragonCfg(false);   // 名字只动文案与存档，不必重建模型
+    });
+    let colTimer = null;
+    const onCol = () => {
+        if(colTimer) clearTimeout(colTimer);
+        colTimer = setTimeout(() => {
+            dragonCfg.colors = {
+                body: dgNumInput(document.getElementById('dgColBody').value),
+                belly: dgNumInput(document.getElementById('dgColBelly').value),
+                accent: dgNumInput(document.getElementById('dgColAccent').value)
+            };
+            dragonCfg.palette = 'custom';
+            applyDragonCfg(true); refreshDragonPanel();
+        }, 150);
+    };
+    ['dgColBody', 'dgColBelly', 'dgColAccent'].forEach(id => {
+        const el = document.getElementById(id);
+        if(el) el.addEventListener('input', onCol);
+    });
+    document.getElementById('dgCall').addEventListener('click', () => { audioEnsure(); dragonCall(); });
+    document.getElementById('dgReset').addEventListener('click', () => {
+        dragonCfg = JSON.parse(JSON.stringify(DRG_DEFAULT_CFG));
+        applyDragonCfg(true); refreshDragonPanel();
+    });
+    dragonRefreshLabels();
 }
 
 /* ==================== 天气系统 ==================== */
@@ -4530,6 +5497,7 @@ function animate(){
     Env.refresh();
     updateModules(dt, t);
     farmRainCheck();
+    updateDragonFx(dt, t);
 
     // 风吹摆动：统一走环境风场（树/花/草共用一阵风，见 Env）
     swayGroups.forEach(sg=>{
@@ -4667,7 +5635,9 @@ function updateStatus(){
     frag.appendChild(statusLine('蝴蝶:',butterflies.length+' 蜜蜂:'+bees.length));
     frag.appendChild(statusLine('寻宝:',(huntState?huntState.found.length:0)+'/5'));
     frag.appendChild(statusLine('收获:',(farmState?farmState.harvest:0)+''));
-    frag.appendChild(statusLine('小龙:',dragonStateLabel()));
+    const _bag=bagEnsure();
+    frag.appendChild(statusLine('背包:','南瓜×'+_bag.pumpkin+' 玉米×'+_bag.corn));
+    frag.appendChild(statusLine(dragonCfg.name + ':',dragonStateLabel()));
     frag.appendChild(statusLine('天气:',
         weatherLabels[weatherIndex]||'-','#ffd97a'));
     s.textContent='';
@@ -7125,6 +8095,9 @@ function setupGlobal(){
     /* 站内更新日志（Issue #37）：入口在上方功能面板的「版本日志」一节，开页自动展示当前版 */
     setupChangelog();
 
+    /* 小龙定制（Issue #41）：入口是底部小龙按钮条里的「🎨 定制小龙」 */
+    setupDragonCustom();
+
     /* 资源加载失败降级：脚本/样式/图片 404 时给一句人话，而不是白屏 */
     window.addEventListener('error', function(ev){
         const t=ev.target;
@@ -7154,7 +8127,7 @@ function setupGlobal(){
     if(!app) return;
     var HIDE_MS = 3000, timer = null;
     function anyDialogOpen(){
-        var ids = ['modPanel','fbMask','ltMask','helpMask','voteMask','logMask','echoMask','codexMask'], i, el;
+        var ids = ['modPanel','fbMask','ltMask','helpMask','voteMask','logMask','dragonMask','echoMask','codexMask'], i, el;
         for(i = 0; i < ids.length; i++){
             el = document.getElementById(ids[i]);
             if(el && el.classList.contains('on')) return true;
