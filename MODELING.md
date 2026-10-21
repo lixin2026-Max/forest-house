@@ -96,11 +96,11 @@
 |---|---|---|
 | 纯逻辑层 | `GClock` 时钟、`WalkMap` 可行走地图、`AgentKit` 行为框架、`Env` 环境状态、`mulberry32`、全部声明式数据（`SKY` 天气表、`CHANGELOG_NOTES`、`VOTE_OPTIONS`、农田布局表） | 直接复用，不依赖浏览器与 THREE 之外的宿主 API |
 | 渲染层 | `ModelKit` 工具箱产出几何/材质，场景组装与 `animate` | 复用结构；换渲染引擎时按构件逐个翻译 |
-| 平台适配层 | 存储适配层 `store`（7 个键收口一处）、唯一上报通道 `fbEndpoint`（FormSubmit）、输入（键鼠/触摸/OrbitControls 接缝）、DPR 与移动端判定 | 必须替换：小程序/App 各有自己的存储、网络与输入 API，只改这一层 |
+| 平台适配层 | 存储适配层 `store`（8 个键收口一处）、唯一上报通道 `fbEndpoint`（FormSubmit）、输入（键鼠/触摸/OrbitControls 接缝）、DPR 与移动端判定 | 必须替换：小程序/App 各有自己的存储、网络与输入 API，只改这一层 |
 
 **接缝规矩（新代码必须遵守）：**
 
-- 本地存储只准经 `store` 进出，不许在别处直接出现存储 API；键名仍是现有 7 个白名单键（新增键须同步登记 verify 与 security-audit 两处白名单）。
+- 本地存储只准经 `store` 进出，不许在别处直接出现存储 API；键名仍是现有 8 个白名单键（新增键须同步登记 verify 与 security-audit 两处白名单）。
 - 网络上报只准经现有唯一通道函数，不许新增请求出口（安全审计会拦）。
 - 可调参数（时间间隔、阈值、色板、比例）集中在 `CONFIG` / `PALETTE` / 性能守卫常量区，
   不散落魔法数字；新参数先问一句「将来要不要调」——要，就进配置区。

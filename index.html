@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <!-- 安全基线：除「同源」与回传邮箱服务外不允许任何外部加载 -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src data: blob:; connect-src 'self' https://formsubmit.co; font-src 'none'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src data: blob:; connect-src 'self' https://formsubmit.co; font-src 'none'; media-src blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <title>楚门的2.0世界 · Three.js 场景</title>
 <style>
@@ -468,6 +468,29 @@
     .mpDisclaimer{font-size:10.5px;line-height:1.7;opacity:.55;
       border-left:2px solid var(--disc-line);padding-left:8px}
     .mpTip{font-size:10.5px;color:var(--mp-tip)}
+    /* ===== 我的音乐（Issue #18：本地文件 BGM，独立 Audio 通道） ===== */
+    .mpMusic{display:grid;gap:7px}
+    .mpNow{display:flex;align-items:center;gap:7px;font-size:11.5px;min-height:16px}
+    .mpDot{width:8px;height:8px;border-radius:50%;background:var(--mp-sub);flex:none;opacity:.55}
+    .mpDot.play{background:#57c465;opacity:1;box-shadow:0 0 6px #57c465}
+    .mpNowTxt{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .mpNowTime{font-size:10.5px;color:var(--mp-sub);flex:none}
+    .mpTrans{display:grid;grid-template-columns:1fr 1.4fr 1fr 1fr;gap:6px}
+    .mpTrans button{font-family:inherit;font-size:12px;padding:6px 2px;border-radius:7px;cursor:pointer;
+        border:1px solid var(--line-soft);background:var(--chip);color:var(--btn-txt)}
+    .mpTrans button.on{background:var(--pri);border-color:var(--pri-line);color:var(--pri-txt)}
+    .mpVol{display:flex;align-items:center;gap:7px;font-size:11px}
+    .mpVol input{flex:1;accent-color:#4aa457;height:14px;min-width:0}
+    .mpAdd{font-family:inherit;font-size:12px;padding:7px;border-radius:8px;cursor:pointer;
+        border:1px dashed var(--dlg-line);background:var(--btn);color:var(--btn-txt)}
+    .mpListM{list-style:none;margin:0;padding:0;display:grid;gap:4px;max-height:118px;overflow:auto}
+    .mpListM li{display:flex;align-items:center;gap:6px;font-size:11.5px;padding:5px 7px;border-radius:7px;
+        border:1px solid var(--line-soft);background:var(--chip);color:var(--btn-txt);cursor:pointer}
+    .mpListM li.cur{border-color:var(--pri-line);background:var(--pri);color:var(--pri-txt)}
+    .mpListM li.off{opacity:.5;cursor:default}
+    .mpListM .nm{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .mpListM .rm{flex:none;background:none;border:none;color:inherit;font-size:12px;cursor:pointer;padding:0 2px;opacity:.75}
+    .mpMusTip{font-size:10.5px;color:var(--mp-tip);line-height:1.6}
 
     @media (max-width:600px),(pointer:coarse){
         /* 9:16 竖屏：面板通栏、按钮收窄，别把内容挤出屏幕 */
@@ -646,6 +669,22 @@
     <div class="mpSound">
         <button type="button" id="muteBtn" class="mpMute">🔇 声音已关闭</button>
         <span class="mpTip">浏览器要求先点一下才能出声</span>
+    </div>
+    <div class="mpSep"></div>
+    <div class="mpSub">我的音乐（本地文件 · 仅本机播放）</div>
+    <div class="mpMusic" id="mpMusic">
+        <div class="mpNow"><span class="mpDot" id="musDot"></span><span class="mpNowTxt" id="musNow">还没有选歌</span><span class="mpNowTime" id="musTime"></span></div>
+        <div class="mpTrans">
+            <button type="button" id="musPrev" title="上一首">⏮</button>
+            <button type="button" id="musPlay" title="播放 / 暂停">▶ 播放</button>
+            <button type="button" id="musNext" title="下一首">⏭</button>
+            <button type="button" id="musLoop" title="循环模式：列表循环 / 单曲循环">🔁 列表</button>
+        </div>
+        <div class="mpVol"><span>音量</span><input id="musVol" type="range" min="0" max="100" value="80"><span id="musVolVal">80%</span></div>
+        <button type="button" class="mpAdd" id="musAdd">🎵 选本地音乐文件（可多选）</button>
+        <input id="musFile" type="file" accept="audio/*" multiple hidden>
+        <ul class="mpListM" id="musList"></ul>
+        <div class="mpMusTip">歌只在你这台设备上播放，不上传、也不分发；请播放自己有权使用的音乐。浏览器限制：刷新页面后需重新选一次文件，歌名和顺序会替你记着。</div>
     </div>
     <div class="mpSep"></div>
     <div class="mpSub">全局</div>
@@ -947,7 +986,7 @@ const CONFIG = {
 };
 
 /* ---------- 薄存储适配层 ----------
-   核心系统不直接碰本地存储：一律经 store.<槽> 读写。槽位与 7 个白名单键
+   核心系统不直接碰本地存储：一律经 store.<槽> 读写。槽位与 8 个白名单键
    一一对应，键名仍以字面量出现在下面这唯一实现处（安全审计照常钉死）。
    移植时只换 mkSlot 底下的读写实现（小程序 storage / App 本地库），上层不动。 */
 
@@ -960,6 +999,12 @@ const THEME_KEY='ct2_theme';
    玩家提交建议时领到的回执码、署名选择与「共建者」徽章只存本机 ct2_echo
    （ECHO_KEY 写死，照其余各键的治理先例）：匹配在本机完成，不绑任何身份。 */
 const ECHO_KEY='ct2_echo';
+/* ---------- 自定义音乐（Issue #18） ----------
+   玩家自选本地音乐的播放偏好只存本机 ct2_music（MUSIC_KEY 写死，照其余
+   各键的治理先例）：只记音量、循环模式与歌名顺序——音频文件本体从不
+   落盘、从不上传（浏览器也不许网页留存 File 对象，刷新后凭歌名对照
+   重新选入的文件接着播）。 */
+const MUSIC_KEY='ct2_music';
 function mkSlot(read, write){
     const slot = { failed:false, _read:read, _write:write,
         get(){ try{ return slot._read(); }catch(e){ slot.failed = true; return null; } },
@@ -978,7 +1023,8 @@ const store = {
     farm:   mkSlot(()=>localStorage.getItem(FARM_KEY),     v=>localStorage.setItem(FARM_KEY, v)),
     vote:   mkSlot(()=>localStorage.getItem(VOTE_KEY),     v=>localStorage.setItem(VOTE_KEY, v)),
     theme:  mkSlot(()=>localStorage.getItem(THEME_KEY),    v=>localStorage.setItem(THEME_KEY, v)),
-    echo:   mkSlot(()=>localStorage.getItem(ECHO_KEY),     v=>localStorage.setItem(ECHO_KEY, v))
+    echo:   mkSlot(()=>localStorage.getItem(ECHO_KEY),     v=>localStorage.setItem(ECHO_KEY, v)),
+    music:  mkSlot(()=>localStorage.getItem(MUSIC_KEY),    v=>localStorage.setItem(MUSIC_KEY, v))
 };
 
 /* 主题状态只从 applyUiTheme 这一处进出：换根元素类 + 存偏好 + 同步面板按钮 */
@@ -5747,13 +5793,14 @@ function audioWeatherSync(){
     if(ambWind) ambWind.gain.setTargetAtTime(mode==='rain'?0.30:(mode==='mist'?0.22:0.16), now, 1.2);
     if(ambRain) ambRain.gain.setTargetAtTime(mode==='rain'?0.55:0.0001, now, 0.9);
     if(ambFire) ambFire.gain.setTargetAtTime(fireOn?0.30:0.0001, now, 0.7);
+    musicNightSync();   // 自选音乐的夜晚放轻跟天气变化同拍（函数在音乐模块里）
 }
 function audioTick(){
     if(!actx || audioMuted) return;
     const now = actx.currentTime;
     const mode = weatherModes[weatherIndex] || 'sunny';
 
-    if(FEAT.bgm.on && now >= bgmNext){
+    if(FEAT.bgm.on && !musicCustomActive() && now >= bgmNext){
         const sc = BGM_SCALE[mode] || BGM_SCALE.sunny;
         const gap = BGM_GAP[mode] || 1.4;
         const base = mode==='night' ? 164.81 : (mode==='golden' ? 196 : 220);
@@ -5794,6 +5841,241 @@ function setMute(v){
         b.textContent = audioMuted ? '🔇 声音已关闭' : '🔊 声音已开启';
         b.classList.toggle('on', !audioMuted);
     }
+}
+
+/* ==================== 自定义音乐（Issue #18） ====================
+   玩家自选本地音频文件作世界 BGM，走一个独立的 HTMLAudioElement 通道，
+   不占 WebAudio 图：程序化 BGM、环境音效（风/雨/鸟鸣/篝火）与敲门声
+   各走各的、互不打架。自选音乐在播时程序化 BGM 自动让行（audioTick
+   查 musicCustomActive），环境声照常；进屋/回户外都不碰这个元素，
+   播放天然不中断。音频文件只经内存对象 URL 在本机播放：不上传、
+   不写任何存储；ct2_music 只存音量、循环模式与歌名顺序。首次播放
+   必由玩家点击触发，符合浏览器自动播放策略，不绕。 */
+const musicState = {
+    el: null,        // 唯一的 Audio 元素（独立通道）
+    tracks: [],      // {name, url|null}：url 为空 = 只有歌名存档、文件待重新选入
+    cur: -1,         // 当前载入的曲目下标（-1 = 还没载入）
+    vol: 0.8,        // 玩家音量 0~1
+    loop: 'list',    // 'list' 列表循环 | 'one' 单曲循环
+    night: false     // 夜晚时段（音量自动放轻）
+};
+function musicCustomActive(){
+    const el = musicState.el;
+    return !!(el && !el.paused && !el.ended);
+}
+function musicIsNight(){
+    return (typeof weatherModes !== 'undefined') && weatherModes[weatherIndex] === 'night';
+}
+function musicNightSync(){
+    const n = musicIsNight();
+    if(n !== musicState.night){ musicState.night = n; musicApplyVol(); }
+}
+function musicApplyVol(){
+    const el = musicState.el;
+    if(el) el.volume = Math.min(1, Math.max(0, musicState.vol * (musicState.night ? 0.55 : 1)));
+}
+function musicSave(){
+    store.music.save({ vol: musicState.vol, loop: musicState.loop,
+        names: musicState.tracks.map(function(t){ return t.name; }) });
+}
+function musicFmt(s){
+    if(!(s >= 0)) s = 0;                 // NaN / 负数 / 未就绪一律当 0
+    if(s === Infinity) return '--:--';   // 直播流式文件没有总时长
+    s = Math.floor(s);
+    return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2);
+}
+function musicHint(msg){
+    const now = document.getElementById('musNow');
+    if(now) now.textContent = msg;
+}
+function musicRender(){
+    const list = document.getElementById('musList');
+    if(list){
+        list.textContent = '';
+        musicState.tracks.forEach(function(t, i){
+            const li = document.createElement('li');
+            if(i === musicState.cur) li.className = 'cur';
+            if(!t.url) li.className = (li.className + ' off').trim();
+            const nm = document.createElement('span');
+            nm.className = 'nm';
+            nm.textContent = (i === musicState.cur && musicCustomActive() ? '▶ ' : '') + t.name + (t.url ? '' : '（待重新选入）');
+            const rm = document.createElement('button');
+            rm.type = 'button'; rm.className = 'rm'; rm.textContent = '✕'; rm.title = '从列表移除';
+            rm.addEventListener('click', function(ev){ ev.stopPropagation(); musicRemove(i); });
+            li.appendChild(nm); li.appendChild(rm);
+            li.addEventListener('click', function(){
+                if(t.url){ musicLoad(i); musicPlay(); }
+                else musicHint('刷新后要重新选一次这个文件才能播（浏览器限制）');
+            });
+            list.appendChild(li);
+        });
+    }
+    const dot = document.getElementById('musDot');
+    if(dot) dot.classList.toggle('play', musicCustomActive());
+    const pb = document.getElementById('musPlay');
+    if(pb) pb.textContent = musicCustomActive() ? '⏸ 暂停' : '▶ 播放';
+    const lb = document.getElementById('musLoop');
+    if(lb){
+        lb.textContent = musicState.loop === 'one' ? '🔂 单曲' : '🔁 列表';
+        lb.classList.toggle('on', musicState.loop === 'one');
+    }
+    const now = document.getElementById('musNow');
+    if(now){
+        const t = musicState.tracks[musicState.cur];
+        if(t) now.textContent = t.name;
+        else if(musicState.tracks.length) now.textContent = '歌单还在，点一首开始听';
+        else now.textContent = '还没有选歌';
+    }
+    musicRenderTime();
+}
+function musicRenderTime(){
+    const tt = document.getElementById('musTime');
+    if(!tt) return;
+    const el = musicState.el;
+    tt.textContent = (el && musicState.cur >= 0 && el.duration) ?
+        musicFmt(el.currentTime) + ' / ' + musicFmt(el.duration) : '';
+}
+function musicLoad(i){
+    const t = musicState.tracks[i];
+    const el = musicState.el;
+    if(!t || !t.url || !el) return false;
+    musicState.cur = i;
+    el.src = t.url;
+    musicApplyVol();
+    musicRender();
+    return true;
+}
+function musicPlay(){
+    const el = musicState.el;
+    if(!el){ musicHint('这台设备不支持音频播放'); return; }
+    const curT = musicState.tracks[musicState.cur];
+    if(!curT || !curT.url){
+        const first = musicState.tracks.findIndex(function(t){ return !!t.url; });
+        if(first < 0){
+            musicHint(musicState.tracks.length ? '这些歌都还没重新选入文件，先点上面选歌' : '先点上面选几首本地音乐吧');
+            return;
+        }
+        musicLoad(first);
+    }
+    const p = el.play();
+    if(p && p.catch) p.catch(function(){ musicHint('浏览器拦下了，点一下「播放」再试'); });
+    musicRender();
+}
+function musicPause(){ if(musicState.el) musicState.el.pause(); musicRender(); }
+function musicToggle(){ if(musicCustomActive()) musicPause(); else musicPlay(); }
+function musicStep(d){
+    const n = musicState.tracks.length;
+    if(!n) return;
+    for(let k = 1; k <= n; k++){
+        const i = (((musicState.cur + d * k) % n) + n) % n;
+        if(musicState.tracks[i].url){ musicLoad(i); musicPlay(); return; }
+    }
+    musicHint('列表里的歌都还没选入文件，先点上面选歌');
+}
+function musicRemove(i){
+    const t = musicState.tracks[i];
+    if(!t) return;
+    if(t.url){ try{ URL.revokeObjectURL(t.url); }catch(e){} }
+    musicState.tracks.splice(i, 1);
+    if(i === musicState.cur){
+        if(musicState.el){ musicState.el.pause(); musicState.el.removeAttribute('src'); musicState.el.load(); }
+        musicState.cur = -1;
+    } else if(i < musicState.cur) musicState.cur--;
+    musicSave(); musicRender();
+}
+function musicAddFiles(files){
+    if(!files || !files.length) return;
+    let firstNew = -1;
+    for(let f = 0; f < files.length; f++){
+        const file = files[f];
+        const url = URL.createObjectURL(file);
+        const ex = musicState.tracks.findIndex(function(t){ return t.name === file.name; });
+        if(ex >= 0){
+            if(musicState.tracks[ex].url){ try{ URL.revokeObjectURL(musicState.tracks[ex].url); }catch(e){} }
+            musicState.tracks[ex].url = url;
+        } else {
+            musicState.tracks.push({ name: file.name, url: url });
+            if(firstNew < 0) firstNew = musicState.tracks.length - 1;
+        }
+    }
+    musicSave(); musicRender();
+    // 只载入不自动播：等玩家点播放（自动播放策略也不许抢跑）
+    if(musicState.cur < 0 && firstNew >= 0) musicLoad(firstNew);
+}
+function setupMusic(){
+    // 独立 Audio 通道；没有该构造器的环境整段降级为纯展示，不报错
+    const ACtor = (typeof window !== 'undefined') ? window.Audio : undefined;
+    if(ACtor){
+        try{ musicState.el = new ACtor(); musicState.el.preload = 'metadata'; }
+        catch(e){ musicState.el = null; }
+    }
+    const el = musicState.el;
+    // 恢复本机偏好：音量 / 循环 / 歌名顺序（文件本体不在存储里，url 先空着待重选）
+    const pref = store.music.json({});
+    if(typeof pref.vol === 'number' && pref.vol === pref.vol) musicState.vol = Math.min(1, Math.max(0, pref.vol));
+    if(pref.loop === 'one' || pref.loop === 'list') musicState.loop = pref.loop;
+    if(Array.isArray(pref.names))
+        musicState.tracks = pref.names
+            .filter(function(n){ return typeof n === 'string' && !!n; })
+            .map(function(n){ return { name: n, url: null }; });
+    musicState.night = musicIsNight();
+    if(el){
+        el.addEventListener('ended', function(){
+            if(musicState.loop === 'one'){ el.currentTime = 0; musicPlay(); }
+            else musicStep(1);
+        });
+        el.addEventListener('play', musicRender);
+        el.addEventListener('pause', musicRender);
+        el.addEventListener('timeupdate', musicRenderTime);
+        el.addEventListener('error', function(){
+            const t = musicState.tracks[musicState.cur];
+            if(!t || !t.url) return;
+            try{ URL.revokeObjectURL(t.url); }catch(e){}
+            t.url = null;
+            musicRender();
+            if(musicState.tracks.some(function(x){ return !!x.url; })){
+                musicHint('这首读不出来，跳到下一首');
+                musicStep(1);
+            } else musicHint('这首读不出来（文件可能已移动或损坏）');
+        });
+    }
+    // 夜晚自动放轻：主钩子挂在 audioWeatherSync（天气一变同拍生效），
+    // 这里的慢轮询只是兜底（个别环境帧循环被节流时也能跟上）
+    setInterval(musicNightSync, 1000);
+    const pb = document.getElementById('musPlay');
+    if(pb) pb.addEventListener('click', musicToggle);
+    const pv = document.getElementById('musPrev');
+    if(pv) pv.addEventListener('click', function(){ musicStep(-1); });
+    const nx = document.getElementById('musNext');
+    if(nx) nx.addEventListener('click', function(){ musicStep(1); });
+    const lp = document.getElementById('musLoop');
+    if(lp) lp.addEventListener('click', function(){
+        musicState.loop = (musicState.loop === 'one') ? 'list' : 'one';
+        musicSave(); musicRender();
+    });
+    const vol = document.getElementById('musVol');
+    const vv = document.getElementById('musVolVal');
+    if(vol){
+        vol.value = Math.round(musicState.vol * 100);
+        vol.addEventListener('input', function(){
+            musicState.vol = (parseInt(vol.value, 10) || 0) / 100;
+            if(vv) vv.textContent = vol.value + '%';
+            musicApplyVol();
+        });
+        vol.addEventListener('change', musicSave);
+    }
+    if(vv) vv.textContent = Math.round(musicState.vol * 100) + '%';
+    const add = document.getElementById('musAdd');
+    const fi = document.getElementById('musFile');
+    if(add && fi){
+        add.addEventListener('click', function(){ fi.click(); });
+        fi.addEventListener('change', function(){
+            musicAddFiles(fi.files);
+            fi.value = '';   // 清空以便再选同一批文件时仍触发 change
+        });
+    }
+    musicApplyVol();
+    musicRender();
 }
 
 /* ---------- 氛围粒子 ---------- */
@@ -6518,6 +6800,7 @@ function init(){
     setupSliders();
     setupFeedback();
     setupEcho();
+    setupMusic();
     setupHelp();
     setupSnapshot();
     setupVote();

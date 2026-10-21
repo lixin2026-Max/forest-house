@@ -297,19 +297,20 @@ test('FB 提交：先复制兜底，再只回传到白名单地址', ()=>{    mu
     const outside = abs.filter(u => !/^https:\/\/formsubmit\.co\//.test(u));
     must(outside.length===0,'出现白名单外的绝对 URL：'+outside.join(', '));
     must(!/XMLHttpRequest|sendBeacon|WebSocket/.test(inlineJs),'出现其他网络通道');
-    // 全页只允许七个具名本地键：ct2_visits（访问计数）、ct2_hunt（寻宝进度）、ct2_help（帮助已提示标记）、ct2_farm（种田存档）、ct2_vote（投票已投标记）、ct2_theme（界面深浅主题偏好）与 ct2_echo（建议回音回执），都不上传
+    // 全页只允许八个具名本地键：ct2_visits（访问计数）、ct2_hunt（寻宝进度）、ct2_help（帮助已提示标记）、ct2_farm（种田存档）、ct2_vote（投票已投标记）、ct2_theme（界面深浅主题偏好）、ct2_echo（建议回音回执）与 ct2_music（自定义音乐偏好，仅音量/循环/歌名），都不上传
     must(!/sessionStorage|document\.cookie/.test(inlineJs),'出现未授权的存储');
     const lsKeys = [...inlineJs.matchAll(/localStorage\.(?:getItem|setItem)\('([^']+)'/g)].map(m=>m[1]);
-    const badKeys = lsKeys.filter(k => k !== 'ct2_visits' && k !== 'ct2_hunt' && k !== 'ct2_help' && k !== 'ct2_farm' && k !== 'ct2_vote' && k !== 'ct2_theme' && k !== 'ct2_echo');
+    const badKeys = lsKeys.filter(k => k !== 'ct2_visits' && k !== 'ct2_hunt' && k !== 'ct2_help' && k !== 'ct2_farm' && k !== 'ct2_vote' && k !== 'ct2_theme' && k !== 'ct2_echo' && k !== 'ct2_music');
     must(badKeys.length===0,'出现未授权的本地存储键：'+badKeys.join(', '));
-    // 动态键只允许具名常量 HUNT_KEY / HELP_KEY / FARM_KEY / VOTE_KEY / THEME_KEY / ECHO_KEY，且它们的取值必须写死
+    // 动态键只允许具名常量 HUNT_KEY / HELP_KEY / FARM_KEY / VOTE_KEY / THEME_KEY / ECHO_KEY / MUSIC_KEY，且它们的取值必须写死
     must(/const HUNT_KEY='ct2_hunt'/.test(inlineJs),'HUNT_KEY 必须写死为 ct2_hunt');
     must(/const HELP_KEY='ct2_help'/.test(inlineJs),'HELP_KEY 必须写死为 ct2_help');
     must(/const FARM_KEY='ct2_farm'/.test(inlineJs),'FARM_KEY 必须写死为 ct2_farm');
     must(/const VOTE_KEY='ct2_vote'/.test(inlineJs),'VOTE_KEY 必须写死为 ct2_vote');
     must(/const THEME_KEY='ct2_theme'/.test(inlineJs),'THEME_KEY 必须写死为 ct2_theme');
     must(/const ECHO_KEY='ct2_echo'/.test(inlineJs),'ECHO_KEY 必须写死为 ct2_echo');
-    must(!/localStorage\.(?:getItem|setItem)\((?!'ct2_visits'|HUNT_KEY|HELP_KEY|FARM_KEY|VOTE_KEY|THEME_KEY|ECHO_KEY)/.test(inlineJs),'存在动态拼接的存储键');
+    must(/const MUSIC_KEY='ct2_music'/.test(inlineJs),'MUSIC_KEY 必须写死为 ct2_music');
+    must(!/localStorage\.(?:getItem|setItem)\((?!'ct2_visits'|HUNT_KEY|HELP_KEY|FARM_KEY|VOTE_KEY|THEME_KEY|ECHO_KEY|MUSIC_KEY)/.test(inlineJs),'存在动态拼接的存储键');
     // 顺序保证：先复制，后发送
     const iCopy = inlineJs.indexOf('copyToClipboard(text).then(');
     const iSend = inlineJs.indexOf('sendFeedback({');
@@ -355,6 +356,29 @@ test('FB 回传必须显式带 Referer（FormSubmit 靠它判来源）', ()=>{
     must(/referrerPolicy:FB_RELAY\?'unsafe-url':undefined/.test(inlineJs), '未指定 referrerPolicy');
     must(/body:FB_RELAY\?new URLSearchParams\(payload\)/.test(inlineJs) ||
          /new URLSearchParams\(payload\)/.test(inlineJs), '未用 urlencoded 简单请求（会触发预检）');
+});
+
+test('自定义音乐：本地文件 BGM、独立通道、偏好只存歌名（Issue #18）', ()=>{
+    must(/const MUSIC_KEY='ct2_music'/.test(inlineJs),'MUSIC_KEY 必须写死为 ct2_music');
+    must(/music:\s+mkSlot/.test(inlineJs),'store 缺少 music 槽');
+    must(/function setupMusic\(/.test(inlineJs),'缺少 setupMusic');
+    must(/function musicAddFiles\(/.test(inlineJs),'缺少导入 musicAddFiles');
+    must(/function musicCustomActive\(/.test(inlineJs),'缺少 musicCustomActive');
+    // 面板入口与控件齐全
+    must(/id="musPlay"/.test(html) && /id="musPrev"/.test(html) && /id="musNext"/.test(html),'缺播放/上一首/下一首按钮');
+    must(/id="musVol" type="range"/.test(html),'缺音量滑杆');
+    must(/id="musLoop"/.test(html),'缺循环模式按钮');
+    must(/id="musFile" type="file" accept="audio\/\*" multiple/.test(html),'缺多选音频文件入口');
+    must(/id="musList"/.test(html),'缺播放列表容器');
+    // 文件只在本机内存里播：对象 URL 播放，偏好只存音量/循环/歌名
+    must(/URL\.createObjectURL/.test(inlineJs),'未用对象 URL 本机播放');
+    must(/media-src blob:;/.test(html),'CSP 未给 blob 媒体开本机口子');
+    must(/store\.music\.save\(\{\s*vol:/.test(inlineJs) && /names:/.test(inlineJs),'偏好未按 vol/loop/names 存');
+    // 自选音乐在播时程序化 BGM 必须让行（不叠音打架）
+    must(/FEAT\.bgm\.on && !musicCustomActive\(\)/.test(inlineJs),'audioTick 未给自选音乐让行');
+    // 版权与浏览器限制提示在面板里写明
+    must(/不上传、也不分发/.test(html),'面板缺版权提示');
+    must(/刷新页面后需重新选一次文件/.test(html),'面板缺刷新重选提示');
 });
 
 // ---------- 迭代维护规范：模块隔离 ----------
