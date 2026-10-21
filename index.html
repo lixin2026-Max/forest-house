@@ -3096,7 +3096,12 @@ function dragonToggleView(){
     if(!DragonCtl.active) return;
     DragonCtl.fp = !DragonCtl.fp;
     DragonCtl.init = false;
-    if(DragonCtl.fp) DragonCtl.pitch = 0;
+    // 视角同步：切换前后必须是同一条视线。三人称 pitch 是镜头高度角（视线朝下），
+    // 一人称 pitch 是视线仰角（朝上为正），符号相反——切换时取反并夹进目标人称的
+    // 拖拽范围，方向分毫不变，只是眼睛位置从龙身后挪到龙眼里（反之亦然）。
+    DragonCtl.pitch = DragonCtl.fp
+        ? Math.max(-1.25, Math.min(1.25, -DragonCtl.pitch))
+        : Math.max(-0.12, Math.min(1.15, -DragonCtl.pitch));
     if(dragonAgent) dragonAgent.parts.head.visible = !DragonCtl.fp;   // 一人称藏头（龙眼视角惯例），低头看身体不受影响
     document.getElementById('viewBtn').textContent = DragonCtl.fp ? '👁️ 第一人称' : '👁️ 第三人称';
 }
