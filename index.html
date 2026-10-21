@@ -383,6 +383,7 @@
     <div class="row"><label>太阳高度角</label><input type="range" id="sunElev" min="3" max="80" value="45"><b id="sunElevV">45°</b></div>
     <div class="row"><label>雾气浓度</label><input type="range" id="fogAmt" min="0" max="100" value="0"><b id="fogAmtV">0%</b></div>
     <div class="row"><label>自动巡游</label><input type="checkbox" id="orbitChk"><b id="orbitV">关</b></div>
+    <div class="row"><label>自动轮转</label><input type="checkbox" id="autoRotChk" checked><b id="autoRotV">开</b></div>
     <div class="row" id="lockRow"><label>视角锁定</label><input type="checkbox" id="lockChk"><b id="lockV">关</b></div>
     <button type="button" id="helpBtn">❓ 操作帮助</button>
     <div class="uiBtns">
@@ -475,11 +476,12 @@
         <div class="hrow"><b>切换天气</b><span>顶栏天气按钮，或按 T 键：晴天、雾天、夜间、雨天、金色时刻</span></div>
         <div class="hrow"><b>太阳与雾气</b><span>顶栏两条滑杆，拖动即时生效</span></div>
         <div class="hrow"><b>自动巡游</b><span>顶栏开关，或按 P 键，镜头自己慢慢环游</span></div>
+        <div class="hrow"><b>自动轮转</b><span>顶栏开关，每 10 分钟自动换一次天气；你手动选天气或拖了滑杆，它会自动让位关掉，想恢复再把开关打开</span></div>
         <div class="hrow"><b>视角锁定</b><span>顶栏开关，锁住后拖动与巡游都不动镜头（缩放仍可用）</span></div>
         <div class="hrow"><b>敲门</b><span>点小屋的门：先轻敲两下，门会朝外打开透出暖光</span></div>
         <div class="hrow"><b>篝火</b><span>点篝火堆可以点火、再点熄火</span></div>
         <div class="hrow"><b>每日寻宝</b><span>每天藏 5 件小物（橡果、蘑菇、羽毛、松果、彩蛋），走近点中即收集，集齐有祝贺</span></div>
-        <div class="hrow"><b>种田</b><span>点农田里空着的地块播种，再点一下浇水（雨天自动浇），等昼夜轮转一圈成熟后，再点一下收获</span></div>
+        <div class="hrow"><b>种田</b><span>点农田里空着的地块播种，再点一下浇水（雨天自动浇），等昼夜轮转一圈、或到了第二天成熟后，再点一下收获</span></div>
         <div class="hrow"><b>快照存图</b><span>顶栏「📸 快照存图」，把当前画面（连天气和昼夜）存成图片下载到本机</span></div>
         <div class="hrow"><b>投票选点子</b><span>顶栏「🗳️ 投票选点子」，给最想要的新点子投票，一台设备一票，票数定期公布</span></div>
         <div class="hrow"><b>放河灯</b><span>左下角「🏮 放河灯」，写一句愿望，让它在湖上漂一会儿</span></div>
@@ -2700,7 +2702,7 @@ function buildWeatherButtons(){
     weatherLabels.forEach((lab,i)=>{
         const b=document.createElement('button');
         b.textContent=lab; b.dataset.i=i;
-        b.onclick=()=>setWeather(i);
+        b.onclick=()=>{ playerTakeover(); setWeather(i); };
         box.appendChild(b);
     });
 }
@@ -2708,7 +2710,7 @@ function updateWeatherUI(){
     [...document.querySelectorAll('#wbtns button')].forEach((b,i)=>
         b.classList.toggle('active',i===weatherIndex));
 }
-function cycleWeather(){ setWeather((weatherIndex+1)%weatherModes.length); }
+function cycleWeather(){ playerTakeover(); setWeather((weatherIndex+1)%weatherModes.length); }
 function onKeyDown(e){
     if(e.key==='t'||e.key==='T')cycleWeather();
     if(e.key==='p'||e.key==='P'){
@@ -2735,13 +2737,16 @@ function setViewLock(v){
 function setupSliders(){
     const se=document.getElementById('sunElev'), sv=document.getElementById('sunElevV');
     se.addEventListener('input',()=>{
+        playerTakeover();
         wx.elev=+se.value; sv.textContent=se.value+'°';
         // 手动拖滑杆时太阳立即跟手：把补间的高度角锚到当前值，不和过渡打架
         curSky.elev=wx.elev;
         if(skyTrans){ skyTrans.from.elev=wx.elev; skyTrans.elevHold=true; }
     });
     const fa=document.getElementById('fogAmt'), fv=document.getElementById('fogAmtV');
-    fa.addEventListener('input',()=>{wx.fogMul=fa.value/100;fv.textContent=fa.value+'%';});
+    fa.addEventListener('input',()=>{playerTakeover();wx.fogMul=fa.value/100;fv.textContent=fa.value+'%';});
+    const arc=document.getElementById('autoRotChk');
+    if(arc) arc.addEventListener('change',e=>{ setAutoRotate(e.target.checked); });
     document.getElementById('orbitChk').addEventListener('change',e=>{
         wx.orbit=e.target.checked;
         if(wx.orbit&&viewLocked) setViewLock(false);   // 巡游与锁定互斥：开巡游先解锁
@@ -3233,7 +3238,7 @@ const MODULE_HOOKS = {
         }
     },
     daynight: {
-        setup(){ autoSeqOn = true; autoSeqNext = 40; },
+        setup(){ autoSeqOn = true; autoSeqNext = -1; },
         teardown(){ autoSeqOn = false; },
         update(dt, t){ updateAutoSeq(t); }
     },
@@ -3300,6 +3305,12 @@ let doorMesh=null, doorOpen=false, tapState=null;
 let doorPivot=null, doorGlowMesh=null, doorGlowF=0, doorTarget=0;
 
 let autoSeqOn=false, autoSeqNext=0, autoSeqAt=0;
+/* 自动轮转（Issue #26）：顶栏独立开关，与相机「自动巡游」是两回事。
+   开关默认开，每 AUTO_ROTATE_INTERVAL 秒自动换一次天气；
+   玩家手动选天气/拖滑杆即「接管」，开关自动关、轮转停下，随时可再打开。
+   autoSeqNext=-1 是哨兵：下一次 update 时按当前时刻重新排满一个间隔。 */
+const AUTO_ROTATE_INTERVAL=600;
+let autoRotate=true;
 let toneIndex=0, viewIndex=0;
 let roamAngle=0.22*Math.PI, roamT=0;
 let perfAcc=0, perfFrames=0, perfHold=0;
@@ -3891,14 +3902,26 @@ function applyTone(i){
     if(renderer && renderer.domElement) renderer.domElement.style.filter = f;
     refreshModUI();
 }
+/* 自动轮转开关只从这一处进出（顶栏勾选、玩家接管都走它），UI 三处同步 */
+function setAutoRotate(v){
+    autoRotate = !!v;
+    const c = document.getElementById('autoRotChk'); if(c) c.checked = autoRotate;
+    const b = document.getElementById('autoRotV'); if(b) b.textContent = autoRotate ? '开' : '关';
+    if(autoRotate) autoSeqNext = -1;   // 重新打开：从此刻起重新计满 10 分钟，不立刻跳
+}
+/* 玩家手动干预（点天气按钮 / T 键 / 拖太阳或雾气滑杆）＝接管：轮转自动让位 */
+function playerTakeover(){
+    if(autoRotate) setAutoRotate(false);
+}
 function updateAutoSeq(t){
-    if(!FEAT.daynight.on || !autoSeqOn) return;
+    if(!FEAT.daynight.on || !autoSeqOn || !autoRotate) return;
+    if(autoSeqNext < 0){ autoSeqNext = t + AUTO_ROTATE_INTERVAL; return; }
     if(t < autoSeqNext) return;
     autoSeqAt = (autoSeqAt + 1) % AUTO_SEQ.length;
     if(autoSeqAt===0) farmNewDay();   // 昼夜轮转满一圈：种田那边浇过水的作物成熟
     const idx = weatherModes.indexOf(AUTO_SEQ[autoSeqAt]);
     if(idx >= 0) setWeather(idx);
-    autoSeqNext = t + 55;
+    autoSeqNext = t + AUTO_ROTATE_INTERVAL;
 }
 
 /* ---------- 注册表 UI ---------- */
