@@ -656,12 +656,43 @@ function distToRiver(x,z){
     }
     return best;
 }
-// 统一的水面避让：湖按椭圆、河按中心线，pad 是要再让出的余量；true=干地可放东西
-function waterClear(x,z,pad){
-    const ex=(x-LAKE_C.x)/(LAKE_RX+pad), ez=(z-LAKE_C.z)/(LAKE_RZ+pad);
-    if(ex*ex+ez*ez<1) return false;
-    return distToRiver(x,z)>=pad;
-}
+/* ==================== 可行走地图（Issue #31 · 地基） ====================
+   全场唯一的障碍/禁区查询层：水域、山丘、房屋、农田、路面、篝火、寻宝点
+   全部登记在这里。散布选点、树木选点、（将来的）角色移动都只问这一处，
+   不再各写一套避让。本层只做纯查询：不掷骰子、不改任何状态——
+   所有随机流的消费顺序与次数与收编前逐一一致，世界布局零位移
+   （已用改前/改后坐标指纹对照验证：树/野花/碎石/寻宝点逐一相同）。 */
+const WalkMap = {
+    /* 水域：湖按椭圆、河按中心线采样，pad 是要再让出的余量；true=离水至少 pad 的干地 */
+    waterDry(x, z, pad){
+        const ex=(x-LAKE_C.x)/(LAKE_RX+pad), ez=(z-LAKE_C.z)/(LAKE_RZ+pad);
+        if(ex*ex+ez*ez<1) return false;
+        return distToRiver(x,z)>=pad;
+    },
+    /* 山丘：true=不在任何一座山丘的半径+pad 内（pad 可为负，表示允许贴裙边） */
+    hillDry(x, z, pad){
+        for(const hd of BACK_HILLS) if(Math.hypot(x-hd.x,z-hd.z)<hd.r+pad) return false;
+        return true;
+    },
+    /* 复合禁区（旧 scatterClear 的全部规则，一条未删）：
+       房子与花带 / 农田 / 池塘与河 / 石板路 / 篝火 / 山丘 / 寻宝点 */
+    clearOf(x, z){
+        if(Math.hypot(x-HOUSE_POS.x,z-HOUSE_POS.z)<8.5) return false;
+        const rx=x-HOUSE_POS.x, rz=z-HOUSE_POS.z;
+        const lx=rx*HOUSE_R.x+rz*HOUSE_R.z, lz=rx*HOUSE_F.x+rz*HOUSE_F.z;
+        if(lx>FARM_RECT.lx0-1.2 && lx<-8.6 && lz>FARM_RECT.lz0-1.2 && lz<9.4) return false;
+        if(!this.waterDry(x,z,1.1)) return false;
+        if(x>-3.4 && x<9.6 && z>1.4 && z<4.0) return false;
+        if(Math.hypot(x+8.5,z-8.5)<2.2) return false;
+        if(!this.hillDry(x,z,-2)) return false;
+        for(const sp of HUNT_SPOTS) if(Math.hypot(x-sp[0],z-sp[1])<1.3) return false;
+        return true;
+    },
+    /* 角色行走口径：脚下是干地、且不在复合禁区里（供 #27 小龙等地面角色移动查询） */
+    isWalkable(x, z){
+        return this.waterDry(x, z, 0) && this.clearOf(x, z);
+    }
+};
 let bfBodyIM=null, bfWingLIM=null, bfWingRIM=null;
 let beeBodyIM=null, beeStripeIM=null, beeWingLIM=null, beeWingRIM=null;
 let birds = [], butterflies = [], bees = [], squirrels = [], smokePuffs = [];
@@ -1334,10 +1365,7 @@ const BACK_HILLS=[
     return {x:c[0], z:c[1], r:hd.r, h:hd.h, r2:hd.r2, h2:hd.h2, o2:hd.o2, color:hd.color};
 });
 function fenceZAt(x){ return -15.5-Math.sin((x+19)/38*Math.PI)*2.2; }  // 与 createFence 的线形一致
-function hillClear(x,z,pad){
-    for(const hd of BACK_HILLS) if(Math.hypot(x-hd.x,z-hd.z)<hd.r+pad) return false;
-    return true;
-}
+/* 山丘禁区查询已收进可行走地图（WalkMap.hillDry），见湖河一节 */
 // 屋后树林选点：栅栏之外、避开山丘裙边与寻宝藏点，并避让已有的环带树，近密远疏两带
 function planBackyardGrove(ringPts){
     const rnd=mulberry32(20261021);
@@ -1345,7 +1373,7 @@ function planBackyardGrove(ringPts){
     function accept(x,z,gap){
         if(Math.hypot(x+7,z+4)<11.5) return false;                     // 不贴小屋
         if(x>-20&&x<20&&z>fenceZAt(x)-2.5) return false;               // 种在栅栏外侧
-        if(!hillClear(x,z,0.5)) return false;                         // 不上山丘（可贴裙边）
+        if(!WalkMap.hillDry(x,z,0.5)) return false;                   // 不上山丘（可贴裙边）
         for(const sp of HUNT_SPOTS) if(Math.hypot(x-sp[0],z-sp[1])<3.2) return false;  // 不挡寻宝
         if(ringPts) for(const p of ringPts) if(Math.hypot(p[0]-x,p[1]-z)<4.5) return false;
         for(const p of pts) if(Math.hypot(p[0]-x,p[1]-z)<gap) return false;
@@ -1404,7 +1432,7 @@ function createTrees(){
     function ok(x,z,minGap){
         if(Math.hypot(x+7,z+4)<9)return false;          // 避开小屋
         if(Math.hypot(x-8,z-6)<13)return false;         // 避开空地
-        if(!waterClear(x,z,1.2))return false;          // 避开小湖与小河
+        if(!WalkMap.waterDry(x,z,1.2))return false;    // 避开小湖与小河
         for(const p of placed) if(Math.hypot(p[0]-x,p[1]-z)<minGap) return false;
         return true;
     }
@@ -1422,7 +1450,7 @@ function createTrees(){
         else if(rnd()<0.6)animal='bd';
         jobs.push({rec:rec, animal:animal});
     }
-    const kept=jobs.filter(function(j){ return hillClear(j.rec.x,j.rec.z,2); });
+    const kept=jobs.filter(function(j){ return WalkMap.hillDry(j.rec.x,j.rec.z,2); });
     kept.forEach(function(j){
         trees.push(j.rec);
         if(j.animal==='sq')attachSquirrel(j.rec);
@@ -2093,24 +2121,13 @@ function createFlowerBands(){
     }
     placeWildflowers(pts,rnd);
 }
-// 散布避让：房子与花带、农田、池塘、石板路、篝火、寻宝点、屋后山丘都不压
-function scatterClear(x,z){
-    if(Math.hypot(x-HOUSE_POS.x,z-HOUSE_POS.z)<8.5) return false;
-    const rx=x-HOUSE_POS.x, rz=z-HOUSE_POS.z;
-    const lx=rx*HOUSE_R.x+rz*HOUSE_R.z, lz=rx*HOUSE_F.x+rz*HOUSE_F.z;
-    if(lx>FARM_RECT.lx0-1.2 && lx<-8.6 && lz>FARM_RECT.lz0-1.2 && lz<9.4) return false;
-    if(!waterClear(x,z,1.1)) return false;
-    if(x>-3.4 && x<9.6 && z>1.4 && z<4.0) return false;
-    if(Math.hypot(x+8.5,z-8.5)<2.2) return false;
-    if(!hillClear(x,z,-2)) return false;
-    for(const sp of HUNT_SPOTS) if(Math.hypot(x-sp[0],z-sp[1])<1.3) return false;
-    return true;
-}
+// 散布避让已收进可行走地图（WalkMap.clearOf）：房子与花带、农田、池塘、
+// 石板路、篝火、寻宝点、屋后山丘都不压——规则在地图层一处维护
 function scatterPoint(rnd,cx,cz,rMin,rMax){
     for(let t=0;t<14;t++){
         const a=rnd()*Math.PI*2, d=rMin+rnd()*(rMax-rMin);
         const x=cx+Math.cos(a)*d, z=cz+Math.sin(a)*d;
-        if(scatterClear(x,z)) return [x,z];
+        if(WalkMap.clearOf(x,z)) return [x,z];
     }
     return null;
 }
@@ -2153,7 +2170,7 @@ function createOutskirts(){
     for(let i=0;i<26;i++){
         const a=rnd()*Math.PI*2, f=1.16+rnd()*0.30;
         const x=LAKE_C.x+Math.cos(a)*LAKE_RX*f, z=LAKE_C.z+Math.sin(a)*LAKE_RZ*f;
-        if(scatterClear(x,z)) wpts.push([x,z]);
+        if(WalkMap.clearOf(x,z)) wpts.push([x,z]);
     }
     // 河两岸也点缀一串，跟着水走
     if(!RIVER_PTS) buildRiverPts();
@@ -2161,11 +2178,11 @@ function createOutskirts(){
         const p=RIVER_PTS[1+((rnd()*RIVER_N)|0)];
         const side=rnd()<0.5?-1:1;
         const x=p.x+side*(p.half+0.9+rnd()*0.8), z=p.z+(rnd()-0.5)*1.6;
-        if(scatterClear(x,z)) wpts.push([x,z]);
+        if(WalkMap.clearOf(x,z)) wpts.push([x,z]);
     }
     for(let i=0;i<22;i++){
         const x=-19+rnd()*38, z=fenceZAt(x)-2.2-rnd()*4.5;
-        if(scatterClear(x,z)) wpts.push([x,z]);
+        if(WalkMap.clearOf(x,z)) wpts.push([x,z]);
     }
     placeWildflowers(wpts,rnd);
     // ③ 草丛加密：与现有草簇同几何，再铺一层到远处
