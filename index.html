@@ -890,6 +890,36 @@ function concatGeos(geos){
     out.setAttribute('uv',new THREE.BufferAttribute(uv,2));
     return out;
 }
+// 给几何体刷一层统一顶点色：配合 vertexColors 材质，能把多色小件合并成一个 mesh
+function paintGeo(geo,hex){
+    const c=C(hex);
+    const n=geo.attributes.position.count;
+    const arr=new Float32Array(n*3);
+    for(let i=0;i<n;i++){ arr[i*3]=c.r; arr[i*3+1]=c.g; arr[i*3+2]=c.b; }
+    geo.setAttribute('color',new THREE.BufferAttribute(arr,3));
+    return geo;
+}
+// 合并已刷色的几何体：与 concatGeos 同法，但多搬一份 color（原 concatGeos 不带顶点色）
+function mergePaintedGeos(geos){
+    const nonIndexed=geos.map(g=>g.index?g.toNonIndexed():g);
+    let vc=0; nonIndexed.forEach(g=>vc+=g.attributes.position.count);
+    const pos=new Float32Array(vc*3), nor=new Float32Array(vc*3),
+          uv=new Float32Array(vc*2), col=new Float32Array(vc*3);
+    let off=0;
+    for(const g of nonIndexed){
+        pos.set(g.attributes.position.array,off*3);
+        if(g.attributes.normal) nor.set(g.attributes.normal.array,off*3);
+        if(g.attributes.uv) uv.set(g.attributes.uv.array,off*2);
+        if(g.attributes.color) col.set(g.attributes.color.array,off*3);
+        off+=g.attributes.position.count;
+    }
+    const out=new THREE.BufferGeometry();
+    out.setAttribute('position',new THREE.BufferAttribute(pos,3));
+    out.setAttribute('normal',new THREE.BufferAttribute(nor,3));
+    out.setAttribute('uv',new THREE.BufferAttribute(uv,2));
+    out.setAttribute('color',new THREE.BufferAttribute(col,3));
+    return out;
+}
 const TREE_BARK = new THREE.MeshStandardMaterial({color:0x6e4a26,roughness:1});
 const TREE_BIRCH= new THREE.MeshStandardMaterial({color:0xe6e1cf,roughness:1});
 const NEEDLE_A  = new THREE.MeshStandardMaterial({color:0x2e7d32,roughness:1});
@@ -1364,6 +1394,137 @@ function createSunflowers(){
     if(flowerHeadIM.instanceColor) flowerHeadIM.instanceColor.needsUpdate=true;
     swayGroups.push({kind:'flower',count:N,data:fdata,
         inst:flowerHeadIM,extra:coreIM,stem:flowerStemIM});
+}
+
+/* ==================== 农田（Issue #2）：地块网格 + 观赏作物 ====================
+   农田挂在小屋本地坐标系里（lx 向右、lz 朝门前），行列网格可枚举；
+   farmGrid 是给种田玩法（Issue #4）预留的接口：每格一条，含格位、世界坐标与当前作物。
+   选址在小屋左前方空地：避开石板路（z≈2.6 一线在屋右）、篝火（本地约 -6.5,10.8）、
+   池塘、花田与全部寻宝点（最近的 [-14.5,2.5] 折算本地约 -9.5,2.9，在田界之外）。 */
+const HOUSE_POS={x:-7,z:-4}, HOUSE_ROT=0.42;
+const HOUSE_F={x:Math.sin(HOUSE_ROT), z:Math.cos(HOUSE_ROT)};   // 小屋前方（门朝向）
+const HOUSE_R={x:Math.cos(HOUSE_ROT), z:-Math.sin(HOUSE_ROT)};  // 小屋右手方向
+function houseLocal(lx,lz){
+    return [HOUSE_POS.x+HOUSE_R.x*lx+HOUSE_F.x*lz, HOUSE_POS.z+HOUSE_R.z*lx+HOUSE_F.z*lz];
+}
+const FARM_RECT={lx0:-16, lz0:1.0, cols:4, rows:5, cellW:1.5, cellD:1.4};
+const FARM_LAYOUT=[
+    ['sunflower','sunflower','sunflower','sunflower'],
+    ['corn','corn','corn','corn'],
+    ['pumpkin','pumpkin','pumpkin','pumpkin'],
+    ['corn','pumpkin','corn','pumpkin'],
+    ['sunflower',null,'pumpkin',null]
+];
+const farmGrid=[];
+function farmCellCenter(r,c){
+    return [FARM_RECT.lx0+(c+0.5)*FARM_RECT.cellW, FARM_RECT.lz0+(r+0.5)*FARM_RECT.cellD];
+}
+function farmSunflowerGeos(){
+    const parts=[];
+    const stem=new THREE.CylinderGeometry(0.045,0.07,1.5,5); stem.translate(0,0.75,0);
+    parts.push(paintGeo(stem,0x4f7a2e));
+    for(const s of [-1,1]){
+        const leaf=new THREE.SphereGeometry(0.24,5,4); leaf.scale(1,0.22,0.5);
+        leaf.rotateY(s*0.7); leaf.translate(s*0.2,0.72,0);
+        parts.push(paintGeo(leaf,0x5c8a38));
+    }
+    const head=[];
+    const disk=new THREE.CylinderGeometry(0.26,0.26,0.09,10);
+    disk.rotateX(Math.PI/2); disk.translate(0,0,0.02);
+    head.push(paintGeo(disk,0x5a3a15));
+    for(let j=0;j<10;j++){
+        const p=new THREE.ConeGeometry(0.11,0.36,4);
+        p.scale(1,1,0.3); p.translate(0,0.42,0); p.rotateZ(j/10*Math.PI*2);
+        head.push(paintGeo(p,0xe8a81a));
+    }
+    const hm=new THREE.Matrix4().makeRotationX(-0.42); hm.setPosition(0,1.52,0.05);
+    head.forEach(g=>g.applyMatrix4(hm));
+    return parts.concat(head);
+}
+function farmCornGeos(){
+    const parts=[];
+    const stalk=new THREE.CylinderGeometry(0.05,0.085,2.0,5); stalk.translate(0,1.0,0);
+    parts.push(paintGeo(stalk,0x55802f));
+    const leafAt=(y,ry,tilt)=>{
+        const l=new THREE.ConeGeometry(0.15,0.95,4); l.scale(1,1,0.22);
+        l.translate(0,0.42,0); l.rotateX(tilt); l.rotateY(ry); l.translate(0,y,0);
+        parts.push(paintGeo(l,0x63963a));
+    };
+    leafAt(0.65,0.4,0.85); leafAt(0.95,2.4,0.95); leafAt(1.3,4.2,0.8); leafAt(1.55,1.4,1.0);
+    const cob=new THREE.CylinderGeometry(0.085,0.11,0.52,6);
+    cob.rotateZ(0.55); cob.translate(0.22,1.12,0);
+    parts.push(paintGeo(cob,0xf2c230));
+    const tip=new THREE.ConeGeometry(0.085,0.18,6);
+    tip.rotateZ(0.55); tip.translate(0.36,1.33,0);
+    parts.push(paintGeo(tip,0xf7d774));
+    return parts;
+}
+function farmPumpkinGeos(rnd){
+    const parts=[];
+    const vine=new THREE.TorusGeometry(0.34,0.045,5,12,Math.PI*1.5);
+    vine.rotateX(Math.PI/2); vine.rotateY(rnd()*3); vine.translate(0,0.05,0);
+    parts.push(paintGeo(vine,0x4f7a2e));
+    for(let i=0;i<3;i++){
+        const lf=new THREE.SphereGeometry(0.27,6,4); lf.scale(1,0.2,1);
+        const a=rnd()*6.28, d=0.25+rnd()*0.25;
+        lf.translate(Math.cos(a)*d,0.10,Math.sin(a)*d);
+        parts.push(paintGeo(lf,0x5c8a38));
+    }
+    const fruits=[[0.28,0.05,0.32],[-0.30,-0.14,0.25]];
+    for(const f of fruits){
+        const p=new THREE.SphereGeometry(f[2],8,6); p.scale(1,0.78,1);
+        p.translate(f[0],f[2]*0.72,f[1]);
+        parts.push(paintGeo(p,0xe07b24));
+        const st=new THREE.CylinderGeometry(0.035,0.05,0.12,5);
+        st.translate(f[0],f[2]*1.5+0.05,f[1]);
+        parts.push(paintGeo(st,0x4f7a2e));
+    }
+    return parts;
+}
+function createFarm(){
+    const R=FARM_RECT, rnd=mulberry32(20260214);
+    const geos=[];
+    const cx=R.lx0+R.cols*R.cellW/2, cz=R.lz0+R.rows*R.cellD/2;
+    const W=R.cols*R.cellW, D=R.rows*R.cellD;
+    // 土基 + 逐行田垄 + 木边框：刷上顶点色后与作物一起合并成一个 mesh
+    const soil=new THREE.BoxGeometry(W+0.6,0.16,D+0.6); soil.translate(cx,0.03,cz);
+    geos.push(paintGeo(soil,0x6b4a2c));
+    for(let r=0;r<R.rows;r++){
+        const ridge=new THREE.BoxGeometry(W,0.13,R.cellD*0.48);
+        ridge.translate(cx,0.155,R.lz0+(r+0.5)*R.cellD);
+        geos.push(paintGeo(ridge,0x7d5836));
+    }
+    for(const s of [-1,1]){
+        const long=new THREE.BoxGeometry(W+0.85,0.3,0.18); long.translate(cx,0.13,cz+s*(D/2+0.36));
+        geos.push(paintGeo(long,0x8a6a44));
+        const side=new THREE.BoxGeometry(0.18,0.3,D+0.85); side.translate(cx+s*(W/2+0.36),0.13,cz);
+        geos.push(paintGeo(side,0x8a6a44));
+    }
+    // 作物：一格一株，位置/朝向/个头用固定种子微扰，免得排得像兵马俑
+    farmGrid.length=0;
+    for(let r=0;r<R.rows;r++) for(let c=0;c<R.cols;c++){
+        const crop=FARM_LAYOUT[r][c];
+        const cell=farmCellCenter(r,c);
+        const w=houseLocal(cell[0],cell[1]);
+        farmGrid.push({row:r,col:c,lx:cell[0],lz:cell[1],x:w[0],z:w[1],crop:crop});
+        if(!crop) continue;
+        const parts= crop==='sunflower' ? farmSunflowerGeos()
+                   : crop==='corn' ? farmCornGeos() : farmPumpkinGeos(rnd);
+        const sc=0.92+rnd()*0.2;
+        const m=new THREE.Matrix4().makeRotationY(rnd()*6.28);
+        m.setPosition(cell[0]+(rnd()-0.5)*0.24, 0.21, cell[1]+(rnd()-0.5)*0.24);
+        m.multiply(new THREE.Matrix4().makeScale(sc,sc,sc));
+        parts.forEach(g=>{ g.applyMatrix4(m); geos.push(g); });
+    }
+    // 整体从小屋本地系转到世界系（绕小屋中心转 0.42 再平移）
+    const merged=mergePaintedGeos(geos);
+    const world=new THREE.Matrix4().makeRotationY(HOUSE_ROT);
+    world.setPosition(HOUSE_POS.x,0,HOUSE_POS.z);
+    merged.applyMatrix4(world);
+    const farm=new THREE.Mesh(merged,new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.95}));
+    farm.castShadow=farm.receiveShadow=true;
+    farm.name='farmPlot';
+    scene.add(farm);
 }
 function createGrass(){
     // 草簇：4 片叶子合并成一次实例
@@ -3111,6 +3272,7 @@ function init(){
     createTrees();
     createSunflowers();
     createGrass();
+    createFarm();
     createInsects();
 
     controls=makeOrbitControls(camera,renderer.domElement);
