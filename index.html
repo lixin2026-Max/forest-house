@@ -8,25 +8,124 @@
 <meta name="referrer" content="no-referrer">
 <title>楚门的2.0世界 · Three.js 场景</title>
 <style>
+    /* ===== UI 深浅主题变量（Issue #10 回补） =====
+       全部 DOM 界面（顶栏/状态栏/弹窗/齿轮面板/浮动钮）的颜色只从这里取值：
+       :root 是深色（默认值与变量化前的字面量逐一相同，现版观感不变）；
+       html.ui-light 覆盖为浅色（浅绿/米白、护眼方向）。切换只换根元素上的类，
+       3D 场景的颜色与光照完全不碰。故意不变量化的：#error 致命错误屏（红底警示语义）、
+       场景暗角、加载进度条彩带渐变——它们不属于面板配色。 */
+    :root{
+        --pg-bg:#1a2a1a;
+        --panel:rgba(10,20,10,.78); --panel-txt:#fff; --accent:#ffd97a; --active-txt:#fff;
+        --panel-hint:#a8bba8; --panel-label:#c8d8c8;
+        --ghost:rgba(255,255,255,.1); --ghost-hov:rgba(255,255,255,.22);
+        --ghost-line:rgba(255,255,255,.25); --ghost-txt:#dfe8df; --ghost-on-bg:rgba(255,190,80,.28);
+        --soft-txt:#cfe3cf; --nav-txt:#cfe8cf;
+        --float:rgba(10,20,10,.82); --float-hov:rgba(30,60,30,.9); --float-line:rgba(140,220,140,.45);
+        --mask:rgba(0,0,0,.45);
+        --dlg:rgba(14,26,14,.97); --dlg-txt:#e6f4e6; --dlg-line:rgba(140,220,140,.35);
+        --dlg-h:#bfe8bf; --dlg-sub:#93b093; --dlg-shadow:0 18px 50px rgba(0,0,0,.55);
+        --note:#9fc79f; --count:#8fa98f; --marker:#7fc97f;
+        --field:rgba(0,0,0,.35); --field-txt:#eaf7ea;
+        --focus-line:rgba(160,240,160,.75); --focus-ring:rgba(120,220,120,.18);
+        --line-soft:rgba(140,220,140,.3); --line-faint:rgba(140,220,140,.22); --line-dash:rgba(140,220,140,.18);
+        --btn:rgba(30,50,30,.9); --btn-hov:rgba(45,80,45,.95); --btn-txt:#d8f0d8;
+        --pri:#3f8f4a; --pri-line:#5fb86b; --pri-hov:#4aa457; --pri-txt:#fff;
+        --ok:#9ee49e; --err:#ffb4b4;
+        --creed-bg:rgba(80,140,90,.10); --creed-line:rgba(120,210,130,.55); --creed-b:#bff0bf;
+        --opt-bg:rgba(255,255,255,.03); --opt-hov:rgba(120,220,120,.08);
+        --sel-line:rgba(160,240,160,.7); --sel-bg:rgba(120,220,120,.10);
+        --tab-bg:rgba(255,255,255,.04);
+        --dis-bg:#33543a; --dis-line:#446a4c; --dis-txt:#b9cdb9;
+        --tip-bg:rgba(14,26,14,.92); --tip-txt:#ffe9a8; --tip-line:rgba(255,210,100,.5);
+        --tip-shadow:0 10px 30px rgba(0,0,0,.4);
+        --lock-b:#ffab6b;
+        /* 暖色系（河灯） */
+        --warm-panel:rgba(26,20,10,.97); --warm-txt:#f7ecd4; --warm-line:rgba(255,190,90,.35);
+        --warm-h:#ffd98f; --warm-sub:#c4ab7d;
+        --warm-btn:rgba(50,36,14,.9); --warm-btn-hov:rgba(80,56,18,.95); --warm-btn-txt:#ffe9bd;
+        --warm-pri:#b06f1e; --warm-pri-line:#e09a35; --warm-pri-hov:#c67f24;
+        --warm-field-txt:#fdf3da; --warm-field-line:rgba(255,190,90,.3);
+        --warm-focus:rgba(255,210,120,.8); --warm-focus-ring:rgba(255,190,90,.18);
+        --warm-float-txt:#ffe2b0; --warm-float-line:rgba(255,190,90,.45); --warm-float-hov:rgba(60,40,10,.9);
+        --warm-glow:rgba(255,170,60,.55); --warm-glow-line:#ffcf7d; --warm-glow-txt:#fff0d0;
+        --bubble:rgba(30,20,6,.88); --bubble-txt:#ffeec4; --bubble-line:rgba(255,200,100,.5);
+        /* 齿轮面板系 */
+        --gear:rgba(18,34,20,.82); --gear-panel:rgba(14,26,16,.94); --gear-txt:#dff0df;
+        --mp-shadow:0 12px 34px rgba(0,0,0,.45); --mp-sub:#8fb88f; --mp-sep:rgba(140,220,140,.16);
+        --mp-tip:#7f9f7f; --chip:rgba(30,50,30,.85); --mute-txt:#ffe0a0;
+        --global-bg:rgba(255,255,255,.07); --global-line:rgba(160,220,170,.30);
+        --pale-b:#bfe8c6; --disc-line:rgba(120,210,130,.35);
+        --gear-m:rgba(26,48,28,.92); --gear-m-line:rgba(150,230,150,.55);
+        /* 加载层 / 唤回钮 */
+        --boot-bg:radial-gradient(120% 90% at 50% 20%,#1b2a20 0%,#0b1310 70%);
+        --boot-txt:#dff0e2; --boot-title:#bfe8c6; --boot-track:rgba(255,255,255,.14);
+        --wake-bg:rgba(10,20,10,.45); --wake-txt:rgba(255,255,255,.88); --wake-hov:rgba(30,60,30,.65);
+    }
+    html.ui-light{
+        --pg-bg:#e9eeda;
+        --panel:rgba(247,249,240,.9); --panel-txt:#22331f; --accent:#8a5f00; --active-txt:#5d4400;
+        --panel-hint:#5a6f5a; --panel-label:#40543e;
+        --ghost:rgba(43,80,46,.09); --ghost-hov:rgba(43,80,46,.17);
+        --ghost-line:rgba(43,80,46,.30); --ghost-txt:#2b4429; --ghost-on-bg:rgba(233,178,60,.40);
+        --soft-txt:#3a5036; --nav-txt:#33502f;
+        --float:rgba(247,249,240,.94); --float-hov:rgba(228,237,214,.97); --float-line:rgba(74,122,74,.5);
+        --mask:rgba(28,40,24,.38);
+        --dlg:rgba(250,250,243,.98); --dlg-txt:#24351f; --dlg-line:rgba(74,122,74,.38);
+        --dlg-h:#2e6334; --dlg-sub:#5f7159; --dlg-shadow:0 18px 50px rgba(50,70,40,.32);
+        --note:#4a7a44; --count:#6d7c68; --marker:#4c9a4c;
+        --field:rgba(255,255,255,.8); --field-txt:#24351f;
+        --focus-line:#2f7a3c; --focus-ring:rgba(47,122,60,.25);
+        --line-soft:rgba(74,122,74,.38); --line-faint:rgba(74,122,74,.3); --line-dash:rgba(74,122,74,.28);
+        --btn:rgba(228,237,214,.95); --btn-hov:rgba(210,226,192,.98); --btn-txt:#2b4429;
+        --pri:#33763c; --pri-line:#2a6633; --pri-hov:#2c6e35;
+        --ok:#2e7d32; --err:#bf3527;
+        --creed-bg:rgba(90,155,95,.13); --creed-line:rgba(70,145,80,.6); --creed-b:#2e6334;
+        --opt-bg:rgba(74,122,74,.05); --opt-hov:rgba(90,160,100,.12);
+        --sel-line:rgba(47,122,60,.7); --sel-bg:rgba(90,160,100,.16);
+        --tab-bg:rgba(74,122,74,.08);
+        --dis-bg:#d3dccd; --dis-line:#a7b5a0; --dis-txt:#68765f;
+        --tip-bg:rgba(250,248,238,.96); --tip-txt:#7c5600; --tip-line:rgba(185,135,25,.55);
+        --tip-shadow:0 10px 30px rgba(50,70,40,.30);
+        --lock-b:#cc5f10;
+        --warm-panel:rgba(253,247,231,.98); --warm-txt:#46351a; --warm-line:rgba(170,115,35,.45);
+        --warm-h:#8a5f06; --warm-sub:#7d6540;
+        --warm-btn:rgba(241,228,199,.95); --warm-btn-hov:rgba(233,213,170,.98); --warm-btn-txt:#5d4416;
+        --warm-pri:#9a5f10; --warm-pri-line:#85500c; --warm-pri-hov:#8f570e;
+        --warm-field-txt:#46351a; --warm-field-line:rgba(170,115,35,.45);
+        --warm-focus:#a8740d; --warm-focus-ring:rgba(168,116,13,.22);
+        --warm-float-txt:#8a5f06; --warm-float-line:rgba(170,115,35,.5); --warm-float-hov:rgba(241,228,199,.97);
+        --warm-glow:rgba(255,170,60,.4); --warm-glow-line:#d99a26; --warm-glow-txt:#7c5600;
+        --bubble:rgba(253,246,224,.96); --bubble-txt:#6b4e10; --bubble-line:rgba(185,135,25,.5);
+        --gear:rgba(247,249,240,.94); --gear-panel:rgba(248,250,242,.97); --gear-txt:#24351f;
+        --mp-shadow:0 12px 34px rgba(50,70,40,.30); --mp-sub:#5f7159; --mp-sep:rgba(74,122,74,.2);
+        --mp-tip:#6d7c68; --chip:rgba(228,237,214,.95); --mute-txt:#8a5f06;
+        --global-bg:rgba(74,122,74,.08); --global-line:rgba(74,122,74,.32);
+        --pale-b:#2e6334; --disc-line:rgba(70,145,80,.5);
+        --gear-m:rgba(248,250,242,.96); --gear-m-line:rgba(74,122,74,.5);
+        --boot-bg:radial-gradient(120% 90% at 50% 20%,#f4f7e9 0%,#dfe8cd 70%);
+        --boot-txt:#33502f; --boot-title:#2e6334; --boot-track:rgba(74,122,74,.2);
+        --wake-bg:rgba(247,249,240,.6); --wake-txt:rgba(36,53,31,.92); --wake-hov:rgba(228,237,214,.9);
+    }
     *{box-sizing:border-box}
     html,body{height:100%}
-    body{margin:0;padding:0;overflow:hidden;font-family:"Segoe UI","Microsoft YaHei",sans-serif;background:#1a2a1a;
+    body{margin:0;padding:0;overflow:hidden;font-family:"Segoe UI","Microsoft YaHei",sans-serif;background:var(--pg-bg);
          overscroll-behavior:none;-webkit-text-size-adjust:100%}
     #scene{position:absolute;inset:0;touch-action:none}
     #scene canvas{display:block;width:100%!important;height:100%!important}
-    #ui{position:absolute;top:15px;left:15px;background:rgba(10,20,10,.78);color:#fff;padding:16px;border-radius:10px;font-size:13px;z-index:100;width:340px;max-width:calc(100vw - 30px);backdrop-filter:blur(6px)}
-    #ui h3{margin:0 0 6px 0;font-size:17px;color:#ffd97a}
-    #ui .hint{font-size:11px;color:#a8bba8;line-height:1.5;margin-bottom:10px}
+    #ui{position:absolute;top:15px;left:15px;background:var(--panel);color:var(--panel-txt);padding:16px;border-radius:10px;font-size:13px;z-index:100;width:340px;max-width:calc(100vw - 30px);backdrop-filter:blur(6px)}
+    #ui h3{margin:0 0 6px 0;font-size:17px;color:var(--accent)}
+    #ui .hint{font-size:11px;color:var(--panel-hint);line-height:1.5;margin-bottom:10px}
     #ui .hint .touch{display:none}
     .wbtns{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px;margin-bottom:10px}
-    .wbtns button{min-width:0;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);color:#dfe8df;padding:7px 4px;border-radius:6px;cursor:pointer;transition:.15s;font-size:12px}
-    .wbtns button:hover{background:rgba(255,255,255,.22)}
-    .wbtns button.active{background:rgba(255,190,80,.28);border-color:#ffd97a;color:#fff;font-weight:bold}
+    .wbtns button{min-width:0;background:var(--ghost);border:1px solid var(--ghost-line);color:var(--ghost-txt);padding:7px 4px;border-radius:6px;cursor:pointer;transition:.15s;font-size:12px}
+    .wbtns button:hover{background:var(--ghost-hov)}
+    .wbtns button.active{background:var(--ghost-on-bg);border-color:var(--accent);color:var(--active-txt);font-weight:bold}
     .row{display:flex;align-items:center;justify-content:space-between;margin:7px 0;font-size:12px}
-    .row label{color:#c8d8c8}
-    .row input[type=range]{flex:1;min-width:80px;max-width:170px;accent-color:#ffd97a}
-    .row b{color:#ffd97a;min-width:42px;text-align:right}
-    #status{position:absolute;top:15px;right:15px;background:rgba(10,20,10,.78);color:#cfe3cf;padding:10px 14px;border-radius:8px;font-size:12px;z-index:100;line-height:1.7;min-width:180px;max-width:calc(100vw - 30px)}
+    .row label{color:var(--panel-label)}
+    .row input[type=range]{flex:1;min-width:80px;max-width:170px;accent-color:var(--accent)}
+    .row b{color:var(--accent);min-width:42px;text-align:right}
+    #status{position:absolute;top:15px;right:15px;background:var(--panel);color:var(--soft-txt);padding:10px 14px;border-radius:8px;font-size:12px;z-index:100;line-height:1.7;min-width:180px;max-width:calc(100vw - 30px)}
     #error{display:none;position:fixed;inset:0;background:rgba(20,0,0,.94);color:#ffb4b4;z-index:999;padding:40px;font-size:15px;line-height:1.8;white-space:pre-wrap;overflow:auto}
 
     /* ---------- 移动端 / 窄屏适配 ---------- */
@@ -64,74 +163,74 @@
 
     /* ===== 优化意见弹窗 ===== */
     #fbBtn{position:absolute;right:15px;bottom:15px;z-index:120;
-        background:rgba(10,20,10,.82);color:#d8f0d8;border:1px solid rgba(140,220,140,.45);
+        background:var(--float);color:var(--btn-txt);border:1px solid var(--float-line);
         padding:9px 15px;border-radius:22px;font-size:13px;font-family:inherit;cursor:pointer;
         backdrop-filter:blur(6px);transition:background .15s,transform .15s}
-    #fbBtn:hover{background:rgba(30,60,30,.9);transform:translateY(-1px)}
+    #fbBtn:hover{background:var(--float-hov);transform:translateY(-1px)}
     #fbBtn:active{transform:translateY(0)}
     #fbMask{display:none;position:absolute;inset:0;z-index:130;
-        background:rgba(0,0,0,.45);backdrop-filter:blur(2px);
+        background:var(--mask);backdrop-filter:blur(2px);
         align-items:center;justify-content:center;padding:16px}
     #fbMask.on{display:flex}
     #fbBox{width:460px;max-width:100%;max-height:100%;overflow:auto;
-        background:rgba(14,26,14,.97);color:#e6f4e6;border:1px solid rgba(140,220,140,.35);
-        border-radius:14px;padding:16px 18px;box-shadow:0 18px 50px rgba(0,0,0,.55);font-size:13px}
-    #fbBox h4{margin:0 0 4px;font-size:15px;color:#bfe8bf}
-    #fbBox p.sub{margin:0 0 10px;font-size:11.5px;color:#93b093;line-height:1.5}
-    .fbCatRow{display:flex;align-items:center;gap:8px;margin:0 0 9px;font-size:12.5px;color:#cfe3cf}
-    #fbCat{flex:1;background:rgba(0,0,0,.35);color:#eaf7ea;border:1px solid rgba(140,220,140,.3);
+        background:var(--dlg);color:var(--dlg-txt);border:1px solid var(--dlg-line);
+        border-radius:14px;padding:16px 18px;box-shadow:var(--dlg-shadow);font-size:13px}
+    #fbBox h4{margin:0 0 4px;font-size:15px;color:var(--dlg-h)}
+    #fbBox p.sub{margin:0 0 10px;font-size:11.5px;color:var(--dlg-sub);line-height:1.5}
+    .fbCatRow{display:flex;align-items:center;gap:8px;margin:0 0 9px;font-size:12.5px;color:var(--soft-txt)}
+    #fbCat{flex:1;background:var(--field);color:var(--field-txt);border:1px solid var(--line-soft);
         border-radius:8px;padding:7px 9px;font-size:13px;font-family:inherit;cursor:pointer}
-    #fbCat:focus{outline:none;border-color:rgba(160,240,160,.75);box-shadow:0 0 0 2px rgba(120,220,120,.18)}
+    #fbCat:focus{outline:none;border-color:var(--focus-line);box-shadow:0 0 0 2px var(--focus-ring)}
     #fbText{width:100%;min-height:110px;max-height:34vh;resize:vertical;box-sizing:border-box;
-        background:rgba(0,0,0,.35);color:#eaf7ea;border:1px solid rgba(140,220,140,.3);
+        background:var(--field);color:var(--field-txt);border:1px solid var(--line-soft);
         border-radius:8px;padding:9px 10px;font-size:13px;font-family:inherit;line-height:1.55}
-    #fbText:focus{outline:none;border-color:rgba(160,240,160,.75);box-shadow:0 0 0 2px rgba(120,220,120,.18)}
-    #fbCount{font-size:11px;color:#8fa98f;text-align:right;margin-top:3px}
+    #fbText:focus{outline:none;border-color:var(--focus-line);box-shadow:0 0 0 2px var(--focus-ring)}
+    #fbCount{font-size:11px;color:var(--count);text-align:right;margin-top:3px}
     #fbRow{display:flex;gap:8px;flex-wrap:wrap;margin-top:11px}
     #fbRow button{font-family:inherit;font-size:12.5px;padding:8px 14px;border-radius:8px;cursor:pointer;
-        border:1px solid rgba(140,220,140,.35);background:rgba(30,50,30,.9);color:#d8f0d8;transition:background .15s}
-    #fbRow button:hover{background:rgba(45,80,45,.95)}
-    #fbRow button.primary{background:#3f8f4a;border-color:#5fb86b;color:#fff;font-weight:600}
-    #fbRow button.primary:hover{background:#4aa457}
+        border:1px solid var(--dlg-line);background:var(--btn);color:var(--btn-txt);transition:background .15s}
+    #fbRow button:hover{background:var(--btn-hov)}
+    #fbRow button.primary{background:var(--pri);border-color:var(--pri-line);color:var(--pri-txt);font-weight:600}
+    #fbRow button.primary:hover{background:var(--pri-hov)}
     #fbRow button.ghost{background:transparent}
-    #fbMsg{margin-top:9px;font-size:12px;color:#9ee49e;min-height:17px;line-height:1.5}
-    #fbMsg.err{color:#ffb4b4}
+    #fbMsg{margin-top:9px;font-size:12px;color:var(--ok);min-height:17px;line-height:1.5}
+    #fbMsg.err{color:var(--err)}
 
     /* ===== 视角锁定（顶栏开关行，开启时整行点亮、一眼可辨） ===== */
     #lockRow input{accent-color:#e2703a;width:16px;height:16px;cursor:pointer}
-    #lockRow.on label{color:#ffd97a;font-weight:600}
-    #lockRow.on b{color:#ffab6b}
+    #lockRow.on label{color:var(--accent);font-weight:600}
+    #lockRow.on b{color:var(--lock-b)}
 
     /* ===== 操作帮助（入口 / 弹窗 / 首次轻提示） ===== */
-    #helpBtn{width:100%;margin-top:9px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);
-        color:#dfe8df;padding:7px 4px;border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit;transition:.15s}
-    #helpBtn:hover{background:rgba(255,255,255,.22)}
+    #helpBtn{width:100%;margin-top:9px;background:var(--ghost);border:1px solid var(--ghost-line);
+        color:var(--ghost-txt);padding:7px 4px;border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit;transition:.15s}
+    #helpBtn:hover{background:var(--ghost-hov)}
     #helpMask{display:none;position:absolute;inset:0;z-index:132;
-        background:rgba(0,0,0,.45);backdrop-filter:blur(2px);
+        background:var(--mask);backdrop-filter:blur(2px);
         align-items:center;justify-content:center;padding:16px}
     #helpMask.on{display:flex}
     #helpBox{width:460px;max-width:100%;max-height:100%;overflow:auto;
-        background:rgba(14,26,14,.97);color:#e6f4e6;border:1px solid rgba(140,220,140,.35);
-        border-radius:14px;padding:16px 18px;box-shadow:0 18px 50px rgba(0,0,0,.55);font-size:13px}
-    #helpBox h4{margin:0 0 4px;font-size:15px;color:#bfe8bf}
-    #helpBox p.sub{margin:0 0 6px;font-size:11.5px;color:#93b093;line-height:1.5}
-    .hrow{display:flex;gap:10px;padding:6px 0;border-bottom:1px dashed rgba(140,220,140,.18);
+        background:var(--dlg);color:var(--dlg-txt);border:1px solid var(--dlg-line);
+        border-radius:14px;padding:16px 18px;box-shadow:var(--dlg-shadow);font-size:13px}
+    #helpBox h4{margin:0 0 4px;font-size:15px;color:var(--dlg-h)}
+    #helpBox p.sub{margin:0 0 6px;font-size:11.5px;color:var(--dlg-sub);line-height:1.5}
+    .hrow{display:flex;gap:10px;padding:6px 0;border-bottom:1px dashed var(--line-dash);
         font-size:12.5px;line-height:1.55}
     .hrow:last-of-type{border-bottom:none}
-    .hrow b{flex:none;width:74px;color:#bfe8bf;font-weight:600}
-    .hrow span{color:#cfe3cf}
+    .hrow b{flex:none;width:74px;color:var(--dlg-h);font-weight:600}
+    .hrow span{color:var(--soft-txt)}
     #helpRow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
     #helpRow button{font-family:inherit;font-size:12.5px;padding:8px 14px;border-radius:8px;cursor:pointer;
-        border:1px solid rgba(140,220,140,.35);background:rgba(30,50,30,.9);color:#d8f0d8;transition:background .15s}
-    #helpRow button:hover{background:rgba(45,80,45,.95)}
-    #helpRow button.primary{background:#3f8f4a;border-color:#5fb86b;color:#fff;font-weight:600}
-    #helpRow button.primary:hover{background:#4aa457}
+        border:1px solid var(--dlg-line);background:var(--btn);color:var(--btn-txt);transition:background .15s}
+    #helpRow button:hover{background:var(--btn-hov)}
+    #helpRow button.primary{background:var(--pri);border-color:var(--pri-line);color:var(--pri-txt);font-weight:600}
+    #helpRow button.primary:hover{background:var(--pri-hov)}
     #helpRow button.ghost{background:transparent}
     #helpTip{position:absolute;left:50%;top:18%;z-index:124;pointer-events:none;
         transform:translate(-50%,-8px);opacity:0;transition:opacity .35s,transform .35s;
-        background:rgba(14,26,14,.92);color:#ffe9a8;border:1px solid rgba(255,210,100,.5);
+        background:var(--tip-bg);color:var(--tip-txt);border:1px solid var(--tip-line);
         padding:10px 18px;border-radius:24px;font-size:14px;white-space:nowrap;
-        box-shadow:0 10px 30px rgba(0,0,0,.4)}
+        box-shadow:var(--tip-shadow)}
     #helpTip.on{opacity:1;transform:translate(-50%,0)}
     @media (max-width:600px),(pointer:coarse){
         #helpTip{font-size:12.5px;top:15%;white-space:normal;text-align:center;max-width:88vw}
@@ -140,66 +239,66 @@
 
     /* ===== 快照 / 投票（顶栏按钮行，与帮助按钮同题） ===== */
     .uiBtns{display:flex;gap:8px;margin-top:8px}
-    .uiBtns button{flex:1;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);
-        color:#dfe8df;padding:7px 4px;border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit;transition:.15s}
-    .uiBtns button:hover{background:rgba(255,255,255,.22)}
+    .uiBtns button{flex:1;background:var(--ghost);border:1px solid var(--ghost-line);
+        color:var(--ghost-txt);padding:7px 4px;border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit;transition:.15s}
+    .uiBtns button:hover{background:var(--ghost-hov)}
 
     /* ===== 访客投票（弹窗与帮助同题） ===== */
     #voteMask{display:none;position:absolute;inset:0;z-index:133;
-        background:rgba(0,0,0,.45);backdrop-filter:blur(2px);
+        background:var(--mask);backdrop-filter:blur(2px);
         align-items:center;justify-content:center;padding:16px}
     #voteMask.on{display:flex}
     #voteBox{width:460px;max-width:100%;max-height:100%;overflow:auto;
-        background:rgba(14,26,14,.97);color:#e6f4e6;border:1px solid rgba(140,220,140,.35);
-        border-radius:14px;padding:16px 18px;box-shadow:0 18px 50px rgba(0,0,0,.55);font-size:13px}
-    #voteBox h4{margin:0 0 4px;font-size:15px;color:#bfe8bf}
-    #voteBox p.sub{margin:0 0 10px;font-size:11.5px;color:#93b093;line-height:1.5}
+        background:var(--dlg);color:var(--dlg-txt);border:1px solid var(--dlg-line);
+        border-radius:14px;padding:16px 18px;box-shadow:var(--dlg-shadow);font-size:13px}
+    #voteBox h4{margin:0 0 4px;font-size:15px;color:var(--dlg-h)}
+    #voteBox p.sub{margin:0 0 10px;font-size:11.5px;color:var(--dlg-sub);line-height:1.5}
     .voteOpt{display:flex;gap:10px;align-items:flex-start;padding:9px 10px;margin:0 0 8px;
-        border:1px solid rgba(140,220,140,.22);border-radius:9px;cursor:pointer;background:rgba(255,255,255,.03)}
-    .voteOpt:hover{background:rgba(120,220,120,.08)}
-    .voteOpt.sel{border-color:rgba(160,240,160,.7);background:rgba(120,220,120,.10)}
-    .voteOpt input{margin-top:2px;accent-color:#3f8f4a;width:16px;height:16px;flex:none;cursor:pointer}
-    .voteOpt .vt b{display:block;color:#bfe8bf;font-weight:600;font-size:13px}
-    .voteOpt .vt span{display:block;color:#9fc79f;font-size:11.5px;line-height:1.5;margin-top:1px}
+        border:1px solid var(--line-faint);border-radius:9px;cursor:pointer;background:var(--opt-bg)}
+    .voteOpt:hover{background:var(--opt-hov)}
+    .voteOpt.sel{border-color:var(--sel-line);background:var(--sel-bg)}
+    .voteOpt input{margin-top:2px;accent-color:var(--pri);width:16px;height:16px;flex:none;cursor:pointer}
+    .voteOpt .vt b{display:block;color:var(--dlg-h);font-weight:600;font-size:13px}
+    .voteOpt .vt span{display:block;color:var(--note);font-size:11.5px;line-height:1.5;margin-top:1px}
     #voteRow{display:flex;gap:8px;flex-wrap:wrap;margin-top:11px}
     #voteRow button{font-family:inherit;font-size:12.5px;padding:8px 14px;border-radius:8px;cursor:pointer;
-        border:1px solid rgba(140,220,140,.35);background:rgba(30,50,30,.9);color:#d8f0d8;transition:background .15s}
-    #voteRow button:hover{background:rgba(45,80,45,.95)}
-    #voteRow button.primary{background:#3f8f4a;border-color:#5fb86b;color:#fff;font-weight:600}
-    #voteRow button.primary:hover{background:#4aa457}
-    #voteRow button.primary:disabled{background:#33543a;border-color:#446a4c;color:#b9cdb9;cursor:default}
+        border:1px solid var(--dlg-line);background:var(--btn);color:var(--btn-txt);transition:background .15s}
+    #voteRow button:hover{background:var(--btn-hov)}
+    #voteRow button.primary{background:var(--pri);border-color:var(--pri-line);color:var(--pri-txt);font-weight:600}
+    #voteRow button.primary:hover{background:var(--pri-hov)}
+    #voteRow button.primary:disabled{background:var(--dis-bg);border-color:var(--dis-line);color:var(--dis-txt);cursor:default}
     #voteRow button.ghost{background:transparent}
-    #voteMsg{margin-top:9px;font-size:12px;color:#9ee49e;min-height:17px;line-height:1.5}
-    #voteMsg.err{color:#ffb4b4}
+    #voteMsg{margin-top:9px;font-size:12px;color:var(--ok);min-height:17px;line-height:1.5}
+    #voteMsg.err{color:var(--err)}
 
     /* ===== 更新日志（开页自动展示 / 弹窗与帮助同题 / Issue #37） ===== */
     #logMask{display:none;position:absolute;inset:0;z-index:134;
-        background:rgba(0,0,0,.45);backdrop-filter:blur(2px);
+        background:var(--mask);backdrop-filter:blur(2px);
         align-items:center;justify-content:center;padding:16px}
     #logMask.on{display:flex}
     #logBox{width:460px;max-width:100%;max-height:100%;overflow:auto;
-        background:rgba(14,26,14,.97);color:#e6f4e6;border:1px solid rgba(140,220,140,.35);
-        border-radius:14px;padding:16px 18px;box-shadow:0 18px 50px rgba(0,0,0,.55);font-size:13px}
+        background:var(--dlg);color:var(--dlg-txt);border:1px solid var(--dlg-line);
+        border-radius:14px;padding:16px 18px;box-shadow:var(--dlg-shadow);font-size:13px}
     .logHead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
-    #logBox h4{margin:0 0 4px;font-size:15px;color:#bfe8bf}
-    #logX{background:none;border:none;color:#9fc79f;font-size:16px;cursor:pointer;padding:0 2px;line-height:1.2;flex:none}
-    #logX:hover{color:#e6f4e6}
-    #logBox p.sub{margin:0 0 10px;font-size:11.5px;color:#93b093;line-height:1.5}
+    #logBox h4{margin:0 0 4px;font-size:15px;color:var(--dlg-h)}
+    #logX{background:none;border:none;color:var(--note);font-size:16px;cursor:pointer;padding:0 2px;line-height:1.2;flex:none}
+    #logX:hover{color:var(--dlg-txt)}
+    #logBox p.sub{margin:0 0 10px;font-size:11.5px;color:var(--dlg-sub);line-height:1.5}
     .logTabs{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 11px}
     .logTabs button{font-family:inherit;font-size:12px;padding:5px 11px;border-radius:999px;cursor:pointer;
-        border:1px solid rgba(140,220,140,.3);background:rgba(255,255,255,.04);color:#cfe3cf;transition:background .15s}
-    .logTabs button:hover{background:rgba(120,220,120,.10)}
-    .logTabs button.on{background:#3f8f4a;border-color:#5fb86b;color:#fff;font-weight:600}
-    .logTheme{font-size:12.5px;color:#ffd97a;margin:0 0 8px;line-height:1.5}
+        border:1px solid var(--line-soft);background:var(--tab-bg);color:var(--soft-txt);transition:background .15s}
+    .logTabs button:hover{background:var(--sel-bg)}
+    .logTabs button.on{background:var(--pri);border-color:var(--pri-line);color:var(--pri-txt);font-weight:600}
+    .logTheme{font-size:12.5px;color:var(--accent);margin:0 0 8px;line-height:1.5}
     .logList{margin:0;padding:0 0 0 17px}
-    .logList li{font-size:12.5px;line-height:1.6;color:#cfe3cf;margin:0 0 5px}
-    .logList li::marker{color:#7fc97f}
+    .logList li{font-size:12.5px;line-height:1.6;color:var(--soft-txt);margin:0 0 5px}
+    .logList li::marker{color:var(--marker)}
     #logRow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
     #logRow button{font-family:inherit;font-size:12.5px;padding:8px 14px;border-radius:8px;cursor:pointer;
-        border:1px solid rgba(140,220,140,.35);background:rgba(30,50,30,.9);color:#d8f0d8;transition:background .15s}
-    #logRow button:hover{background:rgba(45,80,45,.95)}
-    #logRow button.primary{background:#3f8f4a;border-color:#5fb86b;color:#fff;font-weight:600}
-    #logRow button.primary:hover{background:#4aa457}
+        border:1px solid var(--dlg-line);background:var(--btn);color:var(--btn-txt);transition:background .15s}
+    #logRow button:hover{background:var(--btn-hov)}
+    #logRow button.primary{background:var(--pri);border-color:var(--pri-line);color:var(--pri-txt);font-weight:600}
+    #logRow button.primary:hover{background:var(--pri-hov)}
     @media (max-width:600px),(pointer:coarse){
         #logBox{padding:13px 14px}
         #logMask{padding:env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
@@ -207,54 +306,54 @@
     }
     /* 功能面板里打开日志的入口按钮（与 .mpGlobal 按钮同题） */
     .mpVerBtn{width:100%;padding:8px 6px;margin:0 0 8px;font-family:inherit;font-size:12px;border-radius:8px;cursor:pointer;
-        border:1px solid rgba(140,220,140,.35);background:rgba(30,50,30,.85);color:#d8f0d8}
-    .mpVerBtn:hover{background:rgba(45,80,45,.95)}
+        border:1px solid var(--dlg-line);background:var(--chip);color:var(--btn-txt)}
+    .mpVerBtn:hover{background:var(--btn-hov)}
 
     /* ===== 留言弹窗：固定共建文案 ===== */
     .fbCreed{display:grid;gap:3px;margin:2px 0 10px;padding:10px 12px;border-radius:9px;
-        background:rgba(80,140,90,.10);border-left:3px solid rgba(120,210,130,.55)}
-    .fbCreed b{font-size:13px;color:#bff0bf;font-weight:600}
-    .fbCreed span{font-size:11.5px;color:#9fc79f}
+        background:var(--creed-bg);border-left:3px solid var(--creed-line)}
+    .fbCreed b{font-size:13px;color:var(--creed-b);font-weight:600}
+    .fbCreed span{font-size:11.5px;color:var(--note)}
 
     /* ===== 放河灯（按钮 / 弹窗 / 愿望气泡） ===== */
     #lanternBtn{position:absolute;left:15px;bottom:15px;z-index:120;
-        background:rgba(10,20,10,.82);color:#ffe2b0;border:1px solid rgba(255,190,90,.45);
+        background:var(--float);color:var(--warm-float-txt);border:1px solid var(--warm-float-line);
         padding:9px 15px;border-radius:22px;font-size:13px;font-family:inherit;cursor:pointer;
         backdrop-filter:blur(6px);transition:background .15s,transform .15s,box-shadow .3s}
-    #lanternBtn:hover{background:rgba(60,40,10,.9);transform:translateY(-1px)}
-    #lanternBtn.glow{box-shadow:0 0 18px 3px rgba(255,170,60,.55);border-color:#ffcf7d;color:#fff0d0}
+    #lanternBtn:hover{background:var(--warm-float-hov);transform:translateY(-1px)}
+    #lanternBtn.glow{box-shadow:0 0 18px 3px var(--warm-glow);border-color:var(--warm-glow-line);color:var(--warm-glow-txt)}
     #lanternBtn.hide{display:none}
     #ltMask{display:none;position:absolute;inset:0;z-index:131;
-        background:rgba(0,0,0,.45);backdrop-filter:blur(2px);
+        background:var(--mask);backdrop-filter:blur(2px);
         align-items:center;justify-content:center;padding:16px}
     #ltMask.on{display:flex}
     #ltBox{width:380px;max-width:100%;
-        background:rgba(26,20,10,.97);color:#f7ecd4;border:1px solid rgba(255,190,90,.35);
-        border-radius:14px;padding:16px 18px;box-shadow:0 18px 50px rgba(0,0,0,.55);font-size:13px}
-    #ltBox h4{margin:0 0 4px;font-size:15px;color:#ffd98f}
-    #ltBox p.sub{margin:0 0 10px;font-size:11.5px;color:#c4ab7d;line-height:1.5}
+        background:var(--warm-panel);color:var(--warm-txt);border:1px solid var(--warm-line);
+        border-radius:14px;padding:16px 18px;box-shadow:var(--dlg-shadow);font-size:13px}
+    #ltBox h4{margin:0 0 4px;font-size:15px;color:var(--warm-h)}
+    #ltBox p.sub{margin:0 0 10px;font-size:11.5px;color:var(--warm-sub);line-height:1.5}
     #ltText{width:100%;box-sizing:border-box;
-        background:rgba(0,0,0,.35);color:#fdf3da;border:1px solid rgba(255,190,90,.3);
+        background:var(--field);color:var(--warm-field-txt);border:1px solid var(--warm-field-line);
         border-radius:8px;padding:9px 10px;font-size:13.5px;font-family:inherit}
-    #ltText:focus{outline:none;border-color:rgba(255,210,120,.8);box-shadow:0 0 0 2px rgba(255,190,90,.18)}
+    #ltText:focus{outline:none;border-color:var(--warm-focus);box-shadow:0 0 0 2px var(--warm-focus-ring)}
     #ltRow{display:flex;gap:8px;flex-wrap:wrap;margin-top:11px}
     #ltRow button{font-family:inherit;font-size:12.5px;padding:8px 14px;border-radius:8px;cursor:pointer;
-        border:1px solid rgba(255,190,90,.35);background:rgba(50,36,14,.9);color:#ffe9bd;transition:background .15s}
-    #ltRow button:hover{background:rgba(80,56,18,.95)}
-    #ltRow button.primary{background:#b06f1e;border-color:#e09a35;color:#fff;font-weight:600}
-    #ltRow button.primary:hover{background:#c67f24}
+        border:1px solid var(--warm-line);background:var(--warm-btn);color:var(--warm-btn-txt);transition:background .15s}
+    #ltRow button:hover{background:var(--warm-btn-hov)}
+    #ltRow button.primary{background:var(--warm-pri);border-color:var(--warm-pri-line);color:var(--pri-txt);font-weight:600}
+    #ltRow button.primary:hover{background:var(--warm-pri-hov)}
     #ltRow button.ghost{background:transparent}
     #wishBubble{position:absolute;z-index:110;pointer-events:none;max-width:240px;
-        background:rgba(30,20,6,.88);color:#ffeec4;border:1px solid rgba(255,200,100,.5);
+        background:var(--bubble);color:var(--bubble-txt);border:1px solid var(--bubble-line);
         padding:7px 11px;border-radius:12px;font-size:12.5px;line-height:1.5;
         transform:translate(-50%,-130%);opacity:0;transition:opacity .6s;white-space:pre-wrap;word-break:break-all}
     #wishBubble.on{opacity:1}
     /* ===== 找一找（找到提示 / 集齐徽章） ===== */
     #huntToast{position:absolute;left:50%;top:18%;z-index:125;pointer-events:none;
         transform:translate(-50%,-8px);opacity:0;transition:opacity .35s,transform .35s;
-        background:rgba(14,26,14,.92);color:#ffe9a8;border:1px solid rgba(255,210,100,.5);
+        background:var(--tip-bg);color:var(--tip-txt);border:1px solid var(--tip-line);
         padding:10px 18px;border-radius:24px;font-size:14px;white-space:nowrap;
-        box-shadow:0 10px 30px rgba(0,0,0,.4)}
+        box-shadow:var(--tip-shadow)}
     #huntToast.on{opacity:1;transform:translate(-50%,0)}
     @media (max-width:600px),(pointer:coarse){
         #lanternBtn{left:8px;bottom:calc(56px + env(safe-area-inset-bottom, 0px));padding:7px 11px;font-size:12px}
@@ -264,56 +363,56 @@
     /* ===== 功能面板 ===== */
     #modBtn{position:absolute;right:15px;bottom:56px;z-index:121;width:38px;height:38px;border-radius:10px;
         display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:17px;
-        border:1px solid rgba(140,220,140,.3);background:rgba(18,34,20,.82);color:#cfe8cf;
+        border:1px solid var(--line-soft);background:var(--gear);color:var(--nav-txt);
         -webkit-tap-highlight-color:transparent;backdrop-filter:blur(6px)}
-    #modBtn:hover{background:rgba(30,60,30,.9)}
+    #modBtn:hover{background:var(--float-hov)}
     #modPanel{position:absolute;right:15px;bottom:104px;z-index:122;width:250px;max-height:min(70vh,520px);
         overflow:auto;padding:13px 14px;border-radius:14px;display:none;
-        border:1px solid rgba(140,220,140,.22);background:rgba(14,26,16,.94);color:#dff0df;
-        box-shadow:0 12px 34px rgba(0,0,0,.45);backdrop-filter:blur(10px);
+        border:1px solid var(--line-faint);background:var(--gear-panel);color:var(--gear-txt);
+        box-shadow:var(--mp-shadow);backdrop-filter:blur(10px);
         font-size:12.5px;line-height:1.5;-webkit-overflow-scrolling:touch}
     #modPanel.on{display:block}
     .mpHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
     .mpHead h4{margin:0;font-size:13.5px;letter-spacing:.02em}
-    .mpHead button{background:none;border:none;color:#9fc79f;font-size:14px;cursor:pointer;padding:2px 4px}
+    .mpHead button{background:none;border:none;color:var(--note);font-size:14px;cursor:pointer;padding:2px 4px}
     .mpList{display:grid;gap:7px}
     .mpRow{display:flex;align-items:center;gap:8px}
     .mpRow label{flex:1;cursor:pointer}
     .mpRow input{width:15px;height:15px;accent-color:#4aa457;cursor:pointer;flex:none}
-    .mpSep{height:1px;background:rgba(140,220,140,.16);margin:11px 0 9px}
-    .mpSub{font-size:11px;color:#8fb88f;margin-bottom:7px;letter-spacing:.04em}
-    .mpViews,.mpTones{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-    .mpViews button,.mpTones button{font-family:inherit;font-size:11.5px;padding:6px 4px;border-radius:7px;
-        cursor:pointer;border:1px solid rgba(140,220,140,.3);background:rgba(30,50,30,.85);color:#d8f0d8}
-    .mpViews button.on,.mpTones button.on{background:#3f8f4a;border-color:#5fb86b;color:#fff}
+    .mpSep{height:1px;background:var(--mp-sep);margin:11px 0 9px}
+    .mpSub{font-size:11px;color:var(--mp-sub);margin-bottom:7px;letter-spacing:.04em}
+    .mpViews,.mpTones,.mpThemes{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+    .mpViews button,.mpTones button,.mpThemes button{font-family:inherit;font-size:11.5px;padding:6px 4px;border-radius:7px;
+        cursor:pointer;border:1px solid var(--line-soft);background:var(--chip);color:var(--btn-txt)}
+    .mpViews button.on,.mpTones button.on,.mpThemes button.on{background:var(--pri);border-color:var(--pri-line);color:var(--pri-txt)}
     .mpSound{display:grid;gap:5px}
     .mpMute{font-family:inherit;font-size:12px;padding:8px;border-radius:8px;cursor:pointer;
-        border:1px solid rgba(140,220,140,.35);background:rgba(30,50,30,.9);color:#ffe0a0}
-    .mpMute.on{background:#3f8f4a;border-color:#5fb86b;color:#fff}
+        border:1px solid var(--dlg-line);background:var(--btn);color:var(--mute-txt)}
+    .mpMute.on{background:var(--pri);border-color:var(--pri-line);color:var(--pri-txt)}
     /* ===== 全局部署模块（加载兜底 / 分享 / 低画质 / 统计 / 版本 / 免责） ===== */
     #boot{position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;
-      background:radial-gradient(120% 90% at 50% 20%,#1b2a20 0%,#0b1310 70%);
-      transition:opacity .45s ease;color:#dff0e2}
+      background:var(--boot-bg);
+      transition:opacity .45s ease;color:var(--boot-txt)}
     #boot.hide{opacity:0;pointer-events:none}
     .bootBox{width:min(78vw,320px);text-align:center;font:600 14px/1.7 ui-monospace,Consolas,monospace}
-    .bootTitle{font-size:17px;letter-spacing:1px;margin-bottom:10px;color:#bfe8c6}
+    .bootTitle{font-size:17px;letter-spacing:1px;margin-bottom:10px;color:var(--pale-b)}
     .bootMsg{font-size:12px;opacity:.85;margin-bottom:12px;min-height:20px}
-    .bootBar{height:4px;border-radius:3px;background:rgba(255,255,255,.14);overflow:hidden}
+    .bootBar{height:4px;border-radius:3px;background:var(--boot-track);overflow:hidden}
     .bootBar i{display:block;height:100%;width:0;border-radius:3px;
       background:linear-gradient(90deg,#7ed08a,#4fa8d8);transition:width .3s ease}
     .bootPct{font-size:11px;opacity:.7;margin-top:7px}
     .bootTip{font-size:11px;opacity:.6;margin-top:14px;line-height:1.6}
     .mpGlobal{display:grid;grid-template-columns:1fr;gap:6px;margin:2px 0 6px}
     .mpGlobal button{padding:8px 6px;font-size:12px;border-radius:8px;cursor:pointer;
-      background:rgba(255,255,255,.07);border:1px solid rgba(160,220,170,.30);color:#cfe8cf}
+      background:var(--global-bg);border:1px solid var(--global-line);color:var(--nav-txt)}
     .mpGlobal button:active{transform:scale(.985)}
-    .mpToggle.on{background:#3f8f4a;border-color:#5fb86b;color:#fff}
+    .mpToggle.on{background:var(--pri);border-color:var(--pri-line);color:var(--pri-txt)}
     .mpStat{font-size:11px;opacity:.62;margin:0 0 4px;line-height:1.6}
     .mpVer{font-size:11px;line-height:1.75;opacity:.82;margin-bottom:8px}
-    .mpVer b{color:#bfe8c6;font-weight:700}
+    .mpVer b{color:var(--pale-b);font-weight:700}
     .mpDisclaimer{font-size:10.5px;line-height:1.7;opacity:.55;
-      border-left:2px solid rgba(120,210,130,.35);padding-left:8px}
-    .mpTip{font-size:10.5px;color:#7f9f7f}
+      border-left:2px solid var(--disc-line);padding-left:8px}
+    .mpTip{font-size:10.5px;color:var(--mp-tip)}
 
     @media (max-width:600px),(pointer:coarse){
         /* 9:16 竖屏：面板通栏、按钮收窄，别把内容挤出屏幕 */
@@ -326,7 +425,7 @@
         .row input[type=range]{height:14px}
         #fbBtn{left:auto;right:8px;bottom:8px;top:auto;padding:7px 11px;font-size:12px}
         #modBtn{right:8px;bottom:58px;width:42px;height:42px;font-size:18px;
-            background:rgba(26,48,28,.92);border-color:rgba(150,230,150,.55);color:#d8f0d8}
+            background:var(--gear-m);border-color:var(--gear-m-line);color:var(--btn-txt)}
         #modPanel{left:8px;right:8px;bottom:106px;width:auto;max-height:56vh}
         #fbBox{padding:13px 14px}
         #fbText{min-height:88px;font-size:12.5px}
@@ -386,11 +485,11 @@
     #app.bars-off #fbBtn,#app.bars-off #lanternBtn,#app.bars-off #modBtn{opacity:0;pointer-events:none;transform:translateY(12px)}
     #wakeBtn{position:absolute;right:10px;top:50%;z-index:119;width:34px;height:34px;border-radius:50%;
         transform:translateY(-50%);display:flex;align-items:center;justify-content:center;
-        background:rgba(10,20,10,.45);color:rgba(255,255,255,.88);border:1px solid rgba(255,255,255,.25);
+        background:var(--wake-bg);color:var(--wake-txt);border:1px solid var(--ghost-line);
         font-size:20px;line-height:1;font-family:inherit;cursor:pointer;opacity:0;pointer-events:none;
         transition:opacity .35s ease,background .15s ease;-webkit-tap-highlight-color:transparent;backdrop-filter:blur(4px)}
     #app.bars-off #wakeBtn{opacity:.8;pointer-events:auto}
-    #wakeBtn:hover{background:rgba(30,60,30,.65);opacity:1}
+    #wakeBtn:hover{background:var(--wake-hov);opacity:1}
     @media (max-width:600px),(pointer:coarse){
         #app.bars-off #status{transform:translateY(12px)}
         #wakeBtn{right:calc(6px + env(safe-area-inset-right, 0px))}
@@ -445,6 +544,9 @@
     <div class="mpSep"></div>
     <div class="mpSub">色调氛围</div>
     <div class="mpTones" id="mpTones"></div>
+    <div class="mpSep"></div>
+    <div class="mpSub">界面主题（仅面板配色）</div>
+    <div class="mpThemes" id="mpThemes"></div>
     <div class="mpSep"></div>
     <div class="mpSound">
         <button type="button" id="muteBtn" class="mpMute">🔇 声音已关闭</button>
@@ -715,9 +817,15 @@ const CONFIG = {
 };
 
 /* ---------- 薄存储适配层 ----------
-   核心系统不直接碰本地存储：一律经 store.<槽> 读写。槽位与 5 个白名单键
+   核心系统不直接碰本地存储：一律经 store.<槽> 读写。槽位与 6 个白名单键
    一一对应，键名仍以字面量出现在下面这唯一实现处（安全审计照常钉死）。
    移植时只换 mkSlot 底下的读写实现（小程序 storage / App 本地库），上层不动。 */
+
+/* ---------- UI 深浅主题（Issue #10 回补） ----------
+   主题偏好存本机 ct2_theme（THEME_KEY 写死，照其余各键的治理先例）：
+   只决定 DOM 界面的深/浅配色（根元素 html 上的 ui-light 类 + CSS 变量），
+   3D 场景的颜色、光照、场景色调滤镜完全不碰。 */
+const THEME_KEY='ct2_theme';
 function mkSlot(read, write){
     const slot = { failed:false, _read:read, _write:write,
         get(){ try{ return slot._read(); }catch(e){ slot.failed = true; return null; } },
@@ -734,8 +842,26 @@ const store = {
     hunt:   mkSlot(()=>localStorage.getItem(HUNT_KEY),     v=>localStorage.setItem(HUNT_KEY, v)),
     help:   mkSlot(()=>localStorage.getItem(HELP_KEY),     v=>localStorage.setItem(HELP_KEY, v)),
     farm:   mkSlot(()=>localStorage.getItem(FARM_KEY),     v=>localStorage.setItem(FARM_KEY, v)),
-    vote:   mkSlot(()=>localStorage.getItem(VOTE_KEY),     v=>localStorage.setItem(VOTE_KEY, v))
+    vote:   mkSlot(()=>localStorage.getItem(VOTE_KEY),     v=>localStorage.setItem(VOTE_KEY, v)),
+    theme:  mkSlot(()=>localStorage.getItem(THEME_KEY),    v=>localStorage.setItem(THEME_KEY, v))
 };
+
+/* 主题状态只从 applyUiTheme 这一处进出：换根元素类 + 存偏好 + 同步面板按钮 */
+let uiTheme = 'dark';
+function refreshThemeUI(){
+    const tw = document.getElementById('mpThemes');
+    if(tw) for(let i=0;i<tw.children.length;i++)
+        tw.children[i].classList.toggle('on', (i===1) === (uiTheme==='light'));
+}
+function applyUiTheme(t, save){
+    uiTheme = (t === 'light') ? 'light' : 'dark';
+    const rootEl = document.documentElement;
+    if(rootEl && rootEl.classList) rootEl.classList.toggle('ui-light', uiTheme === 'light');
+    if(save) store.theme.set(uiTheme);   // 存不下就只当次生效（与旧版各键一致）
+    refreshThemeUI();
+}
+// 进页面先恢复上次选的主题（默认深色，与变量化前的现版观感一致）
+applyUiTheme(store.theme.get() === 'light' ? 'light' : 'dark', false);
 
 /* ==================== 程序化贴图工厂 ==================== */
 function makeCanvas(w,h){ const c=document.createElement('canvas'); c.width=w; c.height=h; return c; }
@@ -2950,8 +3076,9 @@ function statusLine(label,value,color){
 function updateStatus(){
     const s=document.getElementById('status');
     const frag=document.createDocumentFragment();
-    frag.appendChild(statusLine('FPS:',fps,
-        fps>45?'#7fdc7f':fps>25?'#ffd97a':'#ff8f8f'));
+    frag.appendChild(statusLine('FPS:',fps, uiTheme==='light'
+        ? (fps>45?'#2e8b2e':fps>25?'#a86e00':'#cf3527')
+        : (fps>45?'#7fdc7f':fps>25?'#ffd97a':'#ff8f8f')));
     frag.appendChild(statusLine('draw calls:',renderer.info.render.calls));
     frag.appendChild(statusLine('松鼠:',squirrels.length+' 鸟:'+birds.length));
     frag.appendChild(statusLine('蝴蝶:',butterflies.length+' 蜜蜂:'+bees.length));
@@ -4224,6 +4351,7 @@ function refreshModUI(){
     if(vw) for(let i=0;i<vw.children.length;i++) vw.children[i].classList.toggle('on', i === viewIndex);
     const tw = document.getElementById('mpTones');
     if(tw) for(let i=0;i<tw.children.length;i++) tw.children[i].classList.toggle('on', i === toneIndex);
+    refreshThemeUI();
 }
 function toggleFeat(k, v){
     if(!FEAT[k]) return;
@@ -4278,6 +4406,18 @@ function setupModules(){
             tw.appendChild(b);
         });
     }
+    // 界面主题（深/浅）：只换 DOM 面板配色，与上面的「色调氛围」（场景滤镜）互不相干
+    const th = document.getElementById('mpThemes');
+    if(th){
+        th.textContent = '';
+        [['dark','🌙 深色'],['light','☀️ 浅色']].forEach(function(pair){
+            const b = document.createElement('button');
+            b.type = 'button'; b.textContent = pair[1];
+            b.addEventListener('click', function(){ applyUiTheme(pair[0], true); });
+            th.appendChild(b);
+        });
+    }
+    refreshThemeUI();
     const mb = document.getElementById('muteBtn');
     if(mb) mb.addEventListener('click', function(){ setMute(!audioMuted); });
     const openBtn = document.getElementById('modBtn');
@@ -4626,7 +4766,7 @@ function bootFail(msg){
     const b=document.getElementById('boot');
     if(!b) return;
     const m=document.getElementById('bootMsg');
-    if(m){ m.textContent=msg; m.style.color='#ff9a9a'; }
+    if(m){ m.textContent=msg; m.style.color = uiTheme==='light' ? '#c0392b' : '#ff9a9a'; }
     const t=document.getElementById('bootTip');
     if(t) t.textContent='可以刷新重试；如果一直这样，可能是浏览器不支持 WebGL，或脚本被拦截。';
 }

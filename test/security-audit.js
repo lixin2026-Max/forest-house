@@ -32,8 +32,8 @@ const dangers = {
     'innerHTML/outerHTML': /(inner|outer)HTML/,
     'eval': /\beval\s*\(/,
     'new Function': /new\s+Function\s*\(/,
-    // 只允许五个具名本地键：ct2_visits 字面量、寻宝的 HUNT_KEY、帮助的 HELP_KEY、种田的 FARM_KEY 与投票的 VOTE_KEY 常量（下方另有钉死检查）；其余一律不许
-    'localStorage（非授权键）': /localStorage\.(?:getItem|setItem)\((?!'ct2_visits'|HUNT_KEY|HELP_KEY|FARM_KEY|VOTE_KEY)/,
+    // 只允许六个具名本地键：ct2_visits 字面量、寻宝的 HUNT_KEY、帮助的 HELP_KEY、种田的 FARM_KEY、投票的 VOTE_KEY 与主题的 THEME_KEY 常量（下方另有钉死检查）；其余一律不许
+    'localStorage（非授权键）': /localStorage\.(?:getItem|setItem)\((?!'ct2_visits'|HUNT_KEY|HELP_KEY|FARM_KEY|VOTE_KEY|THEME_KEY)/,
     'sessionStorage': /sessionStorage/,
     'document.cookie': /document\.cookie/,
     'XMLHttpRequest': /XMLHttpRequest/,
@@ -58,6 +58,8 @@ check('帮助存储键 HELP_KEY 写死为 ct2_help', /const HELP_KEY='ct2_help'/
 check('种田存储键 FARM_KEY 写死为 ct2_farm', /const FARM_KEY='ct2_farm'/.test(html));
 // 投票已投标记同理：只能经具名常量 VOTE_KEY 使用，取值钉死
 check('投票存储键 VOTE_KEY 写死为 ct2_vote', /const VOTE_KEY='ct2_vote'/.test(html));
+// 界面主题偏好同理：只能经具名常量 THEME_KEY 使用，取值钉死
+check('主题存储键 THEME_KEY 写死为 ct2_theme', /const THEME_KEY='ct2_theme'/.test(html));
 
 // fetch 是唯一例外：只允许恰好一处、且地址来自 fbEndpoint() 的白名单。
 {
