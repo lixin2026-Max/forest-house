@@ -309,6 +309,61 @@
         border:1px solid var(--dlg-line);background:var(--chip);color:var(--btn-txt)}
     .mpVerBtn:hover{background:var(--btn-hov)}
 
+    /* ===== 建议回音（Issue #39：署名三档 / 回执卡 / 专属信 / 回音墙 / 面板回执区） ===== */
+    .fbNameRow{margin:0 0 9px;font-size:12.5px;color:var(--soft-txt)}
+    .fbNameLab{margin:0 0 3px}
+    .fbNameOpt{display:flex;gap:7px;align-items:flex-start;padding:3px 0;cursor:pointer;line-height:1.45}
+    .fbNameOpt input{margin-top:2px;accent-color:var(--pri);width:15px;height:15px;flex:none;cursor:pointer}
+    #fbCodename{display:block;margin:3px 0 4px 22px;width:calc(100% - 22px);box-sizing:border-box;
+        background:var(--field);color:var(--field-txt);border:1px solid var(--line-soft);
+        border-radius:8px;padding:7px 9px;font-size:12.5px;font-family:inherit}
+    #fbCodename:focus{outline:none;border-color:var(--focus-line);box-shadow:0 0 0 2px var(--focus-ring)}
+    #fbCodename:disabled{opacity:.45}
+    .fbNameHint{font-size:11px;color:var(--note);margin-top:5px;line-height:1.55}
+    #fbEcho{display:none;margin-top:9px;padding:9px 11px;border-radius:9px;font-size:12px;line-height:1.6;
+        color:var(--soft-txt);background:var(--creed-bg);border-left:3px solid var(--creed-line)}
+    #fbEcho.on{display:block}
+    #fbEcho .code{font-size:14.5px;font-weight:700;color:var(--dlg-h);letter-spacing:.05em}
+    #echoMask{display:none;position:absolute;inset:0;z-index:135;
+        background:var(--mask);backdrop-filter:blur(2px);
+        align-items:center;justify-content:center;padding:16px}
+    #echoMask.on{display:flex}
+    #echoBox{width:440px;max-width:100%;max-height:100%;overflow:auto;
+        background:var(--dlg);color:var(--dlg-txt);border:1px solid var(--dlg-line);
+        border-radius:14px;padding:16px 18px;box-shadow:var(--dlg-shadow);font-size:13px}
+    #echoBox h4{margin:0 0 4px;font-size:15px;color:var(--dlg-h)}
+    #echoBox p.sub{margin:0 0 10px;font-size:11.5px;color:var(--dlg-sub);line-height:1.5}
+    #echoBody p{margin:0 0 9px;font-size:12.8px;line-height:1.65;color:var(--soft-txt)}
+    #echoBody p .tp{color:var(--dlg-h);font-weight:600}
+    #echoRow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    #echoRow button{font-family:inherit;font-size:12.5px;padding:8px 14px;border-radius:8px;cursor:pointer;
+        border:1px solid var(--dlg-line);background:var(--btn);color:var(--btn-txt);transition:background .15s}
+    #echoRow button:hover{background:var(--btn-hov)}
+    #echoRow button.primary{background:var(--pri);border-color:var(--pri-line);color:var(--pri-txt);font-weight:600}
+    #echoRow button.primary:hover{background:var(--pri-hov)}
+    #echoRow button.ghost{background:transparent}
+    .logCredits{margin-top:13px;border-top:1px dashed var(--line-dash);padding-top:10px}
+    .logCredits h5{margin:0 0 6px;font-size:12.5px;color:var(--dlg-h)}
+    .logCredits .cr{font-size:12.5px;line-height:1.6;color:var(--soft-txt);margin:0 0 4px}
+    .logCredits .cr b{color:var(--accent);font-weight:600}
+    .logCredits .crNone{font-size:12px;color:var(--note);line-height:1.6;margin:0}
+    .mpEcho{font-size:12px;color:var(--soft-txt);line-height:1.6}
+    .mpEcho .echoCode{font-size:14.5px;font-weight:700;color:var(--dlg-h);letter-spacing:.05em}
+    .mpEchoBtns{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
+    .mpEchoBtns button{flex:1;padding:7px 4px;font-size:11.5px;border-radius:8px;cursor:pointer;font-family:inherit;
+        border:1px solid var(--dlg-line);background:var(--chip);color:var(--btn-txt)}
+    .mpEchoBtns button:hover{background:var(--btn-hov)}
+    .mpEchoRow{display:flex;gap:6px;margin-top:8px}
+    .mpEchoRow input{flex:1;min-width:0;background:var(--field);color:var(--field-txt);
+        border:1px solid var(--line-soft);border-radius:8px;padding:7px 9px;font-size:12px;font-family:inherit}
+    .mpEchoRow input:focus{outline:none;border-color:var(--focus-line);box-shadow:0 0 0 2px var(--focus-ring)}
+    .mpEchoRow button{flex:none;padding:7px 12px;font-size:12px;border-radius:8px;cursor:pointer;font-family:inherit;
+        border:1px solid var(--dlg-line);background:var(--chip);color:var(--btn-txt)}
+    .mpEchoRow button:hover{background:var(--btn-hov)}
+    #echoQueryMsg{margin-top:6px;font-size:11.5px;line-height:1.55;min-height:17px;color:var(--note)}
+    .echoBadge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:600;
+        background:var(--sel-bg);color:var(--accent);border:1px solid var(--sel-line);margin:0 0 5px}
+
     /* ===== 留言弹窗：固定共建文案 ===== */
     .fbCreed{display:grid;gap:3px;margin:2px 0 10px;padding:10px 12px;border-radius:9px;
         background:var(--creed-bg);border-left:3px solid var(--creed-line)}
@@ -603,6 +658,16 @@
     <div class="mpSub">版本日志</div>
     <button type="button" id="logOpenBtn" class="mpVerBtn">📋 查看完整更新日志</button>
     <div class="mpVer" id="mpVer"></div>
+    <div class="mpSep"></div>
+    <div class="mpSub">建议回音</div>
+    <div class="mpEcho" id="mpEcho">
+        <div id="echoMine"></div>
+        <div class="mpEchoRow">
+            <input id="echoQuery" type="text" maxlength="20" placeholder="输入回执码查状态，如 CT2-XXXX-XXXX">
+            <button type="button" id="echoQueryBtn">查状态</button>
+        </div>
+        <div id="echoQueryMsg"></div>
+    </div>
     <div class="mpDisclaimer">
         本世界为开放式共创，访客提交的构想、命名与素材需经负责人审核后才会进入公共场景；
         你桌面上的私人调整只保存在本机浏览器，不影响他人。
@@ -625,6 +690,14 @@
             <option value="声音">声音</option>
             <option value="其它">其它</option>
         </select></div>
+        <div class="fbNameRow">
+            <div class="fbNameLab">如果这条建议被采纳，你希望怎么署名？</div>
+            <label class="fbNameOpt"><input type="radio" name="fbName" value="codename"><span>用我的代号公开鸣谢</span></label>
+            <input id="fbCodename" type="text" maxlength="12" placeholder="给自己起个代号，如：种田小能手" disabled>
+            <label class="fbNameOpt"><input type="radio" name="fbName" value="anon"><span>公开鸣谢，但只写「一位热心玩家」</span></label>
+            <label class="fbNameOpt"><input type="radio" name="fbName" value="private" checked><span>不公开，只给我一对一的回信</span></label>
+            <div class="fbNameHint">提交后会发你一个回执码——只存你本机、不绑任何身份。建议被采纳时，下次打开页面你会凭回执码收到一封只给你的回信。选了代号又没填，就按「一位热心玩家」署名。</div>
+        </div>
         <textarea id="fbText" maxlength="600" placeholder="例如：小屋屋顶想换成茅草；向日葵太少了；夜里太黑看不清路……"></textarea>
         <div id="fbCount">0 / 600</div>
         <div id="fbRow">
@@ -633,6 +706,7 @@
             <button type="button" class="ghost" id="fbClose">关闭</button>
         </div>
         <div id="fbMsg"></div>
+        <div id="fbEcho"></div>
     </div>
 </div>
 
@@ -696,8 +770,23 @@
         <p class="sub">楚门的世界一直在长大。这是最新一版的新鲜事，点上面的版本号，也能翻翻它一路长过来的样子。</p>
         <div class="logTabs" id="logTabs"></div>
         <div id="logBody"></div>
+        <div class="logCredits" id="logCredits">
+            <h5>💌 回音墙 · 玩家建议的回音</h5>
+            <div id="logCreditsBody"></div>
+        </div>
         <div id="logRow">
             <button type="button" class="primary" id="logOk">开始游玩</button>
+        </div>
+    </div>
+</div>
+<div id="echoMask">
+    <div id="echoBox" role="dialog" aria-modal="true" aria-labelledby="echoTitle">
+        <h4 id="echoTitle">💌 一封只给你的回信</h4>
+        <p class="sub">这是凭你的回执码送到的专属感谢信——只在这台设备上出现，不公开、不绑定任何身份。</p>
+        <div id="echoBody"></div>
+        <div id="echoRow">
+            <button type="button" class="primary" id="echoGo">带我去看看</button>
+            <button type="button" class="ghost" id="echoClose">收下啦</button>
         </div>
     </div>
 </div>
@@ -866,7 +955,7 @@ const CONFIG = {
 };
 
 /* ---------- 薄存储适配层 ----------
-   核心系统不直接碰本地存储：一律经 store.<槽> 读写。槽位与 6 个白名单键
+   核心系统不直接碰本地存储：一律经 store.<槽> 读写。槽位与 7 个白名单键
    一一对应，键名仍以字面量出现在下面这唯一实现处（安全审计照常钉死）。
    移植时只换 mkSlot 底下的读写实现（小程序 storage / App 本地库），上层不动。 */
 
@@ -875,6 +964,10 @@ const CONFIG = {
    只决定 DOM 界面的深/浅配色（根元素 html 上的 ui-light 类 + CSS 变量），
    3D 场景的颜色、光照、场景色调滤镜完全不碰。 */
 const THEME_KEY='ct2_theme';
+/* ---------- 建议回音（Issue #39） ----------
+   玩家提交建议时领到的回执码、署名选择与「共建者」徽章只存本机 ct2_echo
+   （ECHO_KEY 写死，照其余各键的治理先例）：匹配在本机完成，不绑任何身份。 */
+const ECHO_KEY='ct2_echo';
 function mkSlot(read, write){
     const slot = { failed:false, _read:read, _write:write,
         get(){ try{ return slot._read(); }catch(e){ slot.failed = true; return null; } },
@@ -892,7 +985,8 @@ const store = {
     help:   mkSlot(()=>localStorage.getItem(HELP_KEY),     v=>localStorage.setItem(HELP_KEY, v)),
     farm:   mkSlot(()=>localStorage.getItem(FARM_KEY),     v=>localStorage.setItem(FARM_KEY, v)),
     vote:   mkSlot(()=>localStorage.getItem(VOTE_KEY),     v=>localStorage.setItem(VOTE_KEY, v)),
-    theme:  mkSlot(()=>localStorage.getItem(THEME_KEY),    v=>localStorage.setItem(THEME_KEY, v))
+    theme:  mkSlot(()=>localStorage.getItem(THEME_KEY),    v=>localStorage.setItem(THEME_KEY, v)),
+    echo:   mkSlot(()=>localStorage.getItem(ECHO_KEY),     v=>localStorage.setItem(ECHO_KEY, v))
 };
 
 /* 主题状态只从 applyUiTheme 这一处进出：换根元素类 + 存偏好 + 同步面板按钮 */
@@ -4651,8 +4745,9 @@ function sendFeedback(body){
     const meta=(body&&body.meta)||{};
     const text=(body&&body.text)||'';
     // FormSubmit 收扁平字段，才会排成一张表发到邮箱。
-    // 访客投票（Issue #9）也走这一条通道：meta.kind==='vote' 时换标题并加「类型/投票选择」字段区分，
-    // 普通留言的字段与原来一字不差。
+    // 访客投票（Issue #9）也走这一条通道：meta.kind==='vote' 时换标题并加「类型/投票选择」字段区分。
+    // 建议回音（Issue #39）：普通留言若带 meta.echo，再多「回执码/署名」两字段——负责人凭回执码
+    // 把采纳记录登记进站内 ECHO_ADOPTED，玩家下次打开凭本机码收到一对一回信（匹配只在本机做）。
     const isVote=meta.kind==='vote';
     const payload=FB_RELAY?Object.assign({
         _subject:isVote?'【楚门2.0】访客投票':'【楚门2.0】优化意见',
@@ -4664,7 +4759,8 @@ function sendFeedback(body){
         画面:meta.screen||'-',
         手机:meta.mobile?'是':'否',
         浏览器:meta.ua||''
-    },isVote?{ 类型:'访客投票', 投票选择:meta.choiceName||meta.choice||'' }:{})
+    },isVote?{ 类型:'访客投票', 投票选择:meta.choiceName||meta.choice||'' }
+            :(meta.echo?{ 回执码:meta.echo, 署名:meta.naming||'' }:{}) )
     :{text:text,meta:meta};
     // 发法很关键：application/json 会触发 CORS 预检（多花 1 秒多），
     // 叠加 FormSubmit 自身 ~1.4 秒的响应，很容易撞上超时被判失败。
@@ -4710,6 +4806,7 @@ function openFeedback(){
     fbOpen=true;
     fbEl('fbMask').classList.add('on');
     setFbMsg('');
+    echoShowFbCard();   // 建议回音：已有回执码就亮出来，提醒玩家它还在
     const t=fbEl('fbText');
     try{ t.focus({preventScroll:true}); }catch(err){ t.focus(); }
 }
@@ -4736,13 +4833,24 @@ function setupFeedback(){
         setFbMsg('');
         ta.focus();
     });
+    // 署名三档：只有选了「用代号公开」时才启用代号输入框
+    const nameRadios=document.querySelectorAll('input[name="fbName"]');
+    nameRadios.forEach(r=>r.addEventListener('change',()=>{
+        fbEl('fbCodename').disabled = feedbackTier()!=='codename';
+        if(feedbackTier()==='codename') fbEl('fbCodename').focus();
+    }));
     fbEl('fbCopy').addEventListener('click',()=>{
-        const text=feedbackText();
         if((ta.value||'').trim().length===0){
             setFbMsg('还没写内容呢，先写两句再提交。',true);
             ta.focus();
             return;
         }
+        // 建议回音（Issue #39）：提交即生成专属回执码——先存本机，再随表单一起发走。
+        // 码是纯随机串、与身份无关；采纳与否的匹配日后只在这台设备本地做。
+        const naming=feedbackNaming();
+        const code=echoGenCode();
+        echoAddReceipt(code, naming);
+        const text=feedbackText()+'\n回执码：'+code+' · 署名：'+echoTierLabel(naming);
         // ① 先复制 —— 这一步不依赖网络，永远可用
         copyToClipboard(text).then(()=>{
             setFbMsg('已复制。正在发送…');
@@ -4760,7 +4868,9 @@ function setupFeedback(){
                     weather:(weatherLabels[weatherIndex]||''),
                     screen:LAYOUT.w+'x'+LAYOUT.h+(ROT?' 横屏':''),
                     mobile:IS_MOBILE,
-                    ua:(typeof navigator!=='undefined'&&navigator.userAgent)?navigator.userAgent:''
+                    ua:(typeof navigator!=='undefined'&&navigator.userAgent)?navigator.userAgent:'',
+                    echo:code,
+                    naming:echoTierLabel(naming)
                 }
             });
         }).then(ok=>{
@@ -4772,6 +4882,7 @@ function setupFeedback(){
             fbEl('fbText').value='';
             fbEl('fbCat').value='画面';
             cnt.textContent='0 / '+FB_MAX;
+            echoShowFbCard();   // 把刚领到的回执码亮在表单里，提醒玩家保存
         });
     });
     // Esc 关闭：挂在 document 上，但不阻断原有 T/P 快捷键
@@ -4781,6 +4892,415 @@ function setupFeedback(){
             e.stopPropagation();
         }
     },true);
+}
+
+/* ==================== 建议回音（Issue #39） ====================
+   负责人点题：提建议的人要能知道「收到了、而且被采纳了」，且只针对他本人。
+   三件套：回执码（提交时生成、随表单发走、只存本机）→ 一对一专属信（下次打开凭
+   本机码匹配站内已采纳清单，命中才弹）→ 公开回音墙（更新日志弹窗里按署名呈现）。
+   感谢三层（Issue 评论钉死）：①专属信 ②世界里的永久印记（清单 mark 字段驱动的小牌子）
+   ③本机「共建者」徽章 + 设置面板里凭码查状态的彩蛋入口。
+   隐私五条（同评论钉死）：①零身份——全程不收集任何联系方式，码是纯随机串；
+   ②署名三档自选（代号公开 / 只写「一位热心玩家」/ 不公开），默认不公开；
+   ③本机匹配——码与清单的比对只在本机做，站点是纯静态页、没有用户数据库；
+   ④不晒原文——公开处只写维护者口径的采纳主题，绝不贴玩家的留言原文；
+   ⑤可撤回——面板里可一键清除本机回执；公开鸣谢与世界印记在群里说一声，下一版移除。 */
+
+/* ---------- 已采纳清单（声明式数据，维护者发版时填） ----------
+   一条 = 一位玩家的建议被采纳并上线。字段：
+     code    回执码：从玩家发来的表单「回执码」字段照抄（格式 CT2-XXXX-XXXX）。
+     topic   采纳主题（公开口径，只写主题如「扩建小湖」，绝不贴留言原文——隐私④）。
+     thanks  专属信正文：写明采纳了什么、做成了什么样，只给这位玩家本人看。
+     name    公开署名，严格按玩家提交时自选的三档填：
+             · 用代号公开 → 填他的代号（如 '种田小能手'）；
+             · 只写热心玩家 → 填 '一位热心玩家'；
+             · 不公开 → 填 ''（空串）：不上回音墙，世界印记的牌面也不许出现可识别信息。
+     mark    世界里的永久印记（可省）：{ x, z, label }，小牌子立在改进点旁，label 是牌面字；
+             name 为 '' 时 label 只许写通用文案（如「这里采纳了一位玩家的建议」）。
+     view    「带我去看看」的镜头落点（可省）：{ x, z }；省了就用 mark 的位置，
+             再省了这封信就不带该按钮。
+   清单为空是正常状态（功能先行、数据随发版累积）。 */
+const ECHO_ADOPTED = [
+    /* 格式模板（不要取消注释，照着往下面加真实记录）：
+    { code:'CT2-7K3F-9QXA', topic:'扩建小湖',
+      thanks:'你说湖太小、河灯没地方漂——我们把池塘扩成了大湖，还拉出一条小河。谢谢你让世界变大了一圈！',
+      name:'一位热心玩家',
+      mark:{ x:18.5, z:-6.0, label:'一位热心玩家的建议' },
+      view:{ x:23, z:-9.5 } },
+    */
+];
+
+/* ---------- 回执码：随机串生成与比对（大小写/横线不敏感） ---------- */
+const ECHO_ALPHABET='ABCDEFGHJKMNPQRSTUVWXYZ23456789';   // 去掉易混的 0/O/1/I/L
+function echoGenCode(){
+    let s='';
+    for(let i=0;i<8;i++) s+=ECHO_ALPHABET[Math.floor(Math.random()*ECHO_ALPHABET.length)];
+    return 'CT2-'+s.slice(0,4)+'-'+s.slice(4);
+}
+function echoNormCode(s){ return String(s==null?'':s).toUpperCase().replace(/[^A-Z0-9]/g,''); }
+function echoFindAdopted(code){
+    const n=echoNormCode(code);
+    if(!n) return null;
+    for(let i=0;i<ECHO_ADOPTED.length;i++)
+        if(echoNormCode(ECHO_ADOPTED[i].code)===n) return ECHO_ADOPTED[i];
+    return null;
+}
+
+/* ---------- 署名三档（提交表单读取） ---------- */
+function feedbackTier(){
+    const r=document.querySelector('input[name="fbName"]:checked');
+    const v=r?r.value:'private';
+    return (v==='codename'||v==='anon'||v==='private')?v:'private';
+}
+function feedbackNaming(){
+    const tier=feedbackTier();
+    const alias=(fbEl('fbCodename').value||'').trim().slice(0,12);
+    if(tier==='codename' && alias) return { tier:'codename', alias:alias };
+    if(tier==='codename') return { tier:'anon', alias:'' };   // 选了代号没填 → 按「一位热心玩家」
+    return { tier:tier, alias:'' };
+}
+function echoTierLabel(n){
+    if(!n) return '不公开';
+    if(n.tier==='codename') return '代号「'+(n.alias||'')+'」';
+    if(n.tier==='anon') return '一位热心玩家';
+    return '不公开';
+}
+
+/* ---------- 本机回执存档（ct2_echo，只经 store.echo 槽进出） ----------
+   形状：{ receipts:[{code,tier,alias,at}], badge:false, seen:[已读过的采纳码] } */
+let echoState=null;
+function echoLoad(){
+    const st=store.echo.json(null);
+    const out={ receipts:[], badge:false, seen:[] };
+    if(st && typeof st==='object'){
+        if(Array.isArray(st.receipts)) out.receipts=st.receipts.filter(r=>r && typeof r.code==='string');
+        if(Array.isArray(st.seen)) out.seen=st.seen.filter(c=>typeof c==='string');
+        out.badge=!!st.badge;
+    }
+    return out;
+}
+function echoSave(){ if(echoState) store.echo.save(echoState); }
+function echoAddReceipt(code, naming){
+    if(!echoState) echoState=echoLoad();
+    echoState.receipts.push({ code:code, tier:naming.tier, alias:naming.alias,
+        at:new Date().toISOString().slice(0,10) });
+    if(echoState.receipts.length>20) echoState.receipts=echoState.receipts.slice(-20);
+    echoSave();
+    echoSyncBadge();
+    echoRenderPanel();
+}
+function echoMyMatches(){
+    if(!echoState) echoState=echoLoad();
+    const out=[];
+    echoState.receipts.forEach(r=>{
+        const e=echoFindAdopted(r.code);
+        if(e) out.push({ receipt:r, entry:e });
+    });
+    return out;
+}
+function echoSyncBadge(){
+    const has=echoMyMatches().length>0;
+    if(has && echoState && !echoState.badge){ echoState.badge=true; echoSave(); }
+    return has;
+}
+
+/* ---------- 表单里的回执卡：提交后亮码、重开弹窗时提醒它还在 ---------- */
+function echoShowFbCard(){
+    const card=fbEl('fbEcho');
+    if(!card) return;
+    if(!echoState) echoState=echoLoad();
+    const list=echoState.receipts;
+    card.textContent='';
+    if(!list.length){ card.classList.remove('on'); return; }
+    const latest=list[list.length-1];
+    card.appendChild(document.createTextNode('🧾 你的回执码 '));
+    const cs=document.createElement('span');
+    cs.className='code'; cs.textContent=latest.code;
+    card.appendChild(cs);
+    card.appendChild(document.createTextNode('（已存本机'+(list.length>1?'，共 '+list.length+' 个':'')+'）'));
+    card.appendChild(document.createElement('br'));
+    card.appendChild(document.createTextNode(echoFindAdopted(latest.code)
+        ? '🎉 这个码对应的建议已经被采纳啦——去右下角齿轮面板的「建议回音」里看你的专属回信。'
+        : '建议被采纳后，下次打开页面你会收到一封只给你的回信。把码截图或抄下来更保险：它不绑身份，丢了没法补发。'));
+    card.classList.add('on');
+}
+
+/* ---------- 专属信（感谢第一层） ---------- */
+let echoOpen=false, echoCurrent=null, echoRest=[];
+function echoEntryPos(e){
+    if(e && e.view && typeof e.view.x==='number' && typeof e.view.z==='number') return e.view;
+    if(e && e.mark && typeof e.mark.x==='number' && typeof e.mark.z==='number') return e.mark;
+    return null;
+}
+function openEchoLetter(entry){
+    const body=document.getElementById('echoBody');
+    if(!body) return;
+    echoCurrent=entry;
+    body.textContent='';
+    const p1=document.createElement('p');
+    p1.appendChild(document.createTextNode('你提的『'));
+    const tp=document.createElement('span');
+    tp.className='tp'; tp.textContent=entry.topic||'这条建议';
+    p1.appendChild(tp);
+    p1.appendChild(document.createTextNode('』已经被采纳、做进世界啦 🎉'));
+    body.appendChild(p1);
+    if(entry.thanks){
+        const p2=document.createElement('p');
+        p2.textContent=entry.thanks;
+        body.appendChild(p2);
+    }
+    if(entry.mark){
+        const p3=document.createElement('p');
+        p3.textContent='我们在改进的地方留了一块小牌子作纪念——点下面「带我去看看」，镜头直接带你过去。';
+        body.appendChild(p3);
+    }
+    const p4=document.createElement('p');
+    p4.textContent='这封信只凭你的回执码送到这台设备，不公开、不绑身份。谢谢你陪这个世界一起长大。';
+    body.appendChild(p4);
+    document.getElementById('echoGo').style.display=echoEntryPos(entry)?'':'none';
+    document.getElementById('echoMask').classList.add('on');
+    echoOpen=true;
+}
+function closeEchoLetter(){
+    if(!echoOpen) return;
+    echoOpen=false;
+    document.getElementById('echoMask').classList.remove('on');
+    if(echoCurrent && echoState && echoState.seen.indexOf(echoCurrent.code)<0){
+        echoState.seen.push(echoCurrent.code);
+        echoSave();
+    }
+    echoCurrent=null;
+    if(echoRest.length) openEchoLetter(echoRest.shift());
+}
+function echoShowLetters(entries){
+    if(!entries || !entries.length) return;
+    echoRest=entries.slice(1);
+    openEchoLetter(entries[0]);
+}
+
+/* ---------- 「带我去看看」：镜头直达改进点 ---------- */
+function echoFlyTo(pos){
+    if(!pos || typeof pos.x!=='number' || typeof pos.z!=='number') return;
+    if(typeof DragonCtl!=='undefined' && DragonCtl.active) dragonRelease();
+    if(typeof viewLocked!=='undefined' && viewLocked) setViewLock(false);
+    if(wx.orbit){   // 巡游中先让位（与既有互斥口径一致）
+        wx.orbit=false;
+        const oc=document.getElementById('orbitChk'); if(oc) oc.checked=false;
+        const ob=document.getElementById('orbitV'); if(ob) ob.textContent='关';
+    }
+    if(typeof FEAT!=='undefined' && FEAT.roam && FEAT.roam.on){ FEAT.roam.on=false; refreshModUI(); }
+    if(!controls || !controls.flyTo || !controls.target) return;
+    controls.target.set(pos.x, terrainH(pos.x, pos.z)+1.6, pos.z);
+    controls.flyTo(Math.atan2(pos.x, pos.z), 0.30*Math.PI, 13);
+}
+
+/* ---------- 回音墙（公开鸣谢，挂在更新日志弹窗里） ----------
+   只呈现清单里的公开字段：采纳主题 + 署名。name 为 '' 的（不公开档）不上墙。 */
+function echoRenderCredits(){
+    const box=document.getElementById('logCreditsBody');
+    if(!box) return;
+    box.textContent='';
+    const pub=ECHO_ADOPTED.filter(e=>e && e.name);
+    if(!pub.length){
+        const p=document.createElement('p');
+        p.className='crNone';
+        p.textContent='还没有采纳记录——第一条也许就是你的。在「💬 优化意见」里写下想法，提交时记得保存回执码；被采纳后，这里会按你选的署名谢谢你。';
+        box.appendChild(p);
+        return;
+    }
+    pub.forEach(e=>{
+        const d=document.createElement('div');
+        d.className='cr';
+        d.appendChild(document.createTextNode('『'+(e.topic||'一条建议')+'』 —— '));
+        const b=document.createElement('b');
+        b.textContent=e.name;
+        d.appendChild(b);
+        box.appendChild(d);
+    });
+}
+
+/* ---------- 世界里的永久印记（感谢第二层）：清单 mark 字段驱动的小牌子 ----------
+   清单为空时一块牌子都不生成（零性能影响）；牌面字来自清单 label，由维护者按
+   玩家的署名三档填写，不公开档只许写通用文案。摆位贴地走 terrainH，与门牌同做法。 */
+function echoMarkTexture(label){
+    const c=makeCanvas(512,256), g=c.getContext('2d');
+    g.fillStyle='#7a4f28'; g.fillRect(0,0,512,256);
+    g.strokeStyle='rgba(46,26,10,0.9)'; g.lineWidth=10; g.strokeRect(9,9,494,238);
+    g.fillStyle='#f7e3bb'; g.textAlign='center'; g.textBaseline='middle';
+    g.font='600 42px "Microsoft YaHei",sans-serif';
+    g.fillText('建议回音 · 已采纳',256,72);
+    let size=54;
+    g.font='bold '+size+'px "Microsoft YaHei",sans-serif';
+    while(size>24 && g.measureText(label).width>440){ size-=4; g.font='bold '+size+'px "Microsoft YaHei",sans-serif'; }
+    g.fillText(label,256,168);
+    const t=new THREE.CanvasTexture(c);
+    if(THREE.sRGBEncoding!==undefined) t.encoding=THREE.sRGBEncoding;
+    return t;
+}
+function echoBuildMarks(){
+    if(typeof scene==='undefined' || !scene) return;
+    ECHO_ADOPTED.forEach(e=>{
+        if(!e || !e.mark || typeof e.mark.x!=='number' || typeof e.mark.z!=='number') return;
+        const x=e.mark.x, z=e.mark.z;
+        const grp=new THREE.Group();
+        const post=new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.055,0.95,8),
+            new THREE.MeshStandardMaterial({color:0x6e4a26,roughness:1}));
+        post.position.y=0.47; post.castShadow=true; grp.add(post);
+        const board=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.6,0.05),
+            new THREE.MeshStandardMaterial({map:echoMarkTexture(e.mark.label||'一位热心玩家的建议'),roughness:0.9}));
+        board.position.y=1.12; board.castShadow=true; grp.add(board);
+        grp.position.set(x, terrainH(x,z), z);
+        grp.rotation.y=Math.atan2(x,z);   // 牌面朝向世界外侧，来访者走近就能读
+        scene.add(grp);
+    });
+}
+
+/* ---------- 设置面板「建议回音」：我的回执 / 共建者徽章 / 查状态彩蛋 / 撤回 ---------- */
+function echoRenderPanel(){
+    const box=document.getElementById('echoMine');
+    if(!box) return;
+    if(!echoState) echoState=echoLoad();
+    box.textContent='';
+    if(echoState.badge){
+        const chip=document.createElement('span');
+        chip.className='echoBadge';
+        chip.textContent='🏅 共建者';
+        box.appendChild(chip);
+        box.appendChild(document.createElement('br'));
+    }
+    const list=echoState.receipts;
+    if(!list.length){
+        box.appendChild(document.createTextNode('你还没提交过建议。在左下角「💬 优化意见」里写下想法，提交后回执码会保存在这里。'));
+        return;
+    }
+    const latest=list[list.length-1];
+    box.appendChild(document.createTextNode('我的回执码（最近一个）'));
+    box.appendChild(document.createElement('br'));
+    const cs=document.createElement('span');
+    cs.className='echoCode'; cs.textContent=latest.code;
+    box.appendChild(cs);
+    if(list.length>1) box.appendChild(document.createTextNode('（共 '+list.length+' 个）'));
+    box.appendChild(document.createElement('br'));
+    box.appendChild(document.createTextNode(echoFindAdopted(latest.code)
+        ? '🎉 最近这条建议已经被采纳啦！'
+        : '把码收好：建议被采纳后，下次打开页面就会收到专属回信。'));
+    const btns=document.createElement('div');
+    btns.className='mpEchoBtns';
+    const bCopy=document.createElement('button');
+    bCopy.type='button'; bCopy.textContent='📋 复制回执码';
+    bCopy.addEventListener('click',()=>{
+        copyToClipboard(latest.code).then(
+            ()=>{ bCopy.textContent='✅ 已复制'; },
+            ()=>{ bCopy.textContent='复制失败，请手动抄下'; });
+        setTimeout(()=>{ bCopy.textContent='📋 复制回执码'; },1600);
+    });
+    btns.appendChild(bCopy);
+    const my=echoMyMatches();
+    if(my.length){
+        const bLetter=document.createElement('button');
+        bLetter.type='button'; bLetter.textContent='💌 看我的回信';
+        bLetter.addEventListener('click',()=>{
+            const panel=document.getElementById('modPanel');
+            if(panel) panel.classList.remove('on');
+            echoShowLetters(my.map(m=>m.entry));
+        });
+        btns.appendChild(bLetter);
+    }
+    const bClear=document.createElement('button');
+    bClear.type='button'; bClear.textContent='🧹 清除本机回执';
+    let armed=false;
+    bClear.addEventListener('click',()=>{
+        if(!armed){
+            armed=true;
+            bClear.textContent='再点一次确认清除';
+            setTimeout(()=>{ armed=false; bClear.textContent='🧹 清除本机回执'; },3000);
+            return;
+        }
+        // 撤回（隐私⑤）：码、徽章、已读记录一并抹掉，本机不再认这批回执
+        echoState={ receipts:[], badge:false, seen:[] };
+        store.echo.set('');
+        echoShowFbCard();
+        echoRenderPanel();
+        const q=document.getElementById('echoQueryMsg');
+        if(q) q.textContent='已清除本机回执与徽章记录。公开鸣谢与世界印记如需撤下，在玩家群里说一声，下一版移除。';
+    });
+    btns.appendChild(bClear);
+    box.appendChild(btns);
+}
+/* 查状态彩蛋：凭码查「已收到 / 已采纳」——已收到以本机存档为准，已采纳查站内清单；
+   查中已采纳就顺手认领：补存本机、点亮共建者徽章、回信随时可看（码就是凭据，不验身份）。 */
+function echoQueryStatus(){
+    const inp=document.getElementById('echoQuery');
+    const msg=document.getElementById('echoQueryMsg');
+    if(!inp || !msg) return;
+    const code=(inp.value||'').trim();
+    if(!code){ msg.textContent='先输入回执码再查。'; return; }
+    const entry=echoFindAdopted(code);
+    if(entry){
+        if(!echoState) echoState=echoLoad();
+        if(!echoState.receipts.some(r=>echoNormCode(r.code)===echoNormCode(code))){
+            echoState.receipts.push({ code:code.toUpperCase(), tier:'private', alias:'',
+                at:new Date().toISOString().slice(0,10) });
+            echoSave();
+        }
+        echoSyncBadge();
+        echoRenderPanel();
+        echoShowFbCard();
+        msg.textContent='🎉 已采纳：『'+(entry.topic||'这条建议')+'』已经做进世界啦！点上面「💌 看我的回信」看看专属感谢信。';
+        return;
+    }
+    if(!echoState) echoState=echoLoad();
+    if(echoState.receipts.some(r=>echoNormCode(r.code)===echoNormCode(code))){
+        msg.textContent='✅ 已收到，这条建议还在排队等负责人看。被采纳后，你下次打开页面就会收到专属回信。';
+        return;
+    }
+    msg.textContent='🤔 没查到这个码：可能抄错了，或者它不是在本站提交建议时领到的。回执码长这样：CT2-XXXX-XXXX。';
+}
+function setupEcho(){
+    echoState=echoLoad();
+    echoSyncBadge();
+    echoRenderCredits();
+    echoBuildMarks();
+    echoRenderPanel();
+    document.getElementById('echoClose').addEventListener('click', closeEchoLetter);
+    document.getElementById('echoGo').addEventListener('click', ()=>{
+        const pos=echoCurrent?echoEntryPos(echoCurrent):null;
+        closeEchoLetter();
+        if(pos) echoFlyTo(pos);
+    });
+    const mask=document.getElementById('echoMask');
+    mask.addEventListener('click', e=>{ if(e.target===mask) closeEchoLetter(); });
+    document.addEventListener('keydown', e=>{
+        if(e.key==='Escape' && echoOpen){ closeEchoLetter(); e.stopPropagation(); }
+    }, true);
+    document.getElementById('echoQueryBtn').addEventListener('click', echoQueryStatus);
+    const q=document.getElementById('echoQuery');
+    q.addEventListener('keydown', e=>{ if(e.key==='Enter') echoQueryStatus(); });
+    q.addEventListener('input', ()=>{ document.getElementById('echoQueryMsg').textContent=''; });
+    echoArmLetterWatch();
+}
+/* 开页调度：等加载层退场、开页自动弹的更新日志等弹窗都关掉后，再递上未读的
+   专属信——不抢戏、不叠层。超过约 90 秒还没等到空档就作罢（面板里随时能看）。 */
+function echoArmLetterWatch(){
+    if(!echoState) echoState=echoLoad();
+    const unseen=echoMyMatches().filter(m=>echoState.seen.indexOf(m.entry.code)<0);
+    if(!unseen.length) return;
+    let tries=0;
+    const timer=setInterval(()=>{
+        tries++;
+        if(echoOpen || tries>150){ clearInterval(timer); return; }
+        const boot=document.getElementById('boot');
+        const bootGone=!boot || boot.classList.contains('hide') || boot.style.display==='none';
+        if(!bootGone) return;
+        const ids=['fbMask','ltMask','helpMask','voteMask','logMask','modPanel'];
+        for(let i=0;i<ids.length;i++){
+            const el=document.getElementById(ids[i]);
+            if(el && el.classList.contains('on')) return;
+        }
+        if(typeof DragonCtl!=='undefined' && DragonCtl.active) return;
+        clearInterval(timer);
+        echoShowLetters(unseen.map(m=>m.entry));
+    }, 600);
 }
 
 /* ==================== 操作帮助（Issue #5） ====================
@@ -6005,6 +6525,7 @@ function init(){
     buildWeatherButtons();
     setupSliders();
     setupFeedback();
+    setupEcho();
     setupHelp();
     setupSnapshot();
     setupVote();
@@ -6308,7 +6829,7 @@ function setupGlobal(){
     if(!app) return;
     var HIDE_MS = 3000, timer = null;
     function anyDialogOpen(){
-        var ids = ['modPanel','fbMask','ltMask','helpMask','voteMask','logMask'], i, el;
+        var ids = ['modPanel','fbMask','ltMask','helpMask','voteMask','logMask','echoMask'], i, el;
         for(i = 0; i < ids.length; i++){
             el = document.getElementById(ids[i]);
             if(el && el.classList.contains('on')) return true;
@@ -6326,7 +6847,7 @@ function setupGlobal(){
         app.classList.remove('bars-off');
         arm();
     }
-    ['ui','status','fbBtn','lanternBtn','modBtn','modPanel','fbMask','ltMask','helpMask','voteMask','logMask'].forEach(function(id){
+    ['ui','status','fbBtn','lanternBtn','modBtn','modPanel','fbMask','ltMask','helpMask','voteMask','logMask','echoMask'].forEach(function(id){
         var el = document.getElementById(id);
         if(!el) return;
         ['pointerdown','input','change','wheel'].forEach(function(ev){
