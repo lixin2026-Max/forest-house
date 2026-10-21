@@ -9,13 +9,14 @@ const SUITES = [
     ['smoke.js', '运行时冒烟'],
     ['security-audit.js', '安全审计'],
     ['feedback-e2e.js', '意见接口端到端'],
-    ['subpath-check.js', '子路径部署（GitHub Pages）']
+    ['subpath-check.js', '子路径部署（GitHub Pages）'],
+    ['perf-guard.js', '性能守卫（draw calls / 三角面）']
 ];
 
 let failed = 0;
 
 // 先检查编码：被错误工具改坏成非 UTF-8 的文件，后面所有测试都没意义
-console.log('\n[0/5] 编码自检');
+console.log('\n[0/' + SUITES.length + '] 编码自检');
 {
     const fs = require('fs');
     const targets = ['index.html', 'serve.js', 'report.md', '手机上打开.md'];
