@@ -148,14 +148,16 @@
         .row label{font-size:11.5px}
         .row input[type=range]{width:100%;margin:0;height:24px}
         .row b{text-align:right;font-size:11.5px;min-width:0}
-        #status{top:auto;bottom:6px;left:6px;right:6px;min-width:0;padding:6px 9px;font-size:10.5px;line-height:1.45}
+        /* 窄屏状态栏改为横向折行的小条：九行竖排会糊满屏底还压住操控条，折成两三行 */
+        #status{top:auto;bottom:6px;left:6px;right:6px;min-width:0;padding:6px 9px;font-size:10.5px;line-height:1.45;
+            display:flex;flex-wrap:wrap;column-gap:11px;row-gap:1px}
         #error{padding:20px;font-size:13px}
     }
     /* 竖屏旋转成横屏后：面板收进左上角，别挡住画面主体 */
     body.rot90 #ui{left:6px;right:auto;top:6px;bottom:auto;width:300px;padding:7px 9px}
     body.rot90 #ui .hint{display:none}
     body.rot90 #ui h3{font-size:13px;margin-bottom:5px}
-    body.rot90 #status{left:auto;right:6px;top:6px;bottom:auto;width:auto;padding:6px 9px}
+    body.rot90 #status{left:auto;right:6px;top:6px;bottom:auto;width:auto;padding:6px 9px;display:block}
     @media (max-height:460px){
         #ui .hint{display:none}
         #status{display:none}
@@ -283,6 +285,9 @@
     #logBox h4{margin:0 0 4px;font-size:15px;color:var(--dlg-h)}
     #logX{background:none;border:none;color:var(--note);font-size:16px;cursor:pointer;padding:0 2px;line-height:1.2;flex:none}
     #logX:hover{color:var(--dlg-txt)}
+    /* 弹窗右上角 ✕ 关钮：全站统一一副样子（挂在 .logHead 里，与 #logX 同题） */
+    .dlgX{background:none;border:none;color:var(--note);font-size:16px;cursor:pointer;padding:0 2px;line-height:1.2;flex:none}
+    .dlgX:hover{color:var(--dlg-txt)}
     #logBox p.sub{margin:0 0 10px;font-size:11.5px;color:var(--dlg-sub);line-height:1.5}
     .logTabs{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 11px}
     .logTabs button{font-family:inherit;font-size:12px;padding:5px 11px;border-radius:999px;cursor:pointer;
@@ -710,23 +715,23 @@
     /* ===== 小龙操控（#27）：底部中间小按钮条 + 移动端虚拟摇杆 ===== */
     #dragonBar{position:absolute;left:50%;bottom:15px;transform:translateX(-50%);z-index:120;
         display:flex;gap:8px}
-    #dragonBar button{background:rgba(10,20,10,.82);color:#ffe2b0;border:1px solid rgba(255,190,90,.45);
+    #dragonBar button{background:var(--float);color:var(--warm-float-txt);border:1px solid var(--warm-float-line);
         padding:9px 15px;border-radius:22px;font-size:13px;font-family:inherit;cursor:pointer;
         backdrop-filter:blur(6px);transition:background .15s}
-    #dragonBar button:hover{background:rgba(60,40,10,.9)}
-    #dragonBar button.on{background:#b06f1e;border-color:#e09a35;color:#fff;font-weight:600}
+    #dragonBar button:hover{background:var(--warm-float-hov)}
+    #dragonBar button.on{background:var(--warm-pri);border-color:var(--warm-pri-line);color:#fff;font-weight:600}
     /* ===== 小龙互动菜单（#16/#17）：贴在操控条上方的小面板，风格与 dragonBar 一套 ===== */
     #dragonMenu{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);z-index:122;
-        background:rgba(10,20,10,.88);border:1px solid rgba(255,190,90,.45);border-radius:14px;
+        background:var(--float);border:1px solid var(--warm-float-line);border-radius:14px;
         padding:10px 12px;backdrop-filter:blur(6px);text-align:center;max-width:calc(100vw - 24px)}
-    #dragonMenu .dmTitle{color:#ffe2b0;font-size:12px;margin-bottom:7px;letter-spacing:1px}
+    #dragonMenu .dmTitle{color:var(--warm-float-txt);font-size:12px;margin-bottom:7px;letter-spacing:1px}
     #dragonMenu .dmRow{display:flex;gap:6px;justify-content:center;margin-bottom:6px}
     #dragonMenu .dmRow:last-of-type{margin-bottom:0}
-    #dragonMenu button{background:rgba(30,50,30,.9);color:#ffe2b0;border:1px solid rgba(255,190,90,.35);
+    #dragonMenu button{background:var(--btn);color:var(--warm-float-txt);border:1px solid var(--warm-float-line);
         padding:7px 11px;border-radius:18px;font-size:12.5px;font-family:inherit;cursor:pointer;transition:background .15s}
-    #dragonMenu button:hover:not(:disabled){background:rgba(90,60,15,.92)}
+    #dragonMenu button:hover:not(:disabled){background:var(--warm-float-hov)}
     #dragonMenu button:disabled{opacity:.42;cursor:default}
-    #dragonMenu .dmHint{color:#a8bba8;font-size:11px;margin-top:6px;min-height:14px}
+    #dragonMenu .dmHint{color:var(--panel-hint);font-size:11px;margin-top:6px;min-height:14px}
     #joy{position:absolute;left:26px;bottom:86px;width:112px;height:112px;border-radius:50%;z-index:121;
         background:rgba(10,20,10,.35);border:1.5px solid rgba(255,255,255,.4);display:none;touch-action:none}
     #joy.on{display:block}
@@ -741,10 +746,10 @@
     /* ===== 进屋看看（#40）：出入按钮 + 切换淡幕（独立小块，不用主题变量） ===== */
     #roomBar{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);z-index:120;
         display:flex;gap:8px}
-    #roomBar button{background:rgba(24,16,8,.85);color:#ffe2b0;border:1px solid rgba(255,190,90,.5);
+    #roomBar button{background:var(--float);color:var(--warm-float-txt);border:1px solid var(--warm-float-line);
         padding:9px 16px;border-radius:22px;font-size:13px;font-family:inherit;cursor:pointer;
         backdrop-filter:blur(6px)}
-    #roomBar button:hover{background:rgba(70,44,12,.92)}
+    #roomBar button:hover{background:var(--warm-float-hov)}
     @media (max-width:600px),(pointer:coarse){
         #roomBar{bottom:calc(112px + env(safe-area-inset-bottom, 0px))}
     }
@@ -888,7 +893,10 @@
 <button id="fbBtn" type="button">💬 优化意见</button>
 <div id="fbMask">
     <div id="fbBox" role="dialog" aria-modal="true" aria-labelledby="fbTitle">
-        <h4 id="fbTitle">💬 写下你的构想</h4>
+        <div class="logHead">
+            <h4 id="fbTitle">💬 写下你的构想</h4>
+            <button type="button" class="dlgX" id="fbX" aria-label="关闭">✕</button>
+        </div>
         <div class="fbCreed">
             <b>楚门的2.0世界正在生长。</b>
             <span>它不被固定场景束缚，一切都可以被重新想象。</span>
@@ -950,7 +958,10 @@
 <button id="lanternBtn" type="button" class="hide">🏮 放河灯</button>
 <div id="ltMask">
     <div id="ltBox" role="dialog" aria-modal="true" aria-labelledby="ltTitle">
-        <h4 id="ltTitle">🏮 放一盏河灯</h4>
+        <div class="logHead">
+            <h4 id="ltTitle">🏮 放一盏河灯</h4>
+            <button type="button" class="dlgX" id="ltX" aria-label="关闭">✕</button>
+        </div>
         <p class="sub">写一句愿望，它会乘着灯在湖面上慢慢漂走。<br>愿望只停留在这台设备上，不会上传。</p>
         <input id="ltText" type="text" maxlength="40" placeholder="例如：愿明天顺顺利利">
         <div id="ltRow">
@@ -961,7 +972,10 @@
 </div>
 <div id="helpMask">
     <div id="helpBox" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
-        <h4 id="helpTitle">🧭 操作帮助</h4>
+        <div class="logHead">
+            <h4 id="helpTitle">🧭 操作帮助</h4>
+            <button type="button" class="dlgX" id="helpX" aria-label="关闭">✕</button>
+        </div>
         <p class="sub">这个小世界能玩的东西都在这儿了，慢慢逛。</p>
         <div class="hrow"><b>旋转视角</b><span>单指或鼠标拖动画面</span></div>
         <div class="hrow"><b>缩放远近</b><span>双指捏合，或滚动鼠标滚轮</span></div>
@@ -972,16 +986,21 @@
         <div class="hrow"><b>视角锁定</b><span>顶栏开关，锁住后拖动与巡游都不动镜头（缩放仍可用）</span></div>
         <div class="hrow"><b>敲门</b><span>点小屋的门：先轻敲两下，门会朝外打开透出暖光</span></div>
         <div class="hrow"><b>进屋看看</b><span>门开着时点门洞里的暖光、或点门口出现的「进屋看看」按钮，就能进屋参观（拖动环视、点地面走动）；操控小龙时走近门口，按钮会带它一起进屋。屋里点门或按「回到院子」出来</span></div>
+        <div class="hrow"><b>留言墙</b><span>屋里墙上贴着留言墙和大事记板：你写过的意见会变成小纸条贴在墙上（点开能看全文，自己写的还能撕下来），负责人精选的留言也会贴上来；大事记板记着这个世界一路长过来的大日子，齿轮面板里也能翻全本</span></div>
         <div class="hrow"><b>小龙互动</b><span>点小龙、或点底部「🤚 互动」：可以摸头、打招呼、让它转圈。收获的南瓜和玉米会进背包，用背包里的食物喂它，它会自己走过去吃；吃饱后它会开心地跟着你玩一阵（状态栏能看背包和喂食次数）</span></div>
+        <div class="hrow"><b>小龙定制</b><span>底部「🎨 定制小龙」：给它改名字、性别、体色花纹、角和翅膀的样式，再配上围巾、铃铛、草帽这些小配饰，还能选性格（好奇 / 活泼 / 慵懒，散步和作息都不一样）。改动立刻生效，都只存本机</span></div>
         <div class="hrow"><b>篝火</b><span>点篝火堆可以点火、再点熄火</span></div>
         <div class="hrow"><b>每日寻宝</b><span>每天藏 5 件小物（橡果、蘑菇、羽毛、松果、彩蛋），走近点中即收集，集齐有祝贺</span></div>
         <div class="hrow"><b>种田</b><span>点农田里空着的地块播种，再点一下浇水（雨天自动浇），等昼夜轮转一圈、或到了第二天成熟后，再点一下收获</span></div>
         <div class="hrow"><b>快照存图</b><span>顶栏「📸 快照存图」，把当前画面（连天气和昼夜）存成图片下载到本机</span></div>
         <div class="hrow"><b>投票选点子</b><span>顶栏「🗳️ 投票选点子」，给最想要的新点子投票，一台设备一票，票数定期公布</span></div>
+        <div class="hrow"><b>世界图鉴</b><span>顶栏「📖 世界图鉴」：真正在世界里见过、种过、找到过的东西才会被记进图鉴，灰色条目旁有发现它的线索；集齐整本有纪念徽章</span></div>
         <div class="hrow"><b>放河灯</b><span>左下角「🏮 放河灯」，写一句愿望，让它在湖上漂一会儿</span></div>
+        <div class="hrow"><b>我的音乐</b><span>右下角齿轮面板里可以选你自己设备上的音乐文件，在世界里当背景乐放（单曲 / 列表循环、夜里自动放轻）；歌只在本机播放、不上传，刷新后要重新选一次文件</span></div>
         <div class="hrow"><b>玩家立牌</b><span>世界里站着的小人/小动物是玩家投稿、负责人审核后放进来的访客，点一点能看它的名字和自我介绍；你也来投稿的话，在「💬 优化意见」里把分类选成「立牌投稿」</span></div>
+        <div class="hrow"><b>节日彩蛋</b><span>逢年过节（还有小龙的诞生日），世界会自己换上应景的小装扮：灯笼、河灯、圣诞树、气球……小龙也会戴上节日小配饰，节日过了自动收好</span></div>
         <div class="hrow"><b>界面隐藏</b><span>顶栏与底栏停手 3 秒会自动隐藏，点屏幕右缘的小圆钮可以唤回</span></div>
-        <div class="hrow"><b>更多设置</b><span>右下角齿轮里有功能开关、预设视角、色调与声音</span></div>
+        <div class="hrow"><b>更多设置</b><span>右下角齿轮里有功能开关、预设视角、色调、声音与我的音乐，还有版本日志、世界大事记和建议回音（凭回执码查建议状态）</span></div>
         <div id="helpRow">
             <button type="button" class="primary" id="helpOk">知道啦</button>
             <button type="button" class="ghost" id="helpClose">关闭</button>
@@ -990,7 +1009,10 @@
 </div>
 <div id="voteMask">
     <div id="voteBox" role="dialog" aria-modal="true" aria-labelledby="voteTitle">
-        <h4 id="voteTitle">🗳️ 下一个点子做什么，你说了算</h4>
+        <div class="logHead">
+            <h4 id="voteTitle">🗳️ 下一个点子做什么，你说了算</h4>
+            <button type="button" class="dlgX" id="voteX" aria-label="关闭">✕</button>
+        </div>
         <p class="sub">选一个最想要的投出去。票数会定期汇总公布，得票最高的优先排进开发计划。<br>每台设备只能投一票，先想好再点哦。</p>
         <div id="voteOpts"></div>
         <div id="voteRow">
@@ -1004,7 +1026,7 @@
     <div id="logBox" role="dialog" aria-modal="true" aria-labelledby="logTitle">
         <div class="logHead">
             <h4 id="logTitle">📋 更新日志</h4>
-            <button type="button" id="logX" aria-label="关闭">✕</button>
+            <button type="button" class="dlgX" id="logX" aria-label="关闭">✕</button>
         </div>
         <p class="sub">楚门的世界一直在长大。这是最新一版的新鲜事，点上面的版本号，也能翻翻它一路长过来的样子。</p>
         <div class="logTabs" id="logTabs"></div>
@@ -1022,7 +1044,7 @@
     <div id="dragonBox" role="dialog" aria-modal="true" aria-labelledby="dgTitle">
         <div class="logHead">
             <h4 id="dgTitle">🐉 小龙定制</h4>
-            <button type="button" id="dgX" aria-label="关闭">✕</button>
+            <button type="button" class="dlgX" id="dgX" aria-label="关闭">✕</button>
         </div>
         <p class="sub">这条龙是你的：性别、名字、体色、配饰、性格都归你管。改任何一项都立刻生效，并自动存到本机。</p>
         <div class="dgSec">成长（陪伴天数到了自己长，只看不能改）</div>
@@ -1063,7 +1085,10 @@
 </div>
 <div id="echoMask">
     <div id="echoBox" role="dialog" aria-modal="true" aria-labelledby="echoTitle">
-        <h4 id="echoTitle">💌 一封只给你的回信</h4>
+        <div class="logHead">
+            <h4 id="echoTitle">💌 一封只给你的回信</h4>
+            <button type="button" class="dlgX" id="echoX" aria-label="关闭">✕</button>
+        </div>
         <p class="sub">这是凭你的回执码送到的专属感谢信——只在这台设备上出现，不公开、不绑定任何身份。</p>
         <div id="echoBody"></div>
         <div id="echoRow">
@@ -1074,7 +1099,10 @@
 </div>
 <div id="gbMask">
     <div id="gbBox" role="dialog" aria-modal="true" aria-labelledby="gbTitle">
-        <h4 id="gbTitle">✎ 墙上的一张纸条</h4>
+        <div class="logHead">
+            <h4 id="gbTitle">✎ 墙上的一张纸条</h4>
+            <button type="button" class="dlgX" id="gbX" aria-label="关闭">✕</button>
+        </div>
         <div id="gbMeta"></div>
         <div id="gbText"></div>
         <div id="gbRow">
@@ -1088,7 +1116,7 @@
     <div id="chronBox" role="dialog" aria-modal="true" aria-labelledby="chronTitle">
         <div class="logHead">
             <h4 id="chronTitle">📜 世界大事记</h4>
-            <button type="button" id="chronX" aria-label="关闭">✕</button>
+            <button type="button" class="dlgX" id="chronX" aria-label="关闭">✕</button>
         </div>
         <p class="sub">这个世界一路长过来的大日子，都记在这里。屋里墙上也挂着一块大事记板，记的是最近的几件。</p>
         <div id="chronBody"></div>
@@ -1101,7 +1129,7 @@
     <div id="codexBox" role="dialog" aria-modal="true" aria-labelledby="codexTitle">
         <div class="logHead">
             <h4 id="codexTitle">📖 世界图鉴</h4>
-            <button type="button" id="codexX" aria-label="关闭">✕</button>
+            <button type="button" class="dlgX" id="codexX" aria-label="关闭">✕</button>
         </div>
         <p class="sub">在这个世界里真正见过、种过、找到过的东西，才会被记进图鉴。灰色的条目旁写着发现它的线索，集齐全册有纪念徽章。</p>
         <div class="codexProg" id="codexProg"></div>
@@ -2816,6 +2844,7 @@ function closeChronicle(){ chronOpen = false; document.getElementById('chronMask
 function setupWalls(){
     wallsRefresh();
     document.getElementById('gbClose').addEventListener('click', closeGbNote);
+    document.getElementById('gbX').addEventListener('click', closeGbNote);
     document.getElementById('gbMask').addEventListener('click', e=>{
         if(e.target === document.getElementById('gbMask')) closeGbNote();
     });
@@ -7117,6 +7146,7 @@ function setupFeedback(){
     const ta=fbEl('fbText'), cnt=fbEl('fbCount');
     fbEl('fbBtn').addEventListener('click',openFeedback);
     fbEl('fbClose').addEventListener('click',closeFeedback);
+    fbEl('fbX').addEventListener('click',closeFeedback);
     fbEl('fbMask').addEventListener('click',e=>{
         if(e.target===fbEl('fbMask')) closeFeedback();
     });
@@ -7563,6 +7593,7 @@ function setupEcho(){
     echoBuildMarks();
     echoRenderPanel();
     document.getElementById('echoClose').addEventListener('click', closeEchoLetter);
+    document.getElementById('echoX').addEventListener('click', closeEchoLetter);
     document.getElementById('echoGo').addEventListener('click', ()=>{
         const pos=echoCurrent?echoEntryPos(echoCurrent):null;
         closeEchoLetter();
@@ -7910,6 +7941,7 @@ function closeHelp(){
 function setupHelp(){
     fbEl('helpBtn').addEventListener('click',openHelp);
     fbEl('helpClose').addEventListener('click',closeHelp);
+    fbEl('helpX').addEventListener('click',closeHelp);
     fbEl('helpOk').addEventListener('click',closeHelp);
     fbEl('helpMask').addEventListener('click',e=>{
         if(e.target===fbEl('helpMask')) closeHelp();
@@ -8079,6 +8111,8 @@ function setupVote(){
     if(go) go.addEventListener('click',submitVote);
     const close=document.getElementById('voteClose');
     if(close) close.addEventListener('click',closeVote);
+    const vx=document.getElementById('voteX');
+    if(vx) vx.addEventListener('click',closeVote);
     const mask=document.getElementById('voteMask');
     if(mask) mask.addEventListener('click',function(e){ if(e.target===mask) closeVote(); });
     document.addEventListener('keydown',function(e){
@@ -8111,7 +8145,8 @@ const FEAT = {
     roam:      { on:false, label:'自动漫游（慢慢环游）' },
     tone:      { on:true, label:'色调氛围' },
     hunt:      { on:true, label:'找一找（每日寻宝）' },
-    lantern:   { on:true, label:'放河灯（池塘许愿）' }
+    lantern:   { on:true, label:'放河灯（池塘许愿）' },
+    codex:     { on:true, label:'世界图鉴' }
 };
 
 /* ---------- 模块生命周期钩子 ----------
@@ -8183,6 +8218,15 @@ const MODULE_HOOKS = {
             const b=document.getElementById('lanternBtn');
             if(b) b.classList.add('hide'); },
         update(dt, t){ updateLanterns(dt, t); }
+    },
+    /* 世界图鉴是纯 UI 册子：开关只管顶栏入口的显隐（与河灯同口径），
+       解锁记录照常在本机累积，关掉不丢数据 */
+    codex: {
+        setup(){ const b=document.getElementById('codexBtn');
+            if(b) b.style.display=''; },
+        teardown(){ closeCodex();
+            const b=document.getElementById('codexBtn');
+            if(b) b.style.display='none'; }
     }
 };
 
@@ -9038,6 +9082,9 @@ function closeCodex(){
     if(x) x.addEventListener('click', closeCodex);
     const mask=document.getElementById('codexMask');
     if(mask) mask.addEventListener('click', e=>{ if(e.target===mask) closeCodex(); });
+    document.addEventListener('keydown', e=>{
+        if(e.key==='Escape' && codexOpen){ closeCodex(); e.stopPropagation(); }
+    }, true);
     setInterval(codexTick, 1400);
 })();
 
@@ -9637,8 +9684,13 @@ function bindLanternUI(){
     if(go) go.addEventListener('click',confirmLantern);
     const cancel=document.getElementById('ltCancel');
     if(cancel) cancel.addEventListener('click',closeLantern);
+    const lx=document.getElementById('ltX');
+    if(lx) lx.addEventListener('click',closeLantern);
     const mask=document.getElementById('ltMask');
     if(mask) mask.addEventListener('click',function(e){ if(e.target===mask) closeLantern(); });
+    document.addEventListener('keydown',function(e){
+        if(e.key==='Escape' && ltOpen){ closeLantern(); e.stopPropagation(); }
+    },true);
 }
 function openLantern(){
     if(ltOpen) return;
@@ -9864,6 +9916,10 @@ function setupModules(){
     if(openBtn && panel) openBtn.addEventListener('click', function(){ panel.classList.toggle('on'); });
     const closeBtn = document.getElementById('modClose');
     if(closeBtn && panel) closeBtn.addEventListener('click', function(){ panel.classList.remove('on'); });
+    // Esc 收起齿轮面板：冒泡阶段处理，让开着的弹窗（捕获阶段）先关
+    document.addEventListener('keydown', function(e){
+        if(e.key === 'Escape' && panel && panel.classList.contains('on')) panel.classList.remove('on');
+    });
 
     if(audioTimer) clearInterval(audioTimer);
     audioTimer = setInterval(audioTick, 250);
@@ -10043,6 +10099,7 @@ window.addEventListener('orientationchange',()=>setTimeout(onResize,220));
 /* ---------- 全局部署模块：加载兜底 / 资源降级 / 访问统计 / 分享 / 弱网低画质 / 版本日志 ----------
    这一层和场景功能完全无关，只依赖 DOM，出问题不影响场景渲染。 */
 const VERSIONS = [
+    { v:'v4.0', d:'2026-10-21', n:'（待版本收口定稿）' },
     { v:'v3.6', d:'2026-10-21', n:'场景补全、种田玩法、小湖小河、投票共创、时间流逝放慢' },
     { v:'v3.5', d:'2026-10-21', n:'敲门互动与门朝外开、每日寻宝、放河灯、质感与性能优化、天气平滑过渡' },
     { v:'v3.4', d:'2026-10-21', n:'刘海屏安全区、触屏手势、点击延迟' },
@@ -10060,6 +10117,9 @@ const VERSIONS = [
    发版时必须两处同步更新（CHANGELOG.md 记全量、含维护侧；这里只摘「用户能感知的」条目，
    并改写成面向玩家的通俗文案，条目可精简合并，维护侧条目不要端给玩家）。 */
 const CHANGELOG_NOTES = [
+    { v:'v4.0', d:'2026-10-21', theme:'（主题待版本收口定稿）', items:[
+        '（本版更新条目待版本收口时补齐）'
+    ]},
     { v:'v3.6', d:'2026-10-21', theme:'场景补全、种田玩法、水系扩容、共创投票、时间流逝放慢', items:[
         '打开页面先看到这份更新日志啦：新版改了什么一目了然，点版本号还能翻看以前每一版',
         '时间慢下来了：昼夜和天气 10 分钟才换一次；顶栏多了「自动轮转」开关，你手动选了天气，它就不再自作主张',
@@ -10336,7 +10396,7 @@ function setupGlobal(){
         app.classList.remove('bars-off');
         arm();
     }
-    ['ui','status','fbBtn','lanternBtn','modBtn','modPanel','fbMask','ltMask','helpMask','voteMask','logMask','echoMask','codexMask','gbMask','chronMask'].forEach(function(id){
+    ['ui','status','fbBtn','lanternBtn','modBtn','modPanel','fbMask','ltMask','helpMask','voteMask','logMask','dragonMask','echoMask','codexMask','gbMask','chronMask'].forEach(function(id){
         var el = document.getElementById(id);
         if(!el) return;
         ['pointerdown','input','change','wheel'].forEach(function(ev){
