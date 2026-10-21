@@ -698,7 +698,7 @@ function makeOrbitControls(cam, dom){
             let dx=e.clientX-prev.x, dy=e.clientY-prev.y;
             if(ROT){ const t=dx; dx=dy; dy=-t; }   // 画布被旋转 90°，拖动方向要跟着换
             st.theta-=dx*0.005;
-            st.phi  +=dy*0.005;
+            st.phi  -=dy*0.005;   // 上下拖动与镜头同向：往下拖镜头升高（俯视），往上拖镜头降低（仰望），不反直觉
             st.phi=Math.max(0.1,Math.min(Math.PI/2-0.04,st.phi));
         }else if(pointers.size===2){
             const d=fingerDist();
