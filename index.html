@@ -516,6 +516,18 @@
         #dragonBar{bottom:calc(64px + env(safe-area-inset-bottom, 0px))}
         #joy{bottom:calc(140px + env(safe-area-inset-bottom, 0px))}
     }
+    /* ===== 进屋看看（#40）：出入按钮 + 切换淡幕（独立小块，不用主题变量） ===== */
+    #roomBar{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);z-index:120;
+        display:flex;gap:8px}
+    #roomBar button{background:rgba(24,16,8,.85);color:#ffe2b0;border:1px solid rgba(255,190,90,.5);
+        padding:9px 16px;border-radius:22px;font-size:13px;font-family:inherit;cursor:pointer;
+        backdrop-filter:blur(6px)}
+    #roomBar button:hover{background:rgba(70,44,12,.92)}
+    @media (max-width:600px),(pointer:coarse){
+        #roomBar{bottom:calc(112px + env(safe-area-inset-bottom, 0px))}
+    }
+    #fadeCover{position:fixed;inset:0;background:#0b0e0a;opacity:0;pointer-events:none;
+        transition:opacity .26s ease;z-index:400}
 </style>
 </head>
 <body>
@@ -552,6 +564,11 @@
     <button type="button" id="viewBtn" style="display:none">👁️ 第三人称</button>
 </div>
 <div id="joy"><div id="joyKnob"></div></div>
+<div id="roomBar">
+    <button type="button" id="enterRoomBtn" style="display:none">🚪 进屋看看</button>
+    <button type="button" id="exitRoomBtn" style="display:none">🌿 回到院子</button>
+</div>
+<div id="fadeCover"></div>
 
 <!-- ===== 可插拔功能面板：每个功能一个独立开关，关掉即彻底停用 ===== -->
 <button id="modBtn" type="button" title="功能开关">⚙</button>
@@ -643,6 +660,7 @@
         <div class="hrow"><b>自动轮转</b><span>顶栏开关，每 10 分钟自动换一次天气；你手动选天气或拖了滑杆，它会自动让位关掉，想恢复再把开关打开</span></div>
         <div class="hrow"><b>视角锁定</b><span>顶栏开关，锁住后拖动与巡游都不动镜头（缩放仍可用）</span></div>
         <div class="hrow"><b>敲门</b><span>点小屋的门：先轻敲两下，门会朝外打开透出暖光</span></div>
+        <div class="hrow"><b>进屋看看</b><span>门开着时点门洞里的暖光、或点门口出现的「进屋看看」按钮，就能进屋参观（拖动环视、点地面走动）；操控小龙时走近门口，按钮会带它一起进屋。屋里点门或按「回到院子」出来</span></div>
         <div class="hrow"><b>篝火</b><span>点篝火堆可以点火、再点熄火</span></div>
         <div class="hrow"><b>每日寻宝</b><span>每天藏 5 件小物（橡果、蘑菇、羽毛、松果、彩蛋），走近点中即收集，集齐有祝贺</span></div>
         <div class="hrow"><b>种田</b><span>点农田里空着的地块播种，再点一下浇水（雨天自动浇），等昼夜轮转一圈、或到了第二天成熟后，再点一下收获</span></div>
@@ -1323,6 +1341,7 @@ function createTerrain(){
         map:grassTexture(), roughness:1, metalness:0}));
     ground.receiveShadow=true;
     scene.add(ground);
+    window.__terrain=ground;   // #40 进屋时地面要保留可见（窗外景色），给室内一节按引用认领
 
     // 小屋前的小路（石板）：7 块合并成 1 个 mesh
     const stoneMat=new THREE.MeshStandardMaterial({color:0x9aa0a6,roughness:0.9});
@@ -1939,6 +1958,644 @@ function createSmoke(house){
         smokePuffs.push({sprite:s,t:i/7,anchor:new THREE.Vector3(2,7.3,-1.4)});
     }
 }
+
+
+/* ==================== 进屋看看（Issue #40） ====================
+   独立室内场景，与小屋同址同朝向（house-local 坐标：x 右 / z 朝门 / y 上）。
+   进屋时藏起室外重元素，只保留天空、云、日月、雨雪、地面与灯光——
+   从室内窗户看出去仍是实时天气与昼夜；出屋原样恢复进入前的位置与视角。
+   触发与敲门严格区分：点门板 = 敲门开合（原有行为，一字未改）；
+   门开着时点门洞暖光、或点门口出现的「进屋看看」按钮 = 进屋。
+   操控小龙时进屋：龙随玩家一起进屋（室内走动改走本节 walkableWorld 口径，
+   dragonWalkTo 里有两行室内分支）；未接管时是参观镜头，龙留在外面照常活动。
+   [数据接口] 本件只做「可生长的容器」与空状态，内容联动在后续件：
+   - Interior.setGuestbook(entries)：留言墙，entries=[{name,text,date}]，空=空态
+   - Interior.setPhotos(list)：照片墙，list=[图片地址]，空=占位图
+   - Interior.setChronicle(items)：大事记，items=[{date,text}]，空=「暂无大事」
+   接入真实数据时只改这三个函数内部，容器与布局不动。 */
+const ROOM = {
+    x0:-2.82, x1:2.82, z0:-2.28, z1:2.40,          // 室内活动边界（local）
+    floorY:0.72,                                     // 室内地板高度（local，= 石基顶）
+    camBox:{ x0:-2.64, x1:2.64, y0:0.95, y1:2.70, z0:-2.10, z1:2.24 }  // 镜头不出屋
+};
+const ROOM_BLOCKS = [   // 家具占位（local 圆障，龙与参观落点都避让）
+    {x:-1.2, z:-1.95, r:1.0},    // 壁炉
+    {x: 1.9, z:-2.02, r:0.85},   // 书架
+    {x: 0.2, z: 0.35, r:1.0},    // 桌椅
+    {x: 2.05,z: 1.42, r:1.0},    // 床
+    {x:-2.15,z: 1.72, r:0.6}     // 龙窝
+];
+const Interior = {
+    active:false, dragonIn:false, group:null, outdoor:[], baseY:0,
+    doorLeaf:null, flames:null, fireLight:null,
+    gbCanvas:null, gbTex:null, chronCanvas:null, chronTex:null, photoTexs:[],
+    savedTarget:new THREE.Vector3(), savedDragonPos:new THREE.Vector3(),
+    savedDragonRot:0, savedDist:5.4,
+    // 参观镜头（室内专用受限轨道：目标在屋内小范围挪，镜头位置每帧夹回屋内）
+    yaw:0, pitch:0.16, dist:3.4, tgt:new THREE.Vector3(), tgtGoal:new THREE.Vector3(),
+    snap:true, keys:new Set()
+};
+let roomFading = false;
+
+function roomBaseY(){ return Interior.baseY; }
+function roomToWorld(lx, ly, lz){
+    const w = houseLocal(lx, lz);
+    return new THREE.Vector3(w[0], Interior.baseY + ly, w[1]);
+}
+function worldToRoom(x, z){
+    const rx = x - HOUSE_POS.x, rz = z - HOUSE_POS.z;
+    return [rx*HOUSE_R.x + rz*HOUSE_R.z, rx*HOUSE_F.x + rz*HOUSE_F.z];
+}
+Interior.floorWorldY = function(){ return Interior.baseY + ROOM.floorY; };
+/* 室内可行走口径（world 坐标进出）：房间边界内、且不撞家具 */
+Interior.walkableWorld = function(x, z){
+    const l = worldToRoom(x, z), lx = l[0], lz = l[1], m = 0.34;
+    if(lx < ROOM.x0 + m || lx > ROOM.x1 - m || lz < ROOM.z0 + m || lz > ROOM.z1 - m) return false;
+    for(const b of ROOM_BLOCKS) if(Math.hypot(lx - b.x, lz - b.z) < b.r) return false;
+    return true;
+};
+function clampCamToRoom(){
+    const c = camera.position, l = worldToRoom(c.x, c.z);
+    const lx = Math.max(ROOM.camBox.x0, Math.min(ROOM.camBox.x1, l[0]));
+    const lz = Math.max(ROOM.camBox.z0, Math.min(ROOM.camBox.z1, l[1]));
+    const ly = Math.max(ROOM.camBox.y0, Math.min(ROOM.camBox.y1, c.y - Interior.baseY));
+    if(lx !== l[0] || lz !== l[1] || ly !== c.y - Interior.baseY){
+        const w = roomToWorld(lx, ly, lz);
+        c.set(w.x, w.y, w.z);
+    }
+}
+
+/* ---------- 室内贴图（程序绘制，与全场同一套路） ---------- */
+function interiorWoodTexture(){
+    const c = makeCanvas(256, 256), x = c.getContext('2d');
+    x.fillStyle = '#8a6844'; x.fillRect(0, 0, 256, 256);
+    const rnd = mulberry32(7);
+    for(let p = 0; p < 4; p++){
+        const y0 = p*64;
+        x.fillStyle = 'rgba(0,0,0,0.18)'; x.fillRect(0, y0, 256, 3);
+        for(let i = 0; i < 22; i++){
+            x.strokeStyle = 'rgba(60,38,18,' + (0.05 + rnd()*0.10).toFixed(2) + ')';
+            x.lineWidth = 1 + rnd()*1.5;
+            x.beginPath();
+            const yy = y0 + 6 + rnd()*52;
+            x.moveTo(0, yy); x.bezierCurveTo(80, yy + rnd()*4 - 2, 170, yy + rnd()*4 - 2, 256, yy);
+            x.stroke();
+        }
+        x.fillStyle = 'rgba(40,24,10,0.45)'; x.fillRect(rnd()*200, y0, 3, 64);
+    }
+    const t = new THREE.CanvasTexture(c);
+    if(THREE.sRGBEncoding !== undefined) t.encoding = THREE.sRGBEncoding;
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2, 2);
+    return t;
+}
+function rugTexture(){
+    const c = makeCanvas(256, 256), x = c.getContext('2d');
+    x.fillStyle = '#a34a2c'; x.fillRect(0, 0, 256, 256);
+    const rings = [[118,'#e0a458'],[100,'#7a9a4d'],[82,'#e8dcc0'],[62,'#b8542f']];
+    x.lineWidth = 9;
+    for(const r of rings){ x.strokeStyle = r[1]; x.beginPath(); x.arc(128, 128, r[0], 0, 6.29); x.stroke(); }
+    x.fillStyle = '#e0a458';
+    x.save(); x.translate(128, 128); x.rotate(Math.PI/4); x.fillRect(-22, -22, 44, 44); x.restore();
+    const t = new THREE.CanvasTexture(c);
+    if(THREE.sRGBEncoding !== undefined) t.encoding = THREE.sRGBEncoding;
+    return t;
+}
+function drawGuestbook(entries){
+    const cv = Interior.gbCanvas; if(!cv) return;
+    const x = cv.getContext('2d');
+    x.fillStyle = '#f5ead0'; x.fillRect(0, 0, 512, 320);
+    x.strokeStyle = 'rgba(122,86,54,0.55)'; x.lineWidth = 4; x.strokeRect(14, 14, 484, 292);
+    x.fillStyle = '#6e4a26'; x.font = 'bold 44px "Microsoft YaHei",sans-serif';
+    x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillText('留 言 墙', 256, 58);
+    x.fillStyle = '#a8895c'; x.fillRect(120, 92, 272, 3);
+    if(!entries || !entries.length){
+        x.fillStyle = '#8a7350'; x.font = '30px "Microsoft YaHei",sans-serif';
+        x.fillText('还没有留言', 256, 168);
+        x.fillStyle = '#b09a72'; x.font = '25px "Microsoft YaHei",sans-serif';
+        x.fillText('第一句，由你来写 ✎', 256, 216);
+    } else {
+        x.fillStyle = '#5a4632'; x.font = '24px "Microsoft YaHei",sans-serif'; x.textAlign = 'left';
+        entries.slice(0, 6).forEach((e, i)=>{
+            const line = '· ' + (e.text || '') + (e.name ? ' —— ' + e.name : '');
+            x.fillText(line.slice(0, 24), 44, 128 + i*32);
+        });
+        x.textAlign = 'center';
+    }
+    if(Interior.gbTex) Interior.gbTex.needsUpdate = true;
+}
+function drawChronicle(items){
+    const cv = Interior.chronCanvas; if(!cv) return;
+    const x = cv.getContext('2d');
+    x.fillStyle = '#5a4026'; x.fillRect(0, 0, 512, 340);
+    x.strokeStyle = '#d9a520'; x.lineWidth = 5; x.strokeRect(14, 14, 484, 312);
+    x.fillStyle = '#f7e3bb'; x.font = 'bold 42px "Microsoft YaHei",sans-serif';
+    x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillText('世界大事记', 256, 62);
+    if(!items || !items.length){
+        x.fillStyle = '#cbb287'; x.font = '27px "Microsoft YaHei",sans-serif';
+        x.fillText('暂无大事发生', 256, 168);
+        x.fillStyle = '#a68a5e'; x.font = '22px "Microsoft YaHei",sans-serif';
+        x.fillText('这个世界的大事，将来都记在这里', 256, 214);
+    } else {
+        x.fillStyle = '#f0dfba'; x.font = '23px "Microsoft YaHei",sans-serif'; x.textAlign = 'left';
+        items.slice(0, 6).forEach((e, i)=>{
+            x.fillText(((e.date || '') + ' ' + (e.text || '')).slice(0, 26), 40, 122 + i*34);
+        });
+        x.textAlign = 'center';
+    }
+    if(Interior.chronTex) Interior.chronTex.needsUpdate = true;
+}
+function photoTexture(idx, label){
+    const c = makeCanvas(256, 320), x = c.getContext('2d');
+    const grd = x.createLinearGradient(0, 0, 0, 320);
+    grd.addColorStop(0, '#a8cfe8'); grd.addColorStop(1, '#eef7ee');
+    x.fillStyle = grd; x.fillRect(0, 0, 256, 320);
+    x.fillStyle = '#ffd76a'; x.beginPath(); x.arc(196, 62, 26, 0, 6.29); x.fill();
+    x.fillStyle = '#7a9a4d';
+    x.beginPath(); x.moveTo(0, 320); x.lineTo(0, 218); x.quadraticCurveTo(80, 168, 150, 226);
+    x.lineTo(150, 320); x.closePath(); x.fill();
+    x.fillStyle = '#5c8a38';
+    x.beginPath(); x.moveTo(110, 320); x.lineTo(150, 226); x.quadraticCurveTo(210, 186, 256, 232);
+    x.lineTo(256, 320); x.closePath(); x.fill();
+    x.fillStyle = 'rgba(90,58,28,0.75)'; x.font = '22px "Microsoft YaHei",sans-serif';
+    x.textAlign = 'center';
+    x.fillText(label || '照片墙 · 待贴', 128, 292);
+    const t = new THREE.CanvasTexture(c);
+    if(THREE.sRGBEncoding !== undefined) t.encoding = THREE.sRGBEncoding;
+    return t;
+}
+/* [数据接口] 三个内容入口：本件只渲染空态/占位，接入数据时改这里 */
+Interior.setGuestbook = function(entries){ drawGuestbook(entries || []); };
+Interior.setChronicle = function(items){ drawChronicle(items || []); };
+Interior.setPhotos = function(list){
+    // list 为空：保持占位图；非空时先把张数标到占位图上（真实贴图在后续件接入）
+    Interior.photoTexs.forEach((t, i)=>{
+        if(list && list[i]){ /* 后续件：按 list[i] 的地址加载真实照片替换占位图 */ }
+    });
+};
+
+/* ---------- 建模小件（全部走 ModelKit 的 paint/mergePainted 口径） ---------- */
+function rbox(list, w, h, d, x, y, z, hex, ry){
+    const g = new THREE.BoxGeometry(w, h, d);
+    if(ry) g.rotateY(ry);
+    g.translate(x, y, z);
+    list.push(paintGeo(g, hex));
+    return g;
+}
+function rcyl(list, rt, rb, h, seg, x, y, z, hex, axis){
+    const g = new THREE.CylinderGeometry(rt, rb, h, seg);
+    if(axis === 'x') g.rotateZ(Math.PI/2);
+    if(axis === 'z') g.rotateX(Math.PI/2);
+    g.translate(x, y, z);
+    list.push(paintGeo(g, hex));
+    return g;
+}
+function roomGable(list, w, h, th, z, hex){
+    const s = new THREE.Shape();
+    s.moveTo(-w/2, 0); s.lineTo(w/2, 0); s.lineTo(0, h); s.closePath();
+    const g = new THREE.ExtrudeGeometry(s, {depth: th, bevelEnabled: false});
+    g.translate(0, 3.02, z - th/2);
+    list.push(paintGeo(g, hex));
+}
+function roomWinFrame(list, cx, cy, cz, alongZ){
+    const col = 0x5a3a1c, t = 0.1, w = 1.1, h = 1.05;
+    if(!alongZ){           // 前/后墙上的窗（洞在 XY 面）
+        rbox(list, w + 0.18, t, 0.26, cx, cy + h/2 + 0.03, cz, col);
+        rbox(list, w + 0.18, t, 0.26, cx, cy - h/2 - 0.03, cz, col);
+        rbox(list, t, h, 0.26, cx - w/2 - 0.03, cy, cz, col);
+        rbox(list, t, h, 0.26, cx + w/2 + 0.03, cy, cz, col);
+        rbox(list, w, 0.05, 0.1, cx, cy, cz, col);
+        rbox(list, 0.05, h, 0.1, cx, cy, cz, col);
+    } else {               // 侧墙上的窗（洞在 ZY 面）
+        rbox(list, 0.26, t, w + 0.18, cx, cy + h/2 + 0.03, cz, col);
+        rbox(list, 0.26, t, w + 0.18, cx, cy - h/2 - 0.03, cz, col);
+        rbox(list, 0.26, h, t, cx, cy, cz - w/2 - 0.03, col);
+        rbox(list, 0.26, h, t, cx, cy, cz + w/2 + 0.03, col);
+        rbox(list, 0.1, 0.05, w, cx, cy, cz, col);
+        rbox(list, 0.1, h, 0.05, cx, cy, cz, col);
+    }
+}
+function roomChair(list, x, z, ry){
+    const c = Math.cos(ry), s = Math.sin(ry);
+    const L = (dx, dz)=>[x + dx*c + dz*s, z - dx*s + dz*c];
+    rbox(list, 0.5, 0.07, 0.5, x, 1.19, z, 0x7a5636, ry);
+    [[-0.19,-0.19],[0.19,-0.19],[-0.19,0.19],[0.19,0.19]].forEach(o=>{
+        const p = L(o[0], o[1]);
+        rbox(list, 0.06, 0.47, 0.06, p[0], 0.955, p[1], 0x6e4a26);
+    });
+    [[-0.21],[0.21]].forEach(o=>{
+        const p = L(o[0], -0.22);
+        rbox(list, 0.06, 0.62, 0.06, p[0], 1.5, p[1], 0x6e4a26);
+    });
+    const bp = L(0, -0.22);
+    rbox(list, 0.5, 0.3, 0.06, bp[0], 1.66, bp[1], 0x7a5636, ry);
+}
+
+/* ---------- 室内搭建（ init 末尾调用一次，平时 visible=false 零开销） ---------- */
+function createInterior(){
+    Interior.baseY = terrainH(HOUSE_POS.x, HOUSE_POS.z);
+    const g = new THREE.Group();
+    g.position.set(HOUSE_POS.x, Interior.baseY, HOUSE_POS.z);
+    g.rotation.y = HOUSE_ROT;
+    const VC = new THREE.MeshStandardMaterial({vertexColors: true, roughness: 0.95});
+    const WALL = 0xdcbd93, WOOD_D = 0x6e4a26, WOOD_M = 0x8a6844, STONE = 0x8d8578;
+
+    /* 结构：地板下托 / 四面墙（带门洞窗洞）/ 山墙 / 坡顶 / 横梁，一次合批 */
+    const S = [];
+    rbox(S, 5.9, 0.22, 4.95, 0, 0.6, 0.05, 0x7d7468);                    // 地板石托
+    rbox(S, 5.9, 2.3, 0.18, 0, 1.87, -2.37, WALL);                       // 后墙
+    roomGable(S, 5.9, 1.28, 0.18, -2.37, WALL);                          // 后山墙
+    roomGable(S, 5.9, 1.28, 0.18, 2.51, WALL);                           // 前山墙
+    // 左墙（侧窗洞 z∈[-0.55,0.55]、y∈[1.85,2.9]）
+    rbox(S, 0.18, 2.3, 1.82, -2.91, 1.87, -1.46, WALL);
+    rbox(S, 0.18, 2.3, 1.91, -2.91, 1.87, 1.5, WALL);
+    rbox(S, 0.18, 1.13, 1.1, -2.91, 1.285, 0, WALL);
+    rbox(S, 0.18, 0.12, 1.1, -2.91, 2.96, 0, WALL);
+    roomWinFrame(S, -2.91, 2.375, 0, true);
+    // 右墙（整面，挂留言墙/大事记/照片墙）
+    rbox(S, 0.18, 2.3, 4.83, 2.91, 1.87, 0.05, WALL);
+    // 前墙（门洞 x∈[-0.65,0.65]、y<2.95；两窗洞 x 中心 ±2.1、y∈[1.85,2.9]）
+    rbox(S, 0.3, 2.3, 0.18, -2.8, 1.87, 2.51, WALL);
+    rbox(S, 1.1, 1.13, 0.18, -2.1, 1.285, 2.51, WALL);
+    rbox(S, 1.1, 0.12, 0.18, -2.1, 2.96, 2.51, WALL);
+    rbox(S, 0.9, 2.3, 0.18, -1.1, 1.87, 2.51, WALL);
+    rbox(S, 1.3, 0.07, 0.18, 0, 2.985, 2.51, WALL);
+    rbox(S, 0.9, 2.3, 0.18, 1.1, 1.87, 2.51, WALL);
+    rbox(S, 1.1, 1.13, 0.18, 2.1, 1.285, 2.51, WALL);
+    rbox(S, 1.1, 0.12, 0.18, 2.1, 2.96, 2.51, WALL);
+    rbox(S, 0.3, 2.3, 0.18, 2.8, 1.87, 2.51, WALL);
+    roomWinFrame(S, -2.1, 2.375, 2.51, false);
+    roomWinFrame(S, 2.1, 2.375, 2.51, false);
+    // 门框（内侧）：两柱 + 过梁，比墙面略凸
+    rbox(S, 0.13, 2.3, 0.26, -0.72, 1.87, 2.47, WOOD_D);
+    rbox(S, 0.13, 2.3, 0.26, 0.72, 1.87, 2.47, WOOD_D);
+    rbox(S, 1.57, 0.14, 0.26, 0, 2.99, 2.47, WOOD_D);
+    // 坡顶（两片斜板）+ 屋脊 + 横梁
+    const slopeLen = Math.hypot(2.95, 1.28), slopeAng = Math.atan2(1.28, 2.95);
+    const ceilL = new THREE.BoxGeometry(slopeLen, 0.1, 4.95);
+    ceilL.rotateZ(slopeAng); ceilL.translate(-1.475, 3.66, 0.05);
+    S.push(paintGeo(ceilL, 0x7a5636));
+    const ceilR = new THREE.BoxGeometry(slopeLen, 0.1, 4.95);
+    ceilR.rotateZ(-slopeAng); ceilR.translate(1.475, 3.66, 0.05);
+    S.push(paintGeo(ceilR, 0x7a5636));
+    rbox(S, 0.16, 0.18, 4.95, 0, 4.26, 0.05, WOOD_D);
+    rbox(S, 0.14, 0.15, 4.8, -1.5, 3.58, 0.05, WOOD_D);
+    rbox(S, 0.14, 0.15, 4.8, 1.5, 3.58, 0.05, WOOD_D);
+    // 三面展示位的背板（右墙）：大事记 / 留言墙 / 照片墙
+    rbox(S, 0.07, 0.86, 1.19, 2.84, 2.02, -1.72, WOOD_D);
+    rbox(S, 0.07, 1.26, 1.66, 2.84, 1.98, -0.35, WOOD_D);
+    [0.78, 1.38, 1.98].forEach(pz=>rbox(S, 0.07, 0.88, 0.68, 2.84, 2.0, pz, WOOD_D));
+    const structMesh = new THREE.Mesh(mergePaintedGeos(S), VC);
+    structMesh.castShadow = true; structMesh.receiveShadow = true;
+    g.add(structMesh);
+
+    /* 地板与地毯（带贴图，单独成 mesh） */
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(5.9, 0.07, 4.95),
+        new THREE.MeshStandardMaterial({map: interiorWoodTexture(), roughness: 0.9}));
+    floor.position.set(0, 0.685, 0.05); floor.receiveShadow = true;
+    g.add(floor);
+    const rug = new THREE.Mesh(new THREE.CircleGeometry(1.18, 26),
+        new THREE.MeshStandardMaterial({map: rugTexture(), roughness: 1}));
+    rug.rotation.x = -Math.PI/2; rug.position.set(0.2, 0.728, 0.42); rug.receiveShadow = true;
+    g.add(rug);
+
+    /* 家具（一次合批）：壁炉 / 书架与书 / 桌椅 / 床 / 龙窝 */
+    const F = [];
+    // 壁炉（后墙，x=-1.2）
+    rbox(F, 1.7, 2.3, 0.52, -1.2, 1.87, -2.11, STONE);
+    rbox(F, 1.95, 0.13, 0.66, -1.2, 2.42, -2.08, WOOD_D);
+    rbox(F, 2.0, 0.07, 0.9, -1.2, 0.755, -1.7, 0xa49a88);
+    rbox(F, 1.02, 0.82, 0.3, -1.2, 1.13, -1.97, 0x17100b);   // 炉膛暗面：正脸 -1.82，比壁炉正面略凸 3cm 防共面盖住
+    rcyl(F, 0.085, 0.085, 0.72, 7, -1.28, 0.86, -1.82, 0x4a2c14, 'x');
+    rcyl(F, 0.075, 0.075, 0.5, 7, -1.16, 0.98, -1.79, 0x5a3a1c, 'z');
+    // 书架（后墙，x=1.9）+ 程序排书
+    rbox(F, 0.07, 1.9, 0.36, 1.3, 1.67, -2.09, WOOD_D);
+    rbox(F, 0.07, 1.9, 0.36, 2.5, 1.67, -2.09, WOOD_D);
+    rbox(F, 1.27, 0.07, 0.36, 1.9, 2.65, -2.09, WOOD_D);
+    rbox(F, 1.27, 1.9, 0.04, 1.9, 1.67, -2.26, WOOD_M);
+    [0.78, 1.23, 1.68, 2.13].forEach(sy=>rbox(F, 1.2, 0.05, 0.34, 1.9, sy, -2.09, WOOD_M));
+    const bookCols = [0xb8542f, 0x7a9a4d, 0x3f6f9f, 0xe0a458, 0x8a4a7a, 0xd8cfb8, 0x5a7a8a];
+    const brnd = mulberry32(41);
+    [0.805, 1.255, 1.705, 2.155].forEach(baseY=>{
+        let bx = 1.36;
+        while(bx < 2.36){
+            const bw = 0.07 + brnd()*0.06, bh = 0.26 + brnd()*0.13;
+            if(brnd() > 0.14) rbox(F, bw, bh, 0.2, bx + bw/2, baseY + bh/2, -2.1, bookCols[(brnd()*7)|0]);
+            bx += bw + 0.014;
+        }
+    });
+    // 桌子（屋心）+ 椅子三把 + 桌上书与蜡烛
+    rbox(F, 1.7, 0.09, 1.05, 0.2, 1.5, 0.35, WOOD_M);
+    [[-0.55,-0.07],[0.95,-0.07],[-0.55,0.77],[0.95,0.77]].forEach(p=>
+        rbox(F, 0.1, 0.78, 0.1, p[0], 1.11, p[1], WOOD_D));
+    roomChair(F, -0.85, 0.35, Math.PI/2);
+    roomChair(F, 1.25, 0.35, -Math.PI/2);
+    roomChair(F, 0.2, 1.32, Math.PI);
+    rbox(F, 0.34, 0.05, 0.26, -0.05, 1.575, 0.18, 0xb8542f);
+    rbox(F, 0.3, 0.045, 0.23, -0.03, 1.62, 0.2, 0x3f6f9f);
+    rcyl(F, 0.05, 0.06, 0.17, 8, 0.58, 1.63, 0.58, 0xf0e6cc);
+    // 床（前墙右侧，头靠前墙）
+    rbox(F, 1.15, 0.3, 1.85, 2.05, 0.87, 1.42, 0x7a5636);
+    rbox(F, 1.08, 0.17, 1.78, 2.05, 1.1, 1.42, 0xefe6d0);
+    rbox(F, 1.1, 0.08, 1.05, 2.05, 1.17, 1.12, 0xb8542f);
+    rbox(F, 0.68, 0.13, 0.4, 2.05, 1.2, 2.05, 0xf7f2e2);
+    rbox(F, 1.15, 0.85, 0.09, 2.05, 1.32, 2.32, WOOD_D);
+    // 龙窝（前墙左侧屋角）：垫子 + 窝沿 + 小毯
+    rcyl(F, 0.58, 0.62, 0.14, 14, -2.15, 0.79, 1.72, 0x7a9a4d);
+    const rim = new THREE.TorusGeometry(0.5, 0.085, 8, 18);
+    rim.rotateX(Math.PI/2); rim.translate(-2.15, 0.86, 1.72);
+    F.push(paintGeo(rim, 0x5c8a38));
+    rcyl(F, 0.4, 0.4, 0.16, 12, -2.15, 0.8, 1.72, 0xa8c686);
+    rbox(F, 0.5, 0.05, 0.4, -2.08, 0.9, 1.64, 0xe0a458, 0.4);
+    const furnMesh = new THREE.Mesh(mergePaintedGeos(F), VC);
+    furnMesh.castShadow = true; furnMesh.receiveShadow = true;
+    g.add(furnMesh);
+
+    /* 展示位贴图面：大事记 / 留言墙（空态）/ 照片墙（占位） */
+    Interior.chronCanvas = makeCanvas(512, 340);
+    Interior.chronTex = new THREE.CanvasTexture(Interior.chronCanvas);
+    if(THREE.sRGBEncoding !== undefined) Interior.chronTex.encoding = THREE.sRGBEncoding;
+    const chron = new THREE.Mesh(new THREE.PlaneGeometry(1.05, 0.7),
+        new THREE.MeshStandardMaterial({map: Interior.chronTex, roughness: 0.9}));
+    chron.rotation.y = -Math.PI/2; chron.position.set(2.79, 2.02, -1.72);
+    g.add(chron);
+    Interior.gbCanvas = makeCanvas(512, 320);
+    Interior.gbTex = new THREE.CanvasTexture(Interior.gbCanvas);
+    if(THREE.sRGBEncoding !== undefined) Interior.gbTex.encoding = THREE.sRGBEncoding;
+    const gb = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.1),
+        new THREE.MeshStandardMaterial({map: Interior.gbTex, roughness: 0.9}));
+    gb.rotation.y = -Math.PI/2; gb.position.set(2.79, 1.98, -0.35);
+    g.add(gb);
+    [0.78, 1.38, 1.98].forEach((pz, i)=>{
+        const pt = photoTexture(i);
+        Interior.photoTexs.push(pt);
+        const ph = new THREE.Mesh(new THREE.PlaneGeometry(0.56, 0.74),
+            new THREE.MeshStandardMaterial({map: pt, roughness: 0.9}));
+        ph.rotation.y = -Math.PI/2; ph.position.set(2.79, 2.0, pz);
+        g.add(ph);
+    });
+    drawGuestbook([]); drawChronicle([]);
+
+    /* 室内门扇（点它出屋）：枢轴在左侧，与室外门同款配色 */
+    const pivot = new THREE.Group();
+    pivot.position.set(-0.63, ROOM.floorY, 2.42);
+    const leaf = new THREE.Mesh(mergePaintedGeos([paintGeo(new THREE.BoxGeometry(1.26, 2.2, 0.08), 0x4a2c14)]),
+        new THREE.MeshStandardMaterial({vertexColors: true, roughness: 0.85}));
+    leaf.position.set(0.63, 1.1, 0); leaf.name = 'roomDoor'; leaf.castShadow = true;
+    pivot.add(leaf);
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8),
+        new THREE.MeshStandardMaterial({color: 0xd9a520, metalness: 0.8, roughness: 0.3}));
+    knob.position.set(1.12, 1.12, -0.09);
+    pivot.add(knob);
+    g.add(pivot);
+    Interior.doorLeaf = pivot;
+
+    /* 壁炉火焰（基础材质小锥，update 里 flicker）+ 两盏室内光 */
+    const flames = new THREE.Group();
+    [[0.17, 0.52, 0xff7a26, 0, 1.06], [0.12, 0.4, 0xffb347, 0.06, 1.1], [0.08, 0.28, 0xffe08a, -0.04, 1.12]]
+    .forEach(f=>{
+        const cone = new THREE.Mesh(new THREE.ConeGeometry(f[0], f[1], 7),
+            new THREE.MeshBasicMaterial({color: f[2]}));
+        cone.position.set(-1.2 + f[3], f[4], -1.8);
+        flames.add(cone);
+    });
+    g.add(flames);
+    Interior.flames = flames;
+    Interior.fireLight = new THREE.PointLight(0xff9a3c, 1.7, 9.5, 2);
+    Interior.fireLight.position.set(-1.2, 1.5, -1.4);
+    g.add(Interior.fireLight);
+    const roomLight = new THREE.PointLight(0xffd9a8, 0.45, 11, 2);
+    roomLight.position.set(0, 2.75, 0.2);
+    g.add(roomLight);
+
+    g.visible = false;
+    scene.add(g);
+    Interior.group = g;
+
+    /* 室外清单：进屋时整表隐藏；天空/云/日月/雨雪/地面/灯光不在表内，
+       留给窗户当实时天气用（地面经 window.__terrain 按引用排除） */
+    Interior.outdoor = scene.children.filter(o=>{
+        if(o === g || o.isLight) return false;
+        if(dragonAgent && o === dragonAgent.group) return false;   // 龙不藏：参观时它在外面照常活动（窗户能看见），操控时它就在屋里
+        if(o.material && o.material === skyMat) return false;
+        if(o === cloudGroup || o === sunMesh || o === moonMesh) return false;
+        if(o === rainPoints || o === starsGroup) return false;
+        if(o === window.__terrain) return false;
+        if(sun && o === sun.target) return false;
+        return true;
+    });
+
+    setupRoomInput();
+    document.getElementById('enterRoomBtn').addEventListener('click', enterRoom);
+    document.getElementById('exitRoomBtn').addEventListener('click', exitRoom);
+    // 室内不接管小龙开关：免得轨道/龙相机在屋里打架（出屋自动恢复可点）
+    document.getElementById('dragonBtn').addEventListener('click', e=>{
+        if(Interior.active){ e.stopImmediatePropagation(); showHuntToast('先出屋，再操控小龙 🐉'); }
+    }, true);
+    window.__interior = Interior;
+    window.__roomDragon = false;
+}
+
+/* ---------- 出入（淡幕切换，进入前状态全量保存、出屋原样恢复） ---------- */
+function roomFade(cb){
+    if(roomFading) return;
+    roomFading = true;
+    const f = document.getElementById('fadeCover');
+    f.style.opacity = '1';
+    setTimeout(()=>{
+        cb();
+        f.style.opacity = '0';
+        setTimeout(()=>{ roomFading = false; }, 300);
+    }, 290);
+}
+function enterRoom(){
+    if(Interior.active || roomFading || !Interior.group) return;
+    const withDragon = DragonCtl.active && dragonAgent;
+    Interior.savedTarget.copy(controls.target);
+    if(withDragon){
+        Interior.savedDragonPos.copy(dragonAgent.group.position);
+        Interior.savedDragonRot = dragonAgent.group.rotation.y;
+        Interior.savedDist = DragonCtl.dist;
+    }
+    roomFade(()=>{
+        Interior.active = true;
+        Interior.dragonIn = !!withDragon;
+        Interior.group.visible = true;
+        for(const o of Interior.outdoor) o.visible = false;
+        if(withDragon){
+            window.__roomDragon = true;
+            dragonAgent.group.position.copy(roomToWorld(0, ROOM.floorY, 1.45));
+            dragonAgent.group.rotation.y = HOUSE_ROT + Math.PI;   // 面朝屋里（-z）
+            dragonAgent.moveTarget = null;
+            DragonCtl.yaw = HOUSE_ROT; DragonCtl.pitch = 0.3;
+            DragonCtl.dist = Math.min(DragonCtl.dist, 3.1);
+            DragonCtl.init = false;
+            showHuntToast('🐉 带着小龙进屋啦 — 点门或「回到院子」出去');
+        } else {
+            controls.setExternal(true);          // 轨道相机停手，室内参观镜头接管
+            Interior.tgtGoal.copy(roomToWorld(0, 1.45, 0.15));
+            Interior.tgt.copy(Interior.tgtGoal);
+            Interior.yaw = HOUSE_ROT; Interior.pitch = 0.16; Interior.dist = 3.4;
+            Interior.snap = true;
+            showHuntToast('🏠 进屋啦 — 拖动环视，点地面走过去，Esc 出去');
+        }
+        document.getElementById('enterRoomBtn').style.display = 'none';
+        document.getElementById('exitRoomBtn').style.display = '';
+    });
+}
+function exitRoom(){
+    if(!Interior.active || roomFading) return;
+    roomFade(()=>{
+        Interior.active = false;
+        Interior.group.visible = false;
+        for(const o of Interior.outdoor) o.visible = true;
+        if(Interior.dragonIn && dragonAgent){
+            window.__roomDragon = false;
+            dragonAgent.group.position.copy(Interior.savedDragonPos);
+            dragonAgent.group.rotation.y = Interior.savedDragonRot;
+            dragonAgent.moveTarget = null;
+            DragonCtl.dist = Interior.savedDist;
+            DragonCtl.init = false;
+        } else {
+            controls.target.copy(Interior.savedTarget);
+            controls.setExternal(false);         // 轨道相机按进入前状态无缝继续
+        }
+        Interior.dragonIn = false;
+        Interior.keys.clear();
+        document.getElementById('exitRoomBtn').style.display = 'none';
+    });
+}
+
+/* ---------- 室内输入（参观镜头：拖动环视 / 滚轮拉近 / 点地面走动 / WASD 挪动） ---------- */
+function setupRoomInput(){
+    const dom = renderer.domElement;
+    let rp = null;
+    dom.addEventListener('pointerdown', e=>{
+        if(!Interior.active || Interior.dragonIn) return;
+        rp = {id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), moved: 0};
+    });
+    dom.addEventListener('pointermove', e=>{
+        if(!rp || e.pointerId !== rp.id) return;
+        const dx = e.clientX - rp.x, dy = e.clientY - rp.y;
+        rp.x = e.clientX; rp.y = e.clientY; rp.moved += Math.abs(dx) + Math.abs(dy);
+        Interior.yaw -= dx*0.0052;
+        Interior.pitch = Math.max(-0.2, Math.min(1.15, Interior.pitch + dy*0.0052));
+    });
+    dom.addEventListener('pointerup', e=>{
+        if(!rp || e.pointerId !== rp.id) return;
+        const wasTap = rp.moved < 7 && (performance.now() - rp.t) < 500;
+        rp = null;
+        if(wasTap && Interior.active && !Interior.dragonIn) roomTap(e);
+    });
+    dom.addEventListener('pointercancel', ()=>{ rp = null; });
+    dom.addEventListener('wheel', e=>{
+        if(!Interior.active || Interior.dragonIn) return;
+        Interior.dist = Math.max(1.3, Math.min(4.8, Interior.dist * (e.deltaY > 0 ? 1.1 : 0.9)));
+    }, {passive: true});
+    window.addEventListener('keydown', e=>{
+        if(!Interior.active) return;
+        const tag = (e.target && e.target.tagName) || '';
+        if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        if(e.key === 'Escape'){ exitRoom(); return; }
+        if(!Interior.dragonIn) Interior.keys.add(e.key.toLowerCase());
+    });
+    window.addEventListener('keyup', e=>{ Interior.keys.delete(e.key.toLowerCase()); });
+    window.addEventListener('blur', ()=>Interior.keys.clear());
+}
+const _roomRay = new THREE.Raycaster(), _roomNdc = new THREE.Vector2();
+function roomTap(e){
+    const r = renderer.domElement.getBoundingClientRect();
+    _roomNdc.set(((e.clientX - r.left)/r.width)*2 - 1, -((e.clientY - r.top)/r.height)*2 + 1);
+    _roomRay.setFromCamera(_roomNdc, camera);
+    // 先判门扇：点门出屋
+    if(Interior.doorLeaf && _roomRay.intersectObject(Interior.doorLeaf, true).length){ exitRoom(); return; }
+    // 再判地板落点：参观目标挪过去（夹在屋内、避开家具）
+    const o = _roomRay.ray.origin, d = _roomRay.ray.direction;
+    if(Math.abs(d.y) < 1e-5) return;
+    const tt = (Interior.floorWorldY() - o.y)/d.y;
+    if(tt < 0) return;
+    const lx = o.x + d.x*tt, lz = o.z + d.z*tt;
+    const l = worldToRoom(lx, lz);
+    const cx = Math.max(ROOM.x0 + 0.4, Math.min(ROOM.x1 - 0.4, l[0]));
+    const cz = Math.max(ROOM.z0 + 0.4, Math.min(ROOM.z1 - 0.4, l[1]));
+    for(const b of ROOM_BLOCKS){           // 落在家具上就推到圈外
+        const dd = Math.hypot(cx - b.x, cz - b.z);
+        if(dd < b.r && dd > 1e-4){
+            const px = b.x + (cx - b.x)/dd*b.r, pz = b.z + (cz - b.z)/dd*b.r;
+            Interior.tgtGoal.copy(roomToWorld(px, 1.45, pz));
+            return;
+        }
+    }
+    Interior.tgtGoal.copy(roomToWorld(cx, 1.45, cz));
+}
+
+/* ---------- 每帧（animate 尾部、渲染之前调用） ---------- */
+Interior.update = function(dt, t){
+    if(!Interior.group) return;
+    // 壁炉火焰呼吸（室内组只在进屋时可见，无额外常驻开销）
+    if(Interior.group.visible && Interior.flames){
+        const ch = Interior.flames.children;
+        for(let i = 0; i < ch.length; i++){
+            const s = 1 + Math.sin(t*11 + i*2.1)*0.09 + Math.sin(t*23 + i)*0.05;
+            ch[i].scale.set(1, s, 1);
+        }
+        if(Interior.fireLight)
+            Interior.fireLight.intensity = 1.6 + Math.sin(t*9)*0.2 + Math.sin(t*27)*0.1;
+    }
+    if(!Interior.active){
+        // 「进屋看看」按钮的出现条件：操控小龙走近门口，或镜头离门不远/门开着
+        const btn = document.getElementById('enterRoomBtn');
+        if(btn){
+            if(roomFading){ btn.style.display = 'none'; return; }
+            const dw = roomToWorld(0, 1.3, 3.4);
+            let show = false;
+            if(DragonCtl.active && dragonAgent)
+                show = dragonAgent.group.position.distanceTo(dw) < 5.2;
+            else
+                show = doorOpen || camera.position.distanceTo(dw) < 13;
+            btn.style.display = show ? '' : 'none';
+        }
+        return;
+    }
+    if(lampLight) lampLight.intensity = 0;   // 门口小灯的光别漏进屋里
+    if(Interior.dragonIn){
+        clampCamToRoom();                     // 龙的相机沿用原逻辑，只多一道不出屋的夹
+        return;
+    }
+    // 参观镜头：WASD 挪目标 → 目标平滑跟随 → 镜头按球面跟随并夹回屋内
+    const K = Interior.keys;
+    if(K.size){
+        const fx = -Math.sin(Interior.yaw), fz = -Math.cos(Interior.yaw);
+        const rx = -fz, rz = fx;
+        let ix = 0, iz = 0;
+        if(K.has('w') || K.has('arrowup')) iz += 1;
+        if(K.has('s') || K.has('arrowdown')) iz -= 1;
+        if(K.has('d') || K.has('arrowright')) ix += 1;
+        if(K.has('a') || K.has('arrowleft')) ix -= 1;
+        if(ix || iz){
+            const sp = 2.4*dt, l = worldToRoom(Interior.tgtGoal.x, Interior.tgtGoal.z);
+            let nx = l[0] + (fx*iz + rx*ix)*sp, nz = l[1] + (fz*iz + rz*ix)*sp;
+            nx = Math.max(ROOM.x0 + 0.4, Math.min(ROOM.x1 - 0.4, nx));
+            nz = Math.max(ROOM.z0 + 0.4, Math.min(ROOM.z1 - 0.4, nz));
+            Interior.tgtGoal.copy(roomToWorld(nx, 1.45, nz));
+        }
+    }
+    Interior.tgt.lerp(Interior.tgtGoal, 1 - Math.exp(-6*dt));
+    const cp = Math.cos(Interior.pitch);
+    _dcOff.set(Math.sin(Interior.yaw)*cp, Math.sin(Interior.pitch), Math.cos(Interior.yaw)*cp);
+    _dcTgt.copy(Interior.tgt).addScaledVector(_dcOff, Interior.dist);
+    // 期望镜头点先夹回屋内，再平滑过去（进屋第一帧直接落位）
+    const l = worldToRoom(_dcTgt.x, _dcTgt.z);
+    const clx = Math.max(ROOM.camBox.x0, Math.min(ROOM.camBox.x1, l[0]));
+    const clz = Math.max(ROOM.camBox.z0, Math.min(ROOM.camBox.z1, l[1]));
+    const cly = Math.max(ROOM.camBox.y0, Math.min(ROOM.camBox.y1, _dcTgt.y - Interior.baseY));
+    const clamped = roomToWorld(clx, cly, clz);
+    if(Interior.snap){ camera.position.copy(clamped); Interior.snap = false; }
+    else camera.position.lerp(clamped, 1 - Math.exp(-12*dt));
+    clampCamToRoom();
+    camera.lookAt(Interior.tgt);
+};
 
 /* ==================== 栅栏 ==================== */
 function createFence(){
@@ -2988,8 +3645,9 @@ function dragonWalkTo(a, tx, tz, speed, dt){
     for(const tr of tries){
         const nx = p.x + tr[0], nz = p.z + tr[1];
         if(Math.hypot(nx, nz) > 58) continue;          // 世界边界
-        if(!WalkMap.isWalkable(nx, nz)) continue;      // 不落水、不穿房树篝火
-        p.x = nx; p.z = nz; p.y = terrainH(nx, nz);
+        // #40：龙在室内时改走房间口径（边界+家具避让），脚下高度是室内地板
+        if(window.__roomDragon ? !Interior.walkableWorld(nx, nz) : !WalkMap.isWalkable(nx, nz)) continue;
+        p.x = nx; p.z = nz; p.y = window.__roomDragon ? Interior.floorWorldY() : terrainH(nx, nz);
         dragonFace(a, Math.atan2(ux, uz), dt);
         return true;
     }
@@ -3254,6 +3912,14 @@ function dragonClickMove(e){
     _dgNdc.set(((e.clientX - r.left)/r.width)*2 - 1, -((e.clientY - r.top)/r.height)*2 + 1);
     _dgRay.setFromCamera(_dgNdc, camera);
     const o = _dgRay.ray.origin, d = _dgRay.ray.direction;
+    if(window.__roomDragon){   // #40：室内点击移动，落点取室内地板平面、走房间口径
+        if(Math.abs(d.y) < 1e-5) return;
+        const tt2 = (Interior.floorWorldY() - o.y)/d.y;
+        if(tt2 < 0) return;
+        const ix = o.x + d.x*tt2, iz = o.z + d.z*tt2;
+        if(dragonAgent && Interior.walkableWorld(ix, iz)) dragonAgent.moveTarget = {x:ix, z:iz};
+        return;
+    }
     if(Math.abs(d.y) < 1e-5) return;
     let tt = -o.y/d.y;
     if(tt < 0) return;
@@ -3696,6 +4362,7 @@ function animate(){
 
     updateDragonCam(dt);
     controls.update();
+    Interior.update(dt, t);
     renderer.render(scene,camera);
     fpsTick(dt);
 }
@@ -4629,7 +5296,11 @@ function onSceneTap(ev){
     const doorTargets = [doorMesh, doorGlowMesh].filter(Boolean);
     const hitDoor = doorTargets.length ? ray.intersectObjects(doorTargets, false) : [];
     const hitFire = campfire ? ray.intersectObjects(campfire.children, false) : [];
-    if(hitDoor.length && (!hitFire.length || hitDoor[0].distance < hitFire[0].distance)){ setDoor(!doorOpen); return; }
+    if(hitDoor.length && (!hitFire.length || hitDoor[0].distance < hitFire[0].distance)){
+        // #40：门开着时点「门洞暖光」= 进屋看看；点门板仍是敲门开合，两者严格区分
+        if(hitDoor[0].object === doorGlowMesh && doorOpen){ enterRoom(); return; }
+        setDoor(!doorOpen); return;
+    }
     if(hitFire.length && hitFire[0].distance < 42) setFire(!fireOn);
 }
 function setupTap(){
@@ -5213,6 +5884,7 @@ function init(){
     setupVote();
     setupDragonControls();
     setupModules();
+    createInterior();
     window.addEventListener('resize',onResize);
     window.addEventListener('keydown',onKeyDown);
 
