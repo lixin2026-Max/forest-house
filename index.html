@@ -1342,8 +1342,6 @@ function updateOrientation(){
 }
 let ambient, hemi, sun, fillLight, sunMesh, moonMesh, starsGroup = null, rainPoints = null;
 let pondMesh = null, houseWindows = [], lampLight = null, fireflies = [];
-const POND_DAY=new THREE.Color(0x3f7fa8).convertSRGBToLinear();
-const POND_NIGHT=new THREE.Color(0x2a4f6e).convertSRGBToLinear();
 /* ---------- 湖与河（Issue #3）：小池塘扩成小湖，再拉一条小河向东南草地 ---------- */
 const LAKE_C={x:23,z:-9.5}, LAKE_RX=8.6, LAKE_RZ=6.0;
 const RIVER_P0={x:28.9,z:-6.1}, RIVER_P1={x:33,z:-1}, RIVER_P2={x:35.5,z:8.5};
@@ -1441,9 +1439,42 @@ const SCENE = {
         windNeedleAmp: 0.050,      // 松针摆幅
         bloomRayMax: 0.34,         // 丁达尔光束不透明度上限
         audioBirdP: { spring: 0.85, summer: 0.70, autumn: 0.40, winter: 0.12 }
+    },
+    /* 全场调色对齐（Issue #76 · v5.0 收尾）：v5.0 新环境（#73 浓绿草地
+       #4c7038/#38602c→#a8cf6e、#74 亮蓝饱和天空 #2f6fd6/#bfe0f5、雪山岩
+       #5b6a82）落地后，旧材质逐类按同一色温/饱和度标尺校准后的唯一声明
+       处。原则：只动发灰/发黄/跳色的个体，不套全局滤镜；色调预设（TONES
+       CSS filter）与季节染色（Season 以这些值为基线再乘倍率）都叠在本
+       值之上、口径不变。画布贴图经 cssHex/cssRgb 取用本分区的数值。 */
+    palette: {
+        leafA: 0x6fbf47, leafB: 0x5db53e,          // 阔叶树冠（旧石灰黄→浓绿）
+        needleA: 0x2b7830, needleB: 0x35913a,      // 松针（旧灰蓝绿→同族浓绿）
+        bark: 0x6b4423, birchBark: 0xe8e2d0, birchTrunk: 0xd8cfb4,
+        stem: 0x44752b, leaf: 0x528434, stalk: 0x4d7c2c, leafLt: 0x5a9036,
+        hillA: 0x4c7a36, hillB: 0x42702f,          // 屋后山丘（旧橄榄灰→草甸绿）
+        weed: 0x4d7a30,
+        patch: [0x3f6d2e, 0x558238, 0x6f9a48, 0x4b7a33],   // 草色斑块
+        rock: [0x8b9096, 0x7f858c, 0x93989c, 0x868c92, 0x767c84, 0x9aa0a6],
+        stoneSlab: 0x969ea6, stoneMid: 0x8b9096, stoneDark: 0x878d94, stoneTrim: 0x82888e,
+        fenceWood: 0x87643f,                       // 栅栏/农田木框统一木色
+        farmSoil: 0x6b472a, farmRidge: 0x7a5433, farmDry: 0x97713f, farmWet: 0x5e4126,
+        wheatSoil: 0x6a4e33, wheatSoilDark: 0x57402a, wheatSoilMid: 0x7a5c3a,
+        wheatStraw: 0xba8c36, wheatGrain: 0xe0ac42,
+        shoreDry: 0xb8a67c, shoreWet: 0x7f6f47, shoreSand: 0xa08a5e,   // 岸线：干沙/湿土/水下沙
+        roadMid: 0xaa8c5e, roadEdge: 0x9e8054,     // 土路
+        waterDay: 0x3579a8, waterNight: 0x26486a,  // 水体深水色（POND_* 镜像）
+        houseGlass: 0x8ec9e6, cottageGlass: 0x46586a,
+        cottageWallA: 0xeadbbe, cottageRoofA: 0x9c5138,
+        cottageWallB: 0xcda26e, cottageRoofB: 0x7c4a38,
+        cottageWallC: 0xdec9a2, cottageRoofC: 0x7e4a34,
+        windmillWall: 0xb3a284
     }
 };
 window.SCENE = SCENE;
+/* 水体日夜深水色（#76）：本体在 SCENE.palette.waterDay/waterNight，此处
+   只是它的线性空间镜像（原写死在 SCENE 之前，现收编进中枢统一管理） */
+const POND_DAY=new THREE.Color(SCENE.palette.waterDay).convertSRGBToLinear();
+const POND_NIGHT=new THREE.Color(SCENE.palette.waterNight).convertSRGBToLinear();
 
 /* ==================== 游戏级水体（Issue #77 · v5.0） ====================
    河与湖共用同一套 ShaderMaterial 家族：多层程序纹理顺流而下、天空色
@@ -1536,7 +1567,7 @@ function makeWaterMaterial(){
     detail.wrapS = detail.wrapT = THREE.RepeatWrapping;
     const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {}]);
     uniforms.uTime = { value: 0 };
-    uniforms.uDeep = { value: new THREE.Color(0x3f7fa8).convertSRGBToLinear() };
+    uniforms.uDeep = { value: POND_DAY.clone() };   // #76：与 animate 同源（SCENE.palette）
     uniforms.uSky = { value: new THREE.Color(0x9fc8e8).convertSRGBToLinear() };
     uniforms.uSunDir = { value: new THREE.Vector3(0.4, 0.8, 0.4) };
     uniforms.uSunCol = { value: new THREE.Color(0x000000) };
@@ -2106,6 +2137,9 @@ function canvasTex(c, rx, ry){
 }
 // sRGB 十六进制 → 线性空间颜色（r128 无颜色管理，材质色需手动转换）
 function C(hex){ return new THREE.Color(hex).convertSRGBToLinear(); }
+/* 画布贴图取色（#76）：数值色板在 SCENE.palette，这里只做格式转换 */
+function cssHex(h){ return '#'+h.toString(16).padStart(6,'0'); }
+function cssRgb(h,a){ return 'rgba('+((h>>16)&255)+','+((h>>8)&255)+','+(h&255)+','+a+')'; }
 // 草地贴图（#73 重写）：1024 程序草地——底色大块晕染打底，中层草叶笔触
 // （短竖线成簇、深浅交错）给近景草叶感，细碎亮点模拟碎光；大尺度的浓淡
 // 起伏另由地面材质的世界噪声层负责（见 GrassSys.patchGround），贴图本身
@@ -2167,11 +2201,11 @@ function grassTexture(){
 // 原木墙贴图
 function logWallTexture(){
     const c=makeCanvas(256,256), g=c.getContext('2d');
-    g.fillStyle='#9c6b3c'; g.fillRect(0,0,256,256);
+    g.fillStyle='#a26c35'; g.fillRect(0,0,256,256);   // #76：原木墙提饱和去灰
     for(let y=0;y<256;y+=32){
         const grd=g.createLinearGradient(0,y,0,y+32);
-        grd.addColorStop(0,'#7a4f28'); grd.addColorStop(0.15,'#a87342');
-        grd.addColorStop(0.85,'#96653a'); grd.addColorStop(1,'#6b4423');
+        grd.addColorStop(0,'#7a4f28'); grd.addColorStop(0.15,'#b07a3e');
+        grd.addColorStop(0.85,'#9d6a36'); grd.addColorStop(1,'#6b4423');
         g.fillStyle=grd; g.fillRect(0,y,256,32);
         // 木纹
         g.strokeStyle='rgba(80,50,25,0.35)';
@@ -2201,13 +2235,13 @@ function logWallTexture(){
 // 屋顶瓦片贴图
 function roofTexture(){
     const c=makeCanvas(256,256), g=c.getContext('2d');
-    g.fillStyle='#7e3528'; g.fillRect(0,0,256,256);
+    g.fillStyle='#84382a'; g.fillRect(0,0,256,256);   // #76：屋顶瓦提饱和（陶土红）
     for(let row=0;row<8;row++){
         const y=row*32;
         for(let col=0;col<8;col++){
             const x=col*32-(row%2?16:0);
             const grd=g.createLinearGradient(0,y,0,y+34);
-            grd.addColorStop(0,'#9c4634'); grd.addColorStop(1,'#6d2c20');
+            grd.addColorStop(0,'#a84c33'); grd.addColorStop(1,'#703022');
             g.fillStyle=grd;
             g.beginPath();
             g.moveTo(x+2,y+30); g.lineTo(x+2,y+8);
@@ -2227,13 +2261,13 @@ function roofTexture(){
 // 石基贴图：灰色石块分缝 + 噪点斑驳
 function stoneTexture(){
     const c=makeCanvas(256,256), g=c.getContext('2d');
-    g.fillStyle='#83837b'; g.fillRect(0,0,256,256);
+    g.fillStyle='#7e868d'; g.fillRect(0,0,256,256);   // #76：石纹去黄绿铸→中性冷灰（呼应雪山岩）
     for(let row=0;row<4;row++){
         const y=row*64;
         for(let col=0;col<3;col++){
             const x=col*86-(row%2?43:0);
             const l=0.92+Math.random()*0.16;
-            g.fillStyle='rgb('+Math.round(128*l)+','+Math.round(128*l)+','+Math.round(118*l)+')';
+            g.fillStyle='rgb('+Math.round(129*l)+','+Math.round(137*l)+','+Math.round(145*l)+')';
             g.fillRect(x+3,y+3,80,58);
         }
     }
@@ -2279,17 +2313,17 @@ function waterTexture(){
 function bedTexture(){
     const c=makeCanvas(256,64), g=c.getContext('2d');
     const grd=g.createLinearGradient(0,0,256,0);
-    grd.addColorStop(0.00,'#c9b586');   // 干沙（与原河床基线色一致）
-    grd.addColorStop(0.08,'#bfa978');
-    grd.addColorStop(0.15,'#97814f');   // 湿岸带（最深处紧贴水线外侧）
-    grd.addColorStop(0.23,'#a8935f');
-    grd.addColorStop(0.32,'#b3a077');   // 水下沙
-    grd.addColorStop(0.50,'#b3a077');
-    grd.addColorStop(0.68,'#b3a077');
-    grd.addColorStop(0.77,'#a8935f');
-    grd.addColorStop(0.85,'#97814f');
-    grd.addColorStop(0.92,'#bfa978');
-    grd.addColorStop(1.00,'#c9b586');
+    grd.addColorStop(0.00,cssHex(SCENE.palette.shoreDry));   // 干沙（#76：去苍白黄、往草地/湿土过渡）
+    grd.addColorStop(0.08,'#ac9a6c');
+    grd.addColorStop(0.15,cssHex(SCENE.palette.shoreWet));   // 湿岸带（#76：加深成湿土色，不再是浅色带）
+    grd.addColorStop(0.23,'#96855c');
+    grd.addColorStop(0.32,cssHex(SCENE.palette.shoreSand));   // 水下沙
+    grd.addColorStop(0.50,cssHex(SCENE.palette.shoreSand));
+    grd.addColorStop(0.68,cssHex(SCENE.palette.shoreSand));
+    grd.addColorStop(0.77,'#96855c');
+    grd.addColorStop(0.85,cssHex(SCENE.palette.shoreWet));
+    grd.addColorStop(0.92,'#ac9a6c');
+    grd.addColorStop(1.00,cssHex(SCENE.palette.shoreDry));
     g.fillStyle=grd; g.fillRect(0,0,256,64);
     for(let i=0;i<1600;i++){
         const l=Math.random();
@@ -2303,16 +2337,16 @@ function bedTexture(){
 function shoreTexture(){
     const c=makeCanvas(256,256), g=c.getContext('2d');
     const grd=g.createRadialGradient(128,128,86,128,128,128);
-    grd.addColorStop(0,'rgba(216,204,160,0)');
-    grd.addColorStop(0.30,'rgba(210,196,148,0.42)');
-    grd.addColorStop(0.44,'rgba(150,128,88,0.60)');
-    grd.addColorStop(0.62,'rgba(186,168,124,0.34)');
-    grd.addColorStop(1,'rgba(198,186,146,0)');
+    grd.addColorStop(0,cssRgb(SCENE.palette.shoreDry,0));
+    grd.addColorStop(0.30,cssRgb(SCENE.palette.shoreDry,0.42));
+    grd.addColorStop(0.44,cssRgb(SCENE.palette.shoreWet,0.55));
+    grd.addColorStop(0.62,cssRgb(SCENE.palette.shoreSand,0.34));
+    grd.addColorStop(1,cssRgb(SCENE.palette.shoreSand,0));
     g.fillStyle=grd; g.fillRect(0,0,256,256);
     // 滩边碎点
     for(let i=0;i<420;i++){
         const a=Math.random()*Math.PI*2, r=92+Math.random()*30;
-        g.fillStyle='rgba(170,158,120,0.35)';
+        g.fillStyle=cssRgb(SCENE.palette.shoreWet,0.32);
         g.fillRect(128+Math.cos(a)*r,128+Math.sin(a)*r,2.2,2.2);
     }
     const t=new THREE.CanvasTexture(c);
@@ -2367,10 +2401,13 @@ function smokeTexture(){
 /* ==================== 简易轨道相机 ==================== */
 function makeOrbitControls(cam, dom){
     const st = {
-        // 默认机位（#36 构图）：略靠近、略偏向小屋一侧，开局第一眼是
-        // 「小屋居左 + 农田花带在前 + 湖面收右下」的海报式构图
-        target:new THREE.Vector3(-1.5,3.4,0),
-        theta:Math.PI*0.24, phi:Math.PI*0.29, radius:36,
+        // 默认机位（#36 构图，#76 按草甸参考帧再定）：旧机位俯角太高，
+        // 第一眼只有地面、雪山环被推出画框上沿（FOV 55° 下要让脊线进
+        // 上缘，俯角须压到约 15°）；现压低机位、目标下移靠近小屋——
+        // 开局三层：下缘草甸前景、中景小屋、上缘雪山背景环主峰段。
+        // 巡游呼吸的基准与「复位」视角与此保持一致。
+        target:new THREE.Vector3(-2.4,2.2,-0.8),
+        theta:Math.PI*0.235, phi:Math.PI*0.42, radius:33,
         tTheta:null, tPhi:null, tRadius:null,
         dragging:false, locked:false, lastX:0, lastY:0,
         external:false   // 外部相机接管标记（#27 小龙操控）：为真时本控制器完全停手
@@ -2389,8 +2426,8 @@ function makeOrbitControls(cam, dom){
         // 有 flyTo 目标在途时让位，不跟补间抢镜头
         if(wx.orbit && !st.dragging && !st.locked && st.tTheta===null){
             st.orbitT=(st.orbitT||0)+0.016;
-            st.phi=Math.PI*0.29+Math.sin(st.orbitT*0.14)*Math.PI*0.035;
-            st.radius=36+Math.sin(st.orbitT*0.09+1.7)*4;
+            st.phi=Math.PI*0.42+Math.sin(st.orbitT*0.14)*Math.PI*0.035;   // #76：呼吸基准跟默认机位走
+            st.radius=33+Math.sin(st.orbitT*0.09+1.7)*4;
         }
         const sp=Math.sin(st.phi), cp=Math.cos(st.phi);
         cam.position.set(
@@ -2540,10 +2577,10 @@ function mtnRidgeV(u){   // 山脊线 v（0..1），三座主峰＋fbm 起伏
     return Math.max(0.46, Math.min(0.94, v));
 }
 const MTN_SEASON_PAINT = {
-    spring: { rock:'#5a6878', tree:'#2a4522', wash:null },
-    summer: { rock:'#5b6a82', tree:'#24401e', wash:null },
-    autumn: { rock:'#6b5a41', tree:'#31401f', wash:'rgba(190,120,50,0.10)' },
-    winter: { rock:'#6d7683', tree:'#20301e', wash:null }
+    spring: { rock:'#5a6878', tree:'#2f4d24', wash:null },
+    summer: { rock:'#5b6a82', tree:'#2a4a22', wash:null },   // #76：林线带提亮入新绿族（原近黑绿与树冠脱节）
+    autumn: { rock:'#6b5a41', tree:'#3d4520', wash:'rgba(190,120,50,0.10)' },
+    winter: { rock:'#6d7683', tree:'#24351f', wash:null }
 };
 function mountainTexture(seasonName){
     const T=SKY_CFG.tiers[skyTier], W=T.ringTexW, H=T.ringTexH;
@@ -2974,7 +3011,7 @@ function createTerrain(){
     window.__terrain=ground;   // #40 进屋时地面要保留可见（窗外景色），给室内一节按引用认领
 
     // 小屋前的小路（石板）：7 块合并成 1 个 mesh
-    const stoneMat=new THREE.MeshStandardMaterial({color:0x9aa0a6,roughness:0.9});
+    const stoneMat=new THREE.MeshStandardMaterial({color:SCENE.palette.stoneSlab,roughness:0.9});
     const slabGeos=[];
     for(let i=0;i<7;i++){
         const sg=new THREE.CylinderGeometry(0.55+Math.random()*0.2,0.6,0.1,7);
@@ -3015,7 +3052,7 @@ function createTerrain(){
     scene.add(riverBed);
     // 湖边＋河岸石头：沿湖岸椭圆摆一圈（河口一段留空出水），河边沿岸点缀，合并 1 个 mesh
     // #36：逐块刷不同灰调（顶点色），再压扁/拉伸去「骰子感」，不再是一批同色正十二面体
-    const ROCK_TINTS=[0x8a8f94,0x7d838a,0x97928a,0x868b90,0x757b84,0x9aa0a2];
+    const ROCK_TINTS=SCENE.palette.rock;   // #76：统一冷灰石族（原含暖调异色块）
     const rockGeos=[];
     const rockRnd=mulberry32(20260303);
     function pushRock(x,z,s){
@@ -3136,19 +3173,19 @@ const ModelKit = {
 /* 统一色板：全场反复用的颜色只在这里定义一份，改色改一处、全场一致。
    数值与收编前逐一相同（完整色板表见 MODELING.md）。 */
 const PALETTE = {
-    stem:   0x4f7a2e,   // 花茎/藤蔓绿
-    leaf:   0x5c8a38,   // 叶片/草簇绿
-    stalk:  0x55802f,   // 作物茎绿（玉米/嫩芽）
-    leafLt: 0x63963a,   // 亮叶绿
-    disk:   0x5a3a15,   // 花盘/花芯褐
-    petal:  0xe8a81a    // 向日葵瓣金黄
+    stem:   SCENE.palette.stem,   // 花茎/藤蔓绿（#76 对齐值在中枢）
+    leaf:   SCENE.palette.leaf,   // 叶片/草簇绿
+    stalk:  SCENE.palette.stalk,  // 作物茎绿（玉米/嫩芽）
+    leafLt: SCENE.palette.leafLt, // 亮叶绿
+    disk:   0x5a3a15,   // 花盘/花芯褐（暖 accent，故意保留与绿的对比）
+    petal:  0xe8a81a    // 向日葵瓣金黄（同上）
 };
-const TREE_BARK = new THREE.MeshStandardMaterial({color:0x6e4a26,roughness:1});
-const TREE_BIRCH= new THREE.MeshStandardMaterial({color:0xe6e1cf,roughness:1});
-const NEEDLE_A  = new THREE.MeshStandardMaterial({color:0x2e7d32,roughness:1});
-const NEEDLE_B  = new THREE.MeshStandardMaterial({color:0x388e3c,roughness:1});
-const LEAF_A    = new THREE.MeshStandardMaterial({color:0x7ec850,roughness:1});
-const LEAF_B    = new THREE.MeshStandardMaterial({color:0x66bb44,roughness:1});
+const TREE_BARK = new THREE.MeshStandardMaterial({color:SCENE.palette.bark,roughness:1});
+const TREE_BIRCH= new THREE.MeshStandardMaterial({color:SCENE.palette.birchBark,roughness:1});
+const NEEDLE_A  = new THREE.MeshStandardMaterial({color:SCENE.palette.needleA,roughness:1});
+const NEEDLE_B  = new THREE.MeshStandardMaterial({color:SCENE.palette.needleB,roughness:1});
+const LEAF_A    = new THREE.MeshStandardMaterial({color:SCENE.palette.leafA,roughness:1});
+const LEAF_B    = new THREE.MeshStandardMaterial({color:SCENE.palette.leafB,roughness:1});
 
 /* 沿角度正弦调制半径：把完美锥/球揉出自然的不规则轮廓（#36 模型精修）。
    轴心顶点（x=z=0）天然不受影响；调制完重算法线。 */
@@ -3280,8 +3317,8 @@ const BACK_SIDE={x:Math.cos(0.42), z:-Math.sin(0.42)};
 function backPoint(t,s){ return [-7+BACK_DIR.x*t+BACK_SIDE.x*s, -4+BACK_DIR.z*t+BACK_SIDE.z*s]; }
 // 两座小山丘：t/s 是沿屋后轴/横向的定位，r/h 主峰半径/高，r2/h2/o2 副峰参数
 const BACK_HILLS=[
-    {t:40, s:-14, r:15, h:8.0, r2:8.5, h2:4.6, o2:[5,-3], color:0x527a3e},
-    {t:38, s: 15, r:12, h:6.2, r2:7.0, h2:3.8, o2:[-4,3], color:0x476e36}
+    {t:40, s:-14, r:15, h:8.0, r2:8.5, h2:4.6, o2:[5,-3], color:SCENE.palette.hillA},
+    {t:38, s: 15, r:12, h:6.2, r2:7.0, h2:3.8, o2:[-4,3], color:SCENE.palette.hillB}
 ].map(function(hd){
     const c=backPoint(hd.t,hd.s);
     return {x:c[0], z:c[1], r:hd.r, h:hd.h, r2:hd.r2, h2:hd.h2, o2:hd.o2, color:hd.color};
@@ -3530,7 +3567,7 @@ function createHouse(){
         if(i===2)frame.rotation.y=Math.PI/2;
         house.add(frame);
         const w=new THREE.Mesh(new THREE.BoxGeometry(1.05,1.05,0.14),
-            new THREE.MeshStandardMaterial({color:0x9ad0e8,emissive:0x000000,roughness:0.2}));
+            new THREE.MeshStandardMaterial({color:SCENE.palette.houseGlass,emissive:0x000000,roughness:0.2}));   // #76：窗玻璃加深成天空反射蓝
         w.position.set(...p);
         if(i===2){ w.rotation.y=Math.PI/2; }
         house.add(w);
@@ -4477,7 +4514,7 @@ Interior.update = function(dt, t){
 
 /* ==================== 栅栏 ==================== */
 function createFence(){
-    const mat=new THREE.MeshStandardMaterial({color:0x8a6a44,roughness:1});
+    const mat=new THREE.MeshStandardMaterial({color:SCENE.palette.fenceWood,roughness:1});   // #76 栅栏木色
     // 围在场地后侧，避免横穿花田
     const pts=[];
     for(let i=0;i<=14;i++){
@@ -4676,17 +4713,17 @@ function createFarm(){
     const W=R.cols*R.cellW, D=R.rows*R.cellD;
     // 土基 + 逐行田垄 + 木边框：刷上顶点色后与作物一起合并成一个 mesh
     const soil=new THREE.BoxGeometry(W+0.6,0.16,D+0.6); soil.translate(cx,0.03,cz);
-    geos.push(paintGeo(soil,0x6b4a2c));
+    geos.push(paintGeo(soil,SCENE.palette.farmSoil));
     for(let r=0;r<R.rows;r++){
         const ridge=new THREE.BoxGeometry(W,0.13,R.cellD*0.48);
         ridge.translate(cx,0.155,R.lz0+(r+0.5)*R.cellD);
-        geos.push(paintGeo(ridge,0x7d5836));
+        geos.push(paintGeo(ridge,SCENE.palette.farmRidge));
     }
     for(const s of [-1,1]){
         const long=new THREE.BoxGeometry(W+0.85,0.3,0.18); long.translate(cx,0.13,cz+s*(D/2+0.36));
-        geos.push(paintGeo(long,0x8a6a44));
+        geos.push(paintGeo(long,SCENE.palette.fenceWood));
         const side=new THREE.BoxGeometry(0.18,0.3,D+0.85); side.translate(cx+s*(W/2+0.36),0.13,cz);
-        geos.push(paintGeo(side,0x8a6a44));
+        geos.push(paintGeo(side,SCENE.palette.fenceWood));
     }
     // 作物：一格一株，位置/朝向/个头用固定种子微扰，免得排得像兵马俑
     farmGrid.length=0;
@@ -4781,7 +4818,7 @@ function renderPlayCrops(){
         // 土贴片压在田垄上：干土偏亮、浇过水变深，一眼能分清哪块浇过
         const patch=new THREE.BoxGeometry(FARM_RECT.cellW*0.9,0.06,FARM_RECT.cellD*0.5);
         patch.translate(cell.lx,0.225,cell.lz);
-        geos.push(paintGeo(patch, st&&st.watered?0x5e4126:0x9a7448));
+        geos.push(paintGeo(patch, st&&st.watered?SCENE.palette.farmWet:SCENE.palette.farmDry));
         if(!st||!st.crop) return;
         const stage= st.mature?2:(st.watered?1:0);
         if(stage===0){
@@ -4986,7 +5023,7 @@ function softDiscTexture(){
 function createOutskirts(){
     const rnd=mulberry32(20260414);
     // ① 草色深浅斑块：软边圆盘合并成一个 mesh，贴在草地上拉开大色块层次
-    const patchCols=[0x466636,0x5d8140,0x74904a,0x527539];
+    const patchCols=SCENE.palette.patch;   // #76：草色斑块去橄榄灰
     const patchGeos=[];
     for(let i=0;i<18;i++){
         const p=scatterPoint(rnd,4,0,16,55);
@@ -5058,7 +5095,7 @@ function createOutskirts(){
     scene.add(tufts);
     AtmoSys.registerWindMat(tufts.material, {amp:0.045, bendH:0.62});   // #81 草丛灌木层风摆登记
     // ④ 碎石：合并成一个 mesh 散在野地里（#36：同岸边石，逐块灰调＋压扁拉伸）
-    const PEB_TINTS=[0x8a8f94,0x7d838a,0x97928a,0x868b90,0x9aa0a2];
+    const PEB_TINTS=SCENE.palette.rock;   // #76：与岸边石同一石族
     const pebGeos=[];
     for(let i=0;i<80;i++){
         const p=scatterPoint(rnd,4,0,13,50);
@@ -5090,7 +5127,7 @@ function createGrass(){
     }
     const weedGeo=concatGeos(wd.map(g=>g.toNonIndexed()));
     weedIM=new THREE.InstancedMesh(weedGeo,
-        new THREE.MeshStandardMaterial({color:0x557a35,roughness:1}),90);
+        new THREE.MeshStandardMaterial({color:SCENE.palette.weed,roughness:1}),90);
     weedIM.receiveShadow=true;
     scene.add(weedIM);
     AtmoSys.registerWindMat(weedIM.material, {amp:0.022, bendH:0.20});   // #81 低矮杂草灌木层风摆登记
@@ -11442,7 +11479,7 @@ const VIEWS = [
     { n:'花海', t:[0.62,0.30,18] },
     { n:'水塘', t:[-0.55,0.32,22] },
     { n:'仰望', t:[0.22,0.13,30] },
-    { n:'复位', t:[0.22,0.30,38] }
+    { n:'复位', t:[0.235,0.42,33] }   // #76：复位＝默认机位（草甸前景＋远山构图）
 ];
 
 const TONES = [
@@ -13341,11 +13378,11 @@ function cottageGeos(list, x, z, yaw, s, bodyCol, roofCol){
     add(new THREE.BoxGeometry(4.6,2.9,3.8), 0,1.45,0, bodyCol);
     const roof=new THREE.ConeGeometry(3.95,1.9,4); roof.rotateY(Math.PI/4); roof.scale(1.16,1,0.84);
     add(roof, 0,3.85,0, roofCol);
-    add(new THREE.BoxGeometry(0.5,1.15,0.5), 1.25,3.75,0.55, 0x8d8578);
+    add(new THREE.BoxGeometry(0.5,1.15,0.5), 1.25,3.75,0.55, SCENE.palette.stoneMid);
     add(new THREE.BoxGeometry(0.85,1.55,0.09), 0,0.78,1.92, 0x5d4630);
-    add(new THREE.BoxGeometry(0.72,0.72,0.09), -1.35,1.65,1.92, 0x46525e);
-    add(new THREE.BoxGeometry(0.72,0.72,0.09), 1.35,1.65,1.92, 0x46525e);
-    add(new THREE.BoxGeometry(0.09,0.72,0.72), 2.32,1.65,0, 0x46525e);
+    add(new THREE.BoxGeometry(0.72,0.72,0.09), -1.35,1.65,1.92, SCENE.palette.cottageGlass);
+    add(new THREE.BoxGeometry(0.72,0.72,0.09), 1.35,1.65,1.92, SCENE.palette.cottageGlass);
+    add(new THREE.BoxGeometry(0.09,0.72,0.72), 2.32,1.65,0, SCENE.palette.cottageGlass);
 }
 /* 栅栏一圈（点列自动取点）：柱子+两道横杆，进静态合并列；skipNear 给大门留口 */
 function fenceGeos(list, pts, closeLoop, skipNear){
@@ -13364,14 +13401,14 @@ function fenceGeos(list, pts, closeLoop, skipNear){
         const y=outerGroundY(p[0],p[1]);
         const post=new THREE.CylinderGeometry(0.055,0.075,1.02,5);
         post.translate(p[0], y+0.51, p[1]);
-        list.push(paintGeo(post, 0x8a6b48));
+        list.push(paintGeo(post, SCENE.palette.fenceWood));
     });
     for(let i=0;i<kept.length-1;i++){
         const a=kept[i], b=kept[i+1];
         if(Math.hypot(b[0]-a[0], b[1]-a[1])>3.4) continue;   // 大门口断开
         const ya=outerGroundY(a[0],a[1]), yb=outerGroundY(b[0],b[1]);
-        list.push(beamGeo3(a[0],ya+0.36,a[1], b[0],yb+0.36,b[1], 0.05,0.08, 0x97754f));
-        list.push(beamGeo3(a[0],ya+0.72,a[1], b[0],yb+0.72,b[1], 0.05,0.08, 0x97754f));
+        list.push(beamGeo3(a[0],ya+0.36,a[1], b[0],yb+0.36,b[1], 0.05,0.08, SCENE.palette.fenceWood));
+        list.push(beamGeo3(a[0],ya+0.72,a[1], b[0],yb+0.72,b[1], 0.05,0.08, SCENE.palette.fenceWood));
     }
 }
 function buildExpansion(){
@@ -13476,7 +13513,7 @@ function buildExpansion(){
             slab.rotateZ(Math.atan(slope));
             slab.rotateY(Math.atan2(-az,ax));
             slab.translate(c.x+ax*a, deckY(a)-0.13, c.z+az*a);
-            statics.push(paintGeo(slab, i%2?0x8f9296:0x878b90));
+            statics.push(paintGeo(slab, i%2?SCENE.palette.stoneMid:SCENE.palette.stoneDark));   // #76：桥面两灰拉近，俯视不再棋盘分段
         }
         [-1,1].forEach(side=>{   // 两侧栏杆：柱 + 顺拱顶杆
             const off=side*(halfWid-0.14);
@@ -13486,8 +13523,8 @@ function buildExpansion(){
                 const px=c.x+ax*a+tx*off, pz=c.z+az*a+tz*off, py=deckY(a);
                 const post=new THREE.BoxGeometry(0.14,0.62,0.14);
                 post.translate(px, py+0.31, pz);
-                statics.push(paintGeo(post, 0x7e8288));
-                if(prev) statics.push(beamGeo3(prev[0],prev[1]+0.6,prev[2], px,py+0.6,pz, 0.09,0.11, 0x84888e));
+                statics.push(paintGeo(post, SCENE.palette.stoneTrim));
+                if(prev) statics.push(beamGeo3(prev[0],prev[1]+0.6,prev[2], px,py+0.6,pz, 0.09,0.11, SCENE.palette.stoneTrim));
                 prev=[px,py,pz];
             }
         });
@@ -13498,7 +13535,7 @@ function buildExpansion(){
             const pier=new THREE.BoxGeometry(1.4,0.5,3.4);
             pier.rotateY(Math.atan2(-az,ax));
             pier.translate(e[0], outerGroundY(e[0],e[1])+0.1, e[1]);
-            statics.push(paintGeo(pier, 0x8f9296));
+            statics.push(paintGeo(pier, SCENE.palette.stoneMid));
         });
     }
     /* ---------- 土路：核心→桥西、桥东→麦田、桥东→果园、核心→牧场、核心→村舍 ---------- */
@@ -13551,11 +13588,11 @@ function buildExpansion(){
         g.computeVertexNormals();
         const rc=makeCanvas(64,64), rg=rc.getContext('2d');
         const grad=rg.createLinearGradient(0,0,64,0);
-        grad.addColorStop(0,'rgba(166,138,92,0)');
-        grad.addColorStop(0.18,'rgba(166,138,92,0.95)');
-        grad.addColorStop(0.5,'rgba(176,148,100,1)');
-        grad.addColorStop(0.82,'rgba(166,138,92,0.95)');
-        grad.addColorStop(1,'rgba(166,138,92,0)');
+        grad.addColorStop(0,cssRgb(SCENE.palette.roadEdge,0));
+        grad.addColorStop(0.18,cssRgb(SCENE.palette.roadEdge,0.95));
+        grad.addColorStop(0.5,cssRgb(SCENE.palette.roadMid,1));
+        grad.addColorStop(0.82,cssRgb(SCENE.palette.roadEdge,0.95));
+        grad.addColorStop(1,cssRgb(SCENE.palette.roadEdge,0));   // #76：土路加深成暖土色（原苍白灰黄与草地糊边）
         rg.fillStyle=grad; rg.fillRect(0,0,64,64);
         for(let i=0;i<300;i++){ rg.fillStyle='rgba(90,70,40,'+(Math.random()*0.12)+')'; rg.fillRect(Math.random()*64,Math.random()*64,1.6,1.6); }
         const roadTex=canvasTex(rc, 1, 1);
@@ -13573,11 +13610,11 @@ function buildExpansion(){
     };
     {
         const sc=makeCanvas(256,256), sg=sc.getContext('2d');
-        sg.fillStyle='#6d5136'; sg.fillRect(0,0,256,256);
+        sg.fillStyle=cssHex(SCENE.palette.wheatSoil); sg.fillRect(0,0,256,256);
         for(let y=0;y<256;y+=32){
             const gr=sg.createLinearGradient(0,y,0,y+32);
-            gr.addColorStop(0,'#5a4230'); gr.addColorStop(0.45,'#7d5f3e');
-            gr.addColorStop(0.55,'#7d5f3e'); gr.addColorStop(1,'#543e2b');
+            gr.addColorStop(0,cssHex(SCENE.palette.wheatSoilDark)); gr.addColorStop(0.45,cssHex(SCENE.palette.wheatSoilMid));
+            gr.addColorStop(0.55,cssHex(SCENE.palette.wheatSoilMid)); gr.addColorStop(1,'#513a26');
             sg.fillStyle=gr; sg.fillRect(0,y,256,32);
         }
         for(let i=0;i<2400;i++){ sg.fillStyle=rnd()<0.5?'rgba(0,0,0,0.08)':'rgba(255,235,200,0.05)';
@@ -13593,9 +13630,9 @@ function buildExpansion(){
         wg.clearRect(0,0,128,128);
         for(let i=0;i<40;i++){
             const x=8+rnd()*112, sway=(rnd()-0.5)*10, h=84+rnd()*36;
-            wg.strokeStyle='rgba(178,132,52,0.95)'; wg.lineWidth=2.4;
+            wg.strokeStyle=cssRgb(SCENE.palette.wheatStraw,0.95); wg.lineWidth=2.4;   // #76：麦秆提饱和（原灰金）
             wg.beginPath(); wg.moveTo(x,128); wg.quadraticCurveTo(x+sway*0.4,128-h*0.6,x+sway,128-h); wg.stroke();
-            wg.fillStyle='rgba(219,168,64,0.98)';
+            wg.fillStyle=cssRgb(SCENE.palette.wheatGrain,0.98);
             for(let k=0;k<5;k++){
                 const t=k/5;
                 wg.beginPath();
@@ -13651,7 +13688,7 @@ function buildExpansion(){
             const y=outerGroundY(x,z), s=0.9+rnd()*0.3;
             const trunk=new THREE.CylinderGeometry(0.13*s,0.2*s,2.2*s,6);
             trunk.translate(x, y+1.1*s, z);
-            trunkGeos.push(paintGeo(trunk, 0x6e5136));
+            trunkGeos.push(paintGeo(trunk, SCENE.palette.bark));
             const blob=new THREE.IcosahedronGeometry(1.55*s,1);
             blob.translate(x, y+(2.2+1.15)*s, z);
             canopyGeos.push(blob);
@@ -13701,11 +13738,11 @@ function buildExpansion(){
     }
     /* ---------- 村舍群（-52,138）：三栋小屋 + 水井 + 柴堆 + 晾衣绳 ---------- */
     {
-        cottageGeos(statics, -63, 129, 0.55, 1.0, 0xe6dcc8, 0x9a4f38);
-        cottageGeos(statics, -43, 147, -0.35, 1.14, 0xc9a06b, 0x6e6259);
-        cottageGeos(statics, -59, 153, 0.95, 0.88, 0xd9c9a8, 0x7a4a3a);
+        cottageGeos(statics, -63, 129, 0.55, 1.0, SCENE.palette.cottageWallA, SCENE.palette.cottageRoofA);
+        cottageGeos(statics, -43, 147, -0.35, 1.14, SCENE.palette.cottageWallB, SCENE.palette.cottageRoofB);   // #76：原灰褐屋顶是全村最跳的灰，收进陶土红族
+        cottageGeos(statics, -59, 153, 0.95, 0.88, SCENE.palette.cottageWallC, SCENE.palette.cottageRoofC);
         const wy=outerGroundY(-52,132);
-        const well=new THREE.CylinderGeometry(0.62,0.7,0.78,10); well.translate(-52,wy+0.39,132); statics.push(paintGeo(well,0x8d9299));
+        const well=new THREE.CylinderGeometry(0.62,0.7,0.78,10); well.translate(-52,wy+0.39,132); statics.push(paintGeo(well,SCENE.palette.stoneMid));
         [-0.55,0.55].forEach(dx=>{
             const post=new THREE.BoxGeometry(0.09,1.35,0.09); post.translate(-52+dx,wy+1.05,132); statics.push(paintGeo(post,0x7a5c38));
         });
@@ -13773,8 +13810,8 @@ function buildExpansion(){
     {
         const mx=WINDMILL_HILL.x, mz=WINDMILL_HILL.z;
         const my=outerGroundY(mx,mz);
-        const tower=new THREE.CylinderGeometry(1.05,1.95,10.6,8); tower.translate(mx,my+5.3,mz); statics.push(paintGeo(tower,0xb9a888));
-        const cap=new THREE.ConeGeometry(1.6,1.7,8); cap.translate(mx,my+11.4,mz); statics.push(paintGeo(cap,0x7a4a3a));
+        const tower=new THREE.CylinderGeometry(1.05,1.95,10.6,8); tower.translate(mx,my+5.3,mz); statics.push(paintGeo(tower,SCENE.palette.windmillWall));
+        const cap=new THREE.ConeGeometry(1.6,1.7,8); cap.translate(mx,my+11.4,mz); statics.push(paintGeo(cap,SCENE.palette.cottageRoofC));
         const door=new THREE.BoxGeometry(0.85,1.6,0.09);
         const fx0=-mx, fz0=-mz, fl=Math.hypot(fx0,fz0)||1;
         door.rotateY(Math.atan2(fx0/fl,fz0/fl));
@@ -13804,10 +13841,10 @@ function buildExpansion(){
         disc.rotation.x=-Math.PI/2;
         disc.position.set(ep.x, profEnd-0.22, ep.z);
         scene.add(disc);
-        const shore=new THREE.Mesh(new THREE.RingGeometry(4.2,5.9,22),
-            new THREE.MeshStandardMaterial({color:0xc9b586, roughness:1}));
+        const shore=new THREE.Mesh(new THREE.RingGeometry(4.45,6.0,22),
+            new THREE.MeshStandardMaterial({color:SCENE.palette.shoreDry, roughness:1}));   // #76：内缘收进 disc 之外+再沉 2cm，去重叠淡印
         shore.rotation.x=-Math.PI/2;
-        shore.position.set(ep.x, profEnd-0.3, ep.z);
+        shore.position.set(ep.x, profEnd-0.32, ep.z);
         shore.receiveShadow=true;
         scene.add(shore);
     }
@@ -13828,13 +13865,13 @@ function buildExpansion(){
             if(distToRoads(x,z)<3.4) continue;
             const y=outerGroundY(x,z), s=0.95+rnd()*0.9;
             if(rnd()<0.52){   // 松
-                const t1=new THREE.CylinderGeometry(0.09*s,0.14*s,1.3*s,5); t1.translate(x,y+0.65*s,z); pineTrunkGeos.push(paintGeo(t1,0x6e5136));
+                const t1=new THREE.CylinderGeometry(0.09*s,0.14*s,1.3*s,5); t1.translate(x,y+0.65*s,z); pineTrunkGeos.push(paintGeo(t1,SCENE.palette.bark));
                 const c1=new THREE.ConeGeometry(1.25*s,2.6*s,7); c1.translate(x,y+(1.3+1.3)*s,z); pineTops.push(c1);
                 const c2=new THREE.ConeGeometry(0.85*s,1.9*s,7); c2.translate(x,y+(1.3+2.6)*s,z); pineTops.push(c2);
                 if(window.__treeTops) window.__treeTops.push({x:x, z:z, y:y, s:1, isPine:true, top:5.6*s});
                 outerPineSpots.push({x:x, y:y, z:z, s:s, ry:rnd()*Math.PI*2});   // #87：高模热替换的位置清单（语义仍走 __treeTops）
             } else {          // 桦/阔叶
-                const t1=new THREE.CylinderGeometry(0.1*s,0.15*s,1.9*s,5); t1.translate(x,y+0.95*s,z); geos.push(paintGeo(t1,0xcfc4ae));
+                const t1=new THREE.CylinderGeometry(0.1*s,0.15*s,1.9*s,5); t1.translate(x,y+0.95*s,z); geos.push(paintGeo(t1,SCENE.palette.birchTrunk));
                 const b1=new THREE.IcosahedronGeometry(1.35*s,0); b1.translate(x,y+(1.9+1.0)*s,z); birchTops.push(b1);
                 const b2=new THREE.IcosahedronGeometry(0.9*s,0); b2.translate(x+0.7*s,y+(1.9+1.5)*s,z+0.3*s); birchTops.push(b2);
                 if(window.__treeTops) window.__treeTops.push({x:x, z:z, y:y, s:1, isPine:false, top:4.5*s});
