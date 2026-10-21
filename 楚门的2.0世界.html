@@ -704,6 +704,13 @@
         transition:opacity .35s ease,background .15s ease;-webkit-tap-highlight-color:transparent;backdrop-filter:blur(4px)}
     #app.bars-off #wakeBtn{opacity:.8;pointer-events:auto}
     #wakeBtn:hover{background:var(--wake-hov);opacity:1}
+    /* 回音「带我去看看」的回程钮（#39 收口小修，2026-10-21 负责人拍板）：只在飞离后出现 */
+    #echoHomeBtn{position:absolute;right:10px;top:calc(50% + 30px);z-index:119;padding:8px 14px;border-radius:999px;
+        background:var(--wake-bg);color:var(--wake-txt);border:1px solid var(--ghost-line);
+        font-size:13px;font-family:inherit;cursor:pointer;display:none;
+        -webkit-tap-highlight-color:transparent;backdrop-filter:blur(4px)}
+    #echoHomeBtn.on{display:block}
+    #echoHomeBtn:hover{background:var(--wake-hov)}
     @media (max-width:600px),(pointer:coarse){
         #app.bars-off #status{transform:translateY(12px)}
         #wakeBtn{right:calc(6px + env(safe-area-inset-right, 0px))}
@@ -1145,6 +1152,7 @@
 <div id="huntToast"></div>
 <div id="helpTip">👋 第一次来？点顶栏里的「❓ 操作帮助」，玩法都在里面</div>
 <button id="wakeBtn" type="button" title="显示操作界面" aria-label="显示操作界面">‹</button>
+<button id="echoHomeBtn" type="button" title="飞回小屋">🏠 回到小屋</button>
 </div><!-- /#app -->
 <div id="error"></div>
 
@@ -7651,7 +7659,7 @@ function openEchoLetter(entry){
     }
     if(entry.mark){
         const p3=document.createElement('p');
-        p3.textContent='我们在改进的地方留了一块小牌子作纪念——点下面「带我去看看」，镜头直接带你过去。';
+        p3.textContent='我们在改进的地方留了一块小牌子作纪念——点下面「带我去看看」，镜头直接带你过去；看完点屏幕右边的「🏠 回到小屋」就能飞回来。';
         body.appendChild(p3);
     }
     const p4=document.createElement('p');
@@ -7690,8 +7698,30 @@ function echoFlyTo(pos){
     }
     if(typeof FEAT!=='undefined' && FEAT.roam && FEAT.roam.on){ FEAT.roam.on=false; refreshModUI(); }
     if(!controls || !controls.flyTo || !controls.target) return;
+    echoSaveHome();   // 飞走前记下当前镜头（只记第一次），回程钮才知道家在哪
     controls.target.set(pos.x, terrainH(pos.x, pos.z)+1.6, pos.z);
     controls.flyTo(Math.atan2(pos.x, pos.z), 0.30*Math.PI, 13);
+    const hb=document.getElementById('echoHomeBtn'); if(hb) hb.classList.add('on');
+}
+
+/* ---------- 「🏠 回到小屋」：飞回飞走前的位置（#39 收口小修） ----------
+   与 #40/#41 的 savedTarget 同一口径：去程存、回程还原，中间用预设视角/进屋/
+   操控龙都不会冲掉这份存档，钮一直留到玩家点它为止。 */
+let echoHomeView=null;
+function echoSaveHome(){
+    if(echoHomeView || !controls || !camera) return;
+    const t=controls.target, dx=camera.position.x-t.x, dy=camera.position.y-t.y, dz=camera.position.z-t.z;
+    const r=Math.hypot(dx,dy,dz); if(!(r>0)) return;
+    echoHomeView={ x:t.x, y:t.y, z:t.z, theta:Math.atan2(dx,dz),
+        phi:Math.acos(Math.max(-1,Math.min(1,dy/r))), radius:r };
+}
+function echoGoHome(){
+    const hb=document.getElementById('echoHomeBtn'); if(hb) hb.classList.remove('on');
+    if(!echoHomeView || !controls || !controls.flyTo){ echoHomeView=null; return; }
+    if(typeof viewLocked!=='undefined' && viewLocked) setViewLock(false);
+    const v=echoHomeView; echoHomeView=null;
+    controls.target.set(v.x, v.y, v.z);
+    controls.flyTo(v.theta, v.phi, v.radius);
 }
 
 /* ---------- 回音墙（公开鸣谢，挂在更新日志弹窗里） ----------
@@ -7864,6 +7894,7 @@ function setupEcho(){
     echoRenderPanel();
     document.getElementById('echoClose').addEventListener('click', closeEchoLetter);
     document.getElementById('echoX').addEventListener('click', closeEchoLetter);
+    document.getElementById('echoHomeBtn').addEventListener('click', echoGoHome);
     document.getElementById('echoGo').addEventListener('click', ()=>{
         const pos=echoCurrent?echoEntryPos(echoCurrent):null;
         closeEchoLetter();
