@@ -2751,6 +2751,7 @@ function wallsRefresh(){
     if(!Interior.gbCanvas) return;   // 室内还没建好时不刷（setupWalls 会在建好后补刷）
     gbWallEntries = wallsBuildEntries();
     Interior.setGuestbook(gbWallEntries);
+    window.__chronicleBase = CHRONICLE.slice();   // #52 成长条目的合并基线（applyGrowthChronicle 读它拼成长事件）
     Interior.setChronicle(CHRONICLE.slice(-6));   // 板上只挂最近 6 件，面板里看全表
 }
 
@@ -6122,7 +6123,7 @@ function dragonGrowthChronicleItems(){
 function applyGrowthChronicle(){
     if(typeof Interior === 'undefined' || !Interior.setChronicle) return;
     const base = window.__chronicleBase || [];
-    Interior.setChronicle(base.concat(dragonGrowthChronicleItems()));
+    Interior.setChronicle(base.concat(dragonGrowthChronicleItems()).slice(-6));   // 板面口径与 #24 一致：合并后仍只挂最近 6 件
 }
 function setupDragonGrowth(){
     applyGrowthChronicle();
