@@ -1276,6 +1276,186 @@ function buildRiverPts(){
     const ext=buildRiverExtPts();
     for(let i=1;i<ext.length;i++) RIVER_PTS.push({x:ext[i].x, z:ext[i].z, half:ext[i].half});
 }
+/* ==================== 游戏级水体（Issue #77 · v5.0） ====================
+   河与湖共用同一套 ShaderMaterial 家族：多层程序纹理顺流而下、天空色
+   反光＋菲涅尔掠射增强、阳光镜面与细碎闪光、岸边泡沫＋极边软化。
+   流向/流速/岸距全部烘焙进顶点属性（aFlow/aCoord），湖与河只差参数：
+   河道 aFlow.z=1 顺流，湖面切向慢漂、老潭与远河潭更缓。颜色不写死：
+   animate 每帧把 POND 日夜色×季节倍率（uDeep）、curSky 天空色（uSky）、
+   太阳色与方向（uSunCol/uSunDir）喂进来，与全场光照口径同源。
+   双档（全版口径）：拉满档两层纹理＋三层波纹，保底档减一层纹理与
+   一层波纹，但流动与反光都在；默认按设备能力定档（粗指针/小屏→保底），
+   弱网低画质开关经 window.__waterTier 手动切换，#75 集中化时收进中枢。
+   draw calls 增量 0：仍是 pondMesh 1 件＋远河潭 disc 1 件、共用材质。 */
+const WATER_CFG = {
+    flowSpeed: 1.15,     // 顺流速度（世界单位/秒）：河面实际速度 = flowSpeed × aFlow.z
+    lakeSpeed: 0.05,     // 湖面切向慢漂倍率
+    poolSpeed: 0.22,     // 河尾小潭/远河潭倍率
+    opacity: 0.93,       // 与旧材质一致——鱼在水下可见、涟漪在上层的口径不变
+    refl: 0.85,          // 天空反光强度上限（菲涅尔项）
+    fitMargin: 0.05,     // 缎带贴合：水边高出走廊带面的余量（盖住断点峰顶）
+    fitMax: 0.8          // 缎带贴合：单边最大抬升，防极端横坡把水边抬成墙
+};
+const WATER_VS = `
+attribute vec4 aFlow;
+attribute vec2 aCoord;
+varying vec3 vWorld;
+varying vec4 vFlow;
+varying vec2 vCoord;
+#include <fog_pars_vertex>
+void main(){
+    vFlow = aFlow;
+    vCoord = aCoord;
+    vec4 wp = modelMatrix * vec4(position, 1.0);
+    vWorld = wp.xyz;
+    vec4 mvPosition = viewMatrix * wp;
+    gl_Position = projectionMatrix * mvPosition;
+    #include <fog_vertex>
+}`;
+const WATER_FS = `
+uniform float uTime;
+uniform vec3 uDeep;
+uniform vec3 uSky;
+uniform vec3 uSunDir;
+uniform vec3 uSunCol;
+uniform sampler2D uDetail;
+uniform float uTier;
+uniform float uFlowSpeed;
+uniform float uOpacity;
+uniform float uRefl;
+varying vec3 vWorld;
+varying vec4 vFlow;
+varying vec2 vCoord;
+#include <fog_pars_fragment>
+void main(){
+    vec3 V = normalize(cameraPosition - vWorld);
+    float sp = uFlowSpeed * vFlow.z;
+    float along = vCoord.x - uTime * sp;
+    // 柔斑层：世界坐标投影并顺流漂移，弯道处也跟着河走
+    vec2 fuv = vWorld.xz - vFlow.xy * (uTime * sp);
+    float d1 = texture2D(uDetail, fuv * 0.055).r;
+    float d2 = 0.5;
+    if(uTier > 0.5) d2 = texture2D(uDetail, fuv * 0.021 + vec2(0.43, 0.71)).g;
+    // 法线扰动：沿程行波（相位由 along 驱动，顺流而下）＋横向细波
+    float g1 = sin(along * 5.2 + d1 * 6.0);
+    float g2 = sin(vWorld.x * 1.9 - vWorld.z * 1.6 + uTime * 1.15 + d1 * 5.0);
+    float g3 = 0.0;
+    if(uTier > 0.5) g3 = sin(along * 11.0 + vCoord.y * 6.0 + d2 * 7.0);
+    vec2 grad = vec2(g1 * 0.55 + g3 * 0.30, g2 * 0.45 + g1 * 0.22 + g3 * 0.18);
+    vec3 N = normalize(vec3(grad.x * 0.28, 1.0, grad.y * 0.28));
+    // 菲涅尔：平视（掠射）时天空反光拉满，俯视时透出水体本色
+    float fres = 0.06 + 0.94 * pow(1.0 - max(V.y, 0.0), 3.0);
+    vec3 col = mix(uDeep, uSky, clamp(fres * uRefl, 0.0, 1.0));
+    col *= 0.90 + d1 * 0.14 + (d2 - 0.5) * 0.08;
+    // 阳光镜面（Blinn）＋细碎闪光
+    vec3 H = normalize(V + uSunDir);
+    float spec = pow(max(dot(N, H), 0.0), 140.0) * 1.2;
+    float glit = smoothstep(0.90, 1.0,
+        sin(along * 26.0 + d1 * 34.0) * sin(vWorld.x * 17.0 + vWorld.z * 21.0 - uTime * 1.7));
+    // 闪光向镜面高光带集中（不再满面均匀撒点），河面活水比湖面略多
+    col += uSunCol * (spec + glit * (0.06 + 0.50 * spec + 0.18 * fres));
+    // 泡沫边：岸距→1 的一带，噪声碎花＋顺流缓脉动；极边再压一点透明度软化衔接。
+    // 湖的径向跨度大，泡沫带按 kind 收窄减弱，免得围一圈宽白边
+    float bank = vFlow.w > 0.5 ? vCoord.y : abs(vCoord.y);
+    float foamBand = smoothstep(mix(0.78, 0.90, vFlow.w), 0.985, bank);
+    float fn = texture2D(uDetail, fuv * 0.16 + vec2(0.13, 0.57)).b;
+    float foamN = fn * 0.65 + d2 * 0.35;
+    float foam = foamBand * smoothstep(0.52, 0.78, foamN + 0.22 * sin(along * 2.2 - uTime * (1.0 + sp * 0.8)));
+    col = mix(col, vec3(0.93, 0.97, 1.0), clamp(foam, 0.0, 1.0) * mix(0.8, 0.5, vFlow.w));
+    float alpha = uOpacity + foam * (1.0 - uOpacity);
+    alpha *= 1.0 - smoothstep(0.97, 1.0, bank) * 0.30;
+    gl_FragColor = vec4(col, alpha);
+    #include <tonemapping_fragment>
+    #include <encodings_fragment>
+    #include <fog_fragment>
+}`;
+let WATER_U = null;   // 水体共享 uniforms（pondMesh 与远河潭 disc 同一材质实例）
+function makeWaterMaterial(){
+    const detail = waterTexture();
+    detail.wrapS = detail.wrapT = THREE.RepeatWrapping;
+    const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {}]);
+    uniforms.uTime = { value: 0 };
+    uniforms.uDeep = { value: new THREE.Color(0x3f7fa8).convertSRGBToLinear() };
+    uniforms.uSky = { value: new THREE.Color(0x9fc8e8).convertSRGBToLinear() };
+    uniforms.uSunDir = { value: new THREE.Vector3(0.4, 0.8, 0.4) };
+    uniforms.uSunCol = { value: new THREE.Color(0x000000) };
+    uniforms.uDetail = { value: detail };
+    uniforms.uTier = { value: 1 };
+    uniforms.uFlowSpeed = { value: WATER_CFG.flowSpeed };
+    uniforms.uOpacity = { value: WATER_CFG.opacity };
+    uniforms.uRefl = { value: WATER_CFG.refl };
+    const mat = new THREE.ShaderMaterial({
+        uniforms: uniforms, vertexShader: WATER_VS, fragmentShader: WATER_FS,
+        transparent: true, side: THREE.DoubleSide, fog: true });
+    WATER_U = uniforms;
+    // 默认定档：粗指针（触屏主导）或小屏设备走保底档，桌面走拉满档
+    let tier = 1;
+    try {
+        const coarse = window.matchMedia && window.matchMedia('(pointer:coarse)').matches;
+        const small = Math.min(window.screen.width || 9999, window.screen.height || 9999) < 760;
+        if (coarse || small) tier = 0;
+    } catch(e) {}
+    uniforms.uTier.value = tier;
+    window.__waterTier = function(name){ if (WATER_U) WATER_U.uTier.value = (name === 'ultra') ? 1 : 0; };
+    return mat;
+}
+/* 径向水面属性烘焙（湖/河尾小潭）：切向慢漂流向＋径向岸距 */
+function bakeRadialWater(geo, cx, cz, rx, rz, speed, alongK){
+    const p = geo.attributes.position, n = p.count;
+    const fl = new Float32Array(n * 4), co = new Float32Array(n * 2);
+    for (let i = 0; i < n; i++){
+        const dx = (p.getX(i) - cx) / rx, dz = (p.getZ(i) - cz) / rz;
+        const rN = Math.hypot(dx, dz), a = Math.atan2(dz, dx);
+        let tx = -Math.sin(a) * rx, tz = Math.cos(a) * rz;
+        const L = Math.hypot(tx, tz) || 1; tx /= L; tz /= L;
+        fl[i*4] = tx; fl[i*4+1] = tz; fl[i*4+2] = speed; fl[i*4+3] = 1;
+        co[i*2] = rN * alongK; co[i*2+1] = Math.min(1, rN);
+    }
+    geo.setAttribute('aFlow', new THREE.BufferAttribute(fl, 4));
+    geo.setAttribute('aCoord', new THREE.BufferAttribute(co, 2));
+    return geo;
+}
+/* 远河潭 disc 属性烘焙：几何在局部 XY 平面，mesh 绕 X 转 -90° 落地——
+   局部 +Y 映射到世界 −Z，故世界切向 = (ly, lx)/r（与 bakeRadialWater 同旋向） */
+function bakeDiscWater(geo, radius, speed){
+    const p = geo.attributes.position, n = p.count;
+    const fl = new Float32Array(n * 4), co = new Float32Array(n * 2);
+    for (let i = 0; i < n; i++){
+        const lx = p.getX(i), ly = p.getY(i);
+        const r = Math.hypot(lx, ly), rN = r / radius;
+        let tx = 0, tz = 1;
+        if (r > 1e-4){ tx = ly / r; tz = lx / r; }
+        fl[i*4] = tx; fl[i*4+1] = tz; fl[i*4+2] = speed; fl[i*4+3] = 1;
+        co[i*2] = rN * 2.0; co[i*2+1] = Math.min(1, rN);
+    }
+    geo.setAttribute('aFlow', new THREE.BufferAttribute(fl, 4));
+    geo.setAttribute('aCoord', new THREE.BufferAttribute(co, 2));
+    return geo;
+}
+/* 带水体属性的合并（mergeGeos 只搬 position/normal/uv，这里多搬 aFlow/aCoord） */
+function mergeWaterGeos(list){
+    const parts = list.map(g => g.index ? g.toNonIndexed() : g);
+    let vc = 0; parts.forEach(g => vc += g.attributes.position.count);
+    const pos = new Float32Array(vc * 3), nor = new Float32Array(vc * 3),
+          uv = new Float32Array(vc * 2), fl = new Float32Array(vc * 4), co = new Float32Array(vc * 2);
+    let off = 0;
+    for (const g of parts){
+        pos.set(g.attributes.position.array, off * 3);
+        nor.set(g.attributes.normal.array, off * 3);
+        uv.set(g.attributes.uv.array, off * 2);
+        fl.set(g.attributes.aFlow.array, off * 4);
+        co.set(g.attributes.aCoord.array, off * 2);
+        off += g.attributes.position.count;
+    }
+    const out = new THREE.BufferGeometry();
+    out.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    out.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+    out.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    out.setAttribute('aFlow', new THREE.BufferAttribute(fl, 4));
+    out.setAttribute('aCoord', new THREE.BufferAttribute(co, 2));
+    return out;
+}
+/* 注：#78 河道走廊带面的采样式直接写在 ribbonGeo 的贴合段里（面片换算版） */
 /* ==================== 世界扩容 · 地形支撑（Issue #78 · v5.0 先行地基） ====================
    红线：核心区（半径 70 内）terrainH 与旧版逐值一致（探针采样比对为零差异）；
    新地形只在 70 外生成，且经 outerFade（72 内恒 0）与各系统的平滑带接入，
@@ -1741,13 +1921,40 @@ function waterTexture(){
     }
     return canvasTex(c, 2, 2);
 }
+// 河床横截面贴图（#77）：u 为横向（0/1 是两岸外缘）——中心水下沙、
+// 紧贴水线一条深色湿岸带、外侧渐回干沙；v 沿程重复，噪点破单调。
+// 水线在 u≈0.16/0.84（河宽随沿程在 0.9–1.25 间变，湿带做软不做死）
+function bedTexture(){
+    const c=makeCanvas(256,64), g=c.getContext('2d');
+    const grd=g.createLinearGradient(0,0,256,0);
+    grd.addColorStop(0.00,'#c9b586');   // 干沙（与原河床基线色一致）
+    grd.addColorStop(0.08,'#bfa978');
+    grd.addColorStop(0.15,'#97814f');   // 湿岸带（最深处紧贴水线外侧）
+    grd.addColorStop(0.23,'#a8935f');
+    grd.addColorStop(0.32,'#b3a077');   // 水下沙
+    grd.addColorStop(0.50,'#b3a077');
+    grd.addColorStop(0.68,'#b3a077');
+    grd.addColorStop(0.77,'#a8935f');
+    grd.addColorStop(0.85,'#97814f');
+    grd.addColorStop(0.92,'#bfa978');
+    grd.addColorStop(1.00,'#c9b586');
+    g.fillStyle=grd; g.fillRect(0,0,256,64);
+    for(let i=0;i<1600;i++){
+        const l=Math.random();
+        g.fillStyle=l<0.5?'rgba(90,74,44,0.13)':'rgba(240,230,200,0.12)';
+        g.fillRect(Math.random()*256,Math.random()*64,1.6,1.6);
+    }
+    return canvasTex(c,1,1);
+}
 // 岸边过渡圈：中心透明 → 浅滩色环 → 外缘透明（用径向渐变画在方形画布，贴圆形几何）
+// #77：水线（画布 r≈104，停点 0.43）外侧加一条深色湿岸带，水陆衔接不再硬切
 function shoreTexture(){
     const c=makeCanvas(256,256), g=c.getContext('2d');
     const grd=g.createRadialGradient(128,128,86,128,128,128);
     grd.addColorStop(0,'rgba(216,204,160,0)');
-    grd.addColorStop(0.28,'rgba(216,204,160,0.55)');
-    grd.addColorStop(0.55,'rgba(198,186,146,0.28)');
+    grd.addColorStop(0.30,'rgba(210,196,148,0.42)');
+    grd.addColorStop(0.44,'rgba(150,128,88,0.60)');
+    grd.addColorStop(0.62,'rgba(186,168,124,0.34)');
     grd.addColorStop(1,'rgba(198,186,146,0)');
     g.fillStyle=grd; g.fillRect(0,0,256,256);
     // 滩边碎点
@@ -1975,12 +2182,100 @@ function terrainH(x,z){
 // halfPlus 是在河面半宽上再外扩的量（垫底沙带用）；vScale 控制水纹沿程的密度。
 function ribbonGeo(halfPlus,yOff,vScale){
     if(!RIVER_PTS) buildRiverPts();
-    const pos=[],nor=[],uv=[],idx=[];
+    const pos=[],nor=[],uv=[],idx=[],flw=[],crd=[];
     const ys=RIVER_PTS.map(p=>terrainH(p.x,p.z));
     const sm=ys.map((y,i)=>{
         const a=ys[Math.max(0,i-1)], b=ys[Math.min(ys.length-1,i+1)];
         return (a+y*2+b)/4;
     });
+    // #77 延长段水面剖面（只动水面，不动地形）：老剖面是逐站平拉的横断面，
+    // 中心高来自粗噪声采样，台阶感明显；s≈30 一带河道贴横坡走，高侧走廊带面
+    // 比水面高出最多 0.63，水面被峰顶压住 2–3 单位（#78 留尾）。
+    // 新剖面 = 沿程平滑的基线（两遍大核平滑、老河尾站钉住、下沉钳制保证河床
+    // 始终沉在水下）＋逐站贴合带面（左右边与中心三点采样取需高、再平滑、
+    // 末尾按容差回钳）——水面成一条缓降的连续面，被压处只抬被压侧。
+    // 贴合比较在世界帧做：水面世界高 = 局部高 + 0.06（pondMesh 偏移）+ 浮沉 ±0.015。
+    let fitL=null, fitR=null;
+    if(halfPlus===0){
+        const N=sm.length, K=[1,2,3,4,3,2,1], KS=16;
+        const S=sm.slice();
+        for(let pass=0;pass<2;pass++){
+            const src=S.slice();
+            for(let i=RIVER_N+1;i<N;i++){
+                let acc=0;
+                for(let k=-3;k<=3;k++){
+                    const j=Math.max(RIVER_N,Math.min(N-1,i+k));
+                    acc+=src[j]*K[k+3];
+                }
+                S[i]=acc/KS;
+            }
+            S[RIVER_N]=sm[RIVER_N];
+        }
+        for(let i=RIVER_N+1;i<N;i++) S[i]=Math.max(S[i], sm[i]-0.02);
+        // 贴合需求按真实带面采样：带面横向是 0/±1.2/±2.4/±4.5 列之间的平面片、
+        // 沿程是隔站一行的插值面——需求先做面片换算再沿程平滑（核 ±2 约等于
+        // 带面的行距），免得追着解析峰顶逐站跳。需求帧：水面世界高 = 局部高
+        // +0.06（pondMesh 偏移）+浮沉 ±0.015，取浮沉下限仍高出带面 fitMargin。
+        const STRIP_COLS=[0,1.2,2.4,4.5,8];
+        const needRaw={L:[], R:[], C:[]};
+        for(let i=0;i<N;i++){
+            if(i<=RIVER_N){ needRaw.L.push(null); needRaw.R.push(null); needRaw.C.push(null); continue; }
+            const p=RIVER_PTS[i];
+            const qA=RIVER_PTS[i-1], qB=RIVER_PTS[Math.min(N-1,i+1)];
+            let tx=qB.x-qA.x, tz=qB.z-qA.z; const L=Math.hypot(tx,tz)||1; tx/=L; tz/=L;
+            const nx=-tz, nz=tx, hw=p.half;
+            const colH=(o)=>outerGroundY(p.x+nx*o, p.z+nz*o)+0.035
+                -0.16*(1-smooth01((Math.abs(o)-1.2)/3.3));
+            const facet=(o)=>{
+                const a=Math.abs(o), sgn=o<0?-1:1;
+                let k=0; while(k<STRIP_COLS.length-2 && a>STRIP_COLS[k+1]) k++;
+                const o0=STRIP_COLS[k], o1=STRIP_COLS[k+1], f=(a-o0)/((o1-o0)||1);
+                return colH(sgn*o0)*(1-f)+colH(sgn*o1)*f;
+            };
+            const off=WATER_CFG.fitMargin-0.045;
+            needRaw.L.push(facet(hw)+off);
+            needRaw.R.push(facet(-hw)+off);
+            needRaw.C.push(facet(0)+off);
+        }
+        const K2=[1,2,3,2,1];
+        const smoothArr=(arr,fallback)=>{
+            for(let pass=0;pass<2;pass++){
+                const src=arr.slice();
+                for(let i=RIVER_N+1;i<N;i++){
+                    let acc=0;
+                    for(let k=-2;k<=2;k++){
+                        const j=Math.max(RIVER_N,Math.min(N-1,i+k));
+                        acc+=(src[j]===null?fallback[j]:src[j])*K2[k+2];
+                    }
+                    arr[i]=acc/9;
+                }
+            }
+            return arr;
+        };
+        const baseArr=sm.map(v=>v+yOff);
+        const needSm={ L:needRaw.L.slice(), R:needRaw.R.slice(), C:needRaw.C.slice() };
+        smoothArr(needSm.L, baseArr); smoothArr(needSm.R, baseArr); smoothArr(needSm.C, baseArr);
+        fitL=[]; fitR=[];
+        for(let i=0;i<N;i++){
+            if(i<=RIVER_N){ fitL.push(null); fitR.push(null); continue; }
+            const base=S[i]+yOff;
+            fitL.push(Math.min(Math.max(base, needSm.L[i], needSm.C[i]), base+WATER_CFG.fitMax));
+            fitR.push(Math.min(Math.max(base, needSm.R[i], needSm.C[i]), base+WATER_CFG.fitMax));
+        }
+        smoothArr(fitL, baseArr); smoothArr(fitR, baseArr);
+        // 回钳必须用未平滑的原始需求：带面在断点是一段 5 站宽的平台、两侧陡升，
+        // 平滑值会把平台顶削掉 0.1 以上，水又会被压回去（实测踩过）
+        for(let i=RIVER_N+1;i<N;i++){
+            fitL[i]=Math.max(fitL[i], needRaw.L[i]-0.02, needRaw.C[i]-0.02);
+            fitR[i]=Math.max(fitR[i], needRaw.R[i]-0.02, needRaw.C[i]-0.02);
+            // 河床净空地板：平滑会把局部峰值站的水位拉低，沙床（基线+0.035、
+            // 无塘面偏移）会逐站捅出水面成米色斑块——水位不许低于基线-0.005，
+            // 站间两面同为线性插值，站点净空 ≥0.02 即全程净空
+            const floorY=sm[i]+yOff-0.005;
+            if(fitL[i]<floorY) fitL[i]=floorY;
+            if(fitR[i]<floorY) fitR[i]=floorY;
+        }
+    }
     let len=0;
     RIVER_PTS.forEach((p,i)=>{
         if(i>0){ const q=RIVER_PTS[i-1]; len+=Math.hypot(p.x-q.x,p.z-q.z); }
@@ -1989,15 +2284,22 @@ function ribbonGeo(halfPlus,yOff,vScale){
         const nx=-tz, nz=tx, hw=p.half+halfPlus;
         // 河头三站把高度向湖面（≈0）融合，免得入水口出现台阶
         const blend=Math.min(1,i/3), y=sm[i]*blend+yOff;
-        pos.push(p.x+nx*hw,y,p.z+nz*hw, p.x-nx*hw,y,p.z-nx*hw);
+        let yL=y, yR=y;
+        if(fitL && i>RIVER_N){ yL=fitL[i]; yR=fitR[i]; }
+        pos.push(p.x+nx*hw,yL,p.z+nz*hw, p.x-nx*hw,yR,p.z-nx*hw);
         nor.push(0,1,0, 0,1,0);
         uv.push(0,len/vScale, 1,len/vScale);
+        // #77 水体属性：流向=下游切线、流速倍率 1、河道型（w=0）；沿程长＋横向符号
+        flw.push(tx,tz,1,0, tx,tz,1,0);
+        crd.push(len,-1, len,1);
         if(i>0){ const b=i*2; idx.push(b-2,b,b-1, b-1,b,b+1); }
     });
     const g=new THREE.BufferGeometry();
     g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
     g.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3));
     g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+    g.setAttribute('aFlow',new THREE.Float32BufferAttribute(flw,4));
+    g.setAttribute('aCoord',new THREE.Float32BufferAttribute(crd,2));
     g.setIndex(idx);
     return g;
 }
@@ -2028,18 +2330,17 @@ function createTerrain(){
     slabs.receiveShadow=slabs.castShadow=true;
     scene.add(slabs);
     // 小湖＋小河（Issue #3）：湖面椭圆与河道缎带合并成一个水面 mesh，绘制仍是 1 次；
-    // 水纹贴图在 animate 里统一流动，河道 v 坐标沿程累积，看着像顺流而下
+    // #77 起换游戏级 shader 水体：流动/反光/泡沫全在 shader 内，湖河共用同一材质
     if(!RIVER_PTS) buildRiverPts();
     const lakeGeo=new THREE.CircleGeometry(1,44).rotateX(-Math.PI/2);
     lakeGeo.scale(LAKE_RX,1,LAKE_RZ); lakeGeo.translate(LAKE_C.x,0,LAKE_C.z);
-    const waterMat=new THREE.MeshStandardMaterial({
-        map:waterTexture(),color:0x4a90b8,roughness:0.16,metalness:0.22,
-        transparent:true,opacity:0.93,side:THREE.DoubleSide});
-    if(waterMat.map){ waterMat.map.wrapS=waterMat.map.wrapT=THREE.RepeatWrapping; waterMat.map.repeat.set(2,2); }
+    bakeRadialWater(lakeGeo, LAKE_C.x, LAKE_C.z, LAKE_RX, LAKE_RZ, WATER_CFG.lakeSpeed, 2.5);
+    const waterMat=makeWaterMaterial();
     // 河尾收一个小水潭，免得缎带到头戛然而止
     const poolGeo=new THREE.CircleGeometry(1.7,24).rotateX(-Math.PI/2);
     poolGeo.translate(RIVER_P2.x,terrainH(RIVER_P2.x,RIVER_P2.z)+0.005,RIVER_P2.z);
-    pondMesh=new THREE.Mesh(mergeGeos([lakeGeo,ribbonGeo(0,0.01,3),poolGeo]),waterMat);
+    bakeRadialWater(poolGeo, RIVER_P2.x, RIVER_P2.z, 1.7, 1.7, WATER_CFG.poolSpeed, 1.5);
+    pondMesh=new THREE.Mesh(mergeWaterGeos([lakeGeo,ribbonGeo(0,0.01,3),poolGeo]),waterMat);
     pondMesh.position.y=0.06;
     pondMesh.name='lakeWater';
     scene.add(pondMesh);
@@ -2053,7 +2354,7 @@ function createTerrain(){
     shore.position.y=0.045;
     scene.add(shore);
     const riverBed=new THREE.Mesh(ribbonGeo(0.55,0.035,3),
-        new THREE.MeshStandardMaterial({color:0xcbb98a,roughness:1,side:THREE.DoubleSide}));
+        new THREE.MeshStandardMaterial({map:bedTexture(),roughness:1,side:THREE.DoubleSide}));
     riverBed.receiveShadow=true;
     scene.add(riverBed);
     // 湖边＋河岸石头：沿湖岸椭圆摆一圈（河口一段留空出水），河边沿岸点缀，合并 1 个 mesh
@@ -7326,13 +7627,17 @@ function animate(){
         p.sprite.scale.setScalar(0.7+k*3.2);
         p.sprite.material.opacity=Math.sin(k*Math.PI)*0.4;
     });
-    // 水面微波：颜色随日光强度平滑过渡（不再二值跳变），水纹贴图缓慢流动
+    // 水面（#77 游戏级水体）：基色随日光平滑过渡×季节倍率、天空反光与太阳
+    // 参数逐帧喂 shader（与全场光照同源）；流动/泡沫在 shader 内顺流而下
     if(pondMesh){
         const pk=Math.max(0,Math.min(1,(curSky.sunI-0.3)/1.4));
-        pondMesh.material.color.copy(POND_NIGHT).lerp(POND_DAY,pk);
-        pondMesh.material.color.multiply(Season.waterMul);   // 季节水色（#21）：夏季倍率为 1，保持基线
-        if(pondMesh.material.map){
-            pondMesh.material.map.offset.set((t*Env.waterFlow)%1, Math.sin(t*0.11)*0.02);
+        if(WATER_U){
+            WATER_U.uDeep.value.copy(POND_NIGHT).lerp(POND_DAY,pk).multiply(Season.waterMul);
+            WATER_U.uSky.value.copy(curSky.bot).lerp(curSky.top,0.45);
+            WATER_U.uSunCol.value.copy(curSky.sunC).multiplyScalar(Math.max(0,curSky.sunI)*0.5);
+            if(sun) WATER_U.uSunDir.value.copy(sun.position).normalize();
+            WATER_U.uFlowSpeed.value=WATER_CFG.flowSpeed*(1+Env.rainK*0.5);   // 雨天流速略急
+            WATER_U.uTime.value=t;
         }
         pondMesh.position.y=0.06+Math.sin(t*Env.bobFreq)*Env.bobAmp;
     }
@@ -11125,7 +11430,9 @@ function buildExpansion(){
     {
         const ep=extPts[extPts.length-1];
         const profEnd=riverY0()-0.011*ep.s;
-        const disc=new THREE.Mesh(new THREE.CircleGeometry(4.3,22), pondMesh.material);
+        const discGeo=new THREE.CircleGeometry(4.3,22);
+        bakeDiscWater(discGeo, 4.3, WATER_CFG.poolSpeed);   // #77：共用 shader 材质需同款属性
+        const disc=new THREE.Mesh(discGeo, pondMesh.material);
         disc.rotation.x=-Math.PI/2;
         disc.position.set(ep.x, profEnd-0.22, ep.z);
         scene.add(disc);
@@ -11583,6 +11890,7 @@ function applyLowQuality(){
         lq.classList.toggle('on', lowQuality);
         lq.textContent='📶 弱网低画质：'+(lowQuality?'开':'关');
     }
+    if(window.__waterTier) window.__waterTier(lowQuality?'base':'ultra');   // #77 水体双档同步
     if(!renderer) return;
     if(lowQuality){
         dprCur=1;
