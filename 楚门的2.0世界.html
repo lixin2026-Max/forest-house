@@ -386,6 +386,39 @@
     #echoRow button.primary{background:var(--pri);border-color:var(--pri-line);color:var(--pri-txt);font-weight:600}
     #echoRow button.primary:hover{background:var(--pri-hov)}
     #echoRow button.ghost{background:transparent}
+    /* 世界图鉴（Issue #23）：册子弹窗，配色全走主题变量，深浅色一致 */
+    #codexMask{display:none;position:absolute;inset:0;z-index:136;
+        background:var(--mask);backdrop-filter:blur(2px);
+        align-items:center;justify-content:center;padding:16px}
+    #codexMask.on{display:flex}
+    #codexBox{width:520px;max-width:100%;max-height:100%;overflow:auto;
+        background:var(--dlg);color:var(--dlg-txt);border:1px solid var(--dlg-line);
+        border-radius:14px;padding:16px 18px;box-shadow:var(--dlg-shadow);font-size:13px}
+    #codexBox h4{margin:0 0 4px;font-size:15px;color:var(--dlg-h)}
+    #codexX{background:none;border:none;color:var(--note);font-size:16px;cursor:pointer;padding:0 2px;line-height:1.2;flex:none}
+    #codexX:hover{color:var(--dlg-txt)}
+    #codexBox p.sub{margin:0 0 10px;font-size:11.5px;color:var(--dlg-sub);line-height:1.5}
+    .codexProg{display:flex;align-items:center;gap:9px;margin:0 0 11px;font-size:12.5px;color:var(--soft-txt)}
+    .codexBar{flex:1;height:8px;border-radius:99px;background:var(--tab-bg);border:1px solid var(--line-faint);overflow:hidden}
+    .codexBar i{display:block;height:100%;background:var(--pri);border-radius:99px;transition:width .4s}
+    .codexBadge{font-size:12px;color:var(--accent);font-weight:600;white-space:nowrap}
+    .codexGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(138px,1fr));gap:8px}
+    .cxItem{border:1px solid var(--line-faint);border-radius:10px;padding:9px 10px;background:var(--opt-bg)}
+    .cxItem .cxIcon{font-size:21px;line-height:1.25}
+    .cxItem .cxName{font-size:12.8px;font-weight:600;color:var(--dlg-txt);margin:2px 0 3px}
+    .cxItem .cxDesc{font-size:11.3px;line-height:1.5;color:var(--dlg-sub)}
+    .cxItem.lock .cxIcon{filter:grayscale(1) brightness(.45);opacity:.55}
+    .cxItem.lock .cxName{color:var(--dlg-sub)}
+    .cxItem.new{border-color:var(--sel-line);background:var(--sel-bg)}
+    #codexToast{position:absolute;left:50%;top:24%;transform:translate(-50%,-6px);z-index:137;pointer-events:none;
+        background:var(--float);color:var(--panel-txt);border:1px solid var(--float-line);border-radius:999px;
+        padding:7px 15px;font-size:12.5px;opacity:0;transition:opacity .3s,transform .3s;white-space:nowrap;max-width:92%}
+    #codexToast.on{opacity:1;transform:translate(-50%,0)}
+    @media (max-width:600px),(pointer:coarse){
+        #codexBox{padding:13px 14px}
+        #codexMask{padding:env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+                        env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px)}
+    }
     .logCredits{margin-top:13px;border-top:1px dashed var(--line-dash);padding-top:10px}
     .logCredits h5{margin:0 0 6px;font-size:12.5px;color:var(--dlg-h)}
     .logCredits .cr{font-size:12.5px;line-height:1.6;color:var(--soft-txt);margin:0 0 4px}
@@ -668,6 +701,7 @@
     <div class="uiBtns">
         <button type="button" id="snapBtn">📸 快照存图</button>
         <button type="button" id="voteBtn">🗳️ 投票选点子</button>
+        <button type="button" id="codexBtn">📖 世界图鉴</button>
     </div>
 </div>
 <div id="status">初始化中…</div>
@@ -905,6 +939,19 @@
         </div>
     </div>
 </div>
+<div id="codexMask">
+    <div id="codexBox" role="dialog" aria-modal="true" aria-labelledby="codexTitle">
+        <div class="logHead">
+            <h4 id="codexTitle">📖 世界图鉴</h4>
+            <button type="button" id="codexX" aria-label="关闭">✕</button>
+        </div>
+        <p class="sub">在这个世界里真正见过、种过、找到过的东西，才会被记进图鉴。灰色的条目旁写着发现它的线索，集齐全册有纪念徽章。</p>
+        <div class="codexProg" id="codexProg"></div>
+        <div class="logTabs" id="codexTabs"></div>
+        <div id="codexBody"></div>
+    </div>
+</div>
+<div id="codexToast"></div>
 <div id="wishBubble"></div>
 <div id="huntToast"></div>
 <div id="helpTip">👋 第一次来？点顶栏里的「❓ 操作帮助」，玩法都在里面</div>
@@ -1070,7 +1117,7 @@ const CONFIG = {
 };
 
 /* ---------- 薄存储适配层 ----------
-   核心系统不直接碰本地存储：一律经 store.<槽> 读写。槽位与 9 个白名单键
+   核心系统不直接碰本地存储：一律经 store.<槽> 读写。槽位与 10 个白名单键
    一一对应，键名仍以字面量出现在下面这唯一实现处（安全审计照常钉死）。
    移植时只换 mkSlot 底下的读写实现（小程序 storage / App 本地库），上层不动。 */
 
@@ -1088,6 +1135,10 @@ const DRAGON_KEY='ct2_dragon';
    玩家提交建议时领到的回执码、署名选择与「共建者」徽章只存本机 ct2_echo
    （ECHO_KEY 写死，照其余各键的治理先例）：匹配在本机完成，不绑任何身份。 */
 const ECHO_KEY='ct2_echo';
+/* ---------- 世界图鉴（Issue #23） ----------
+   图鉴的解锁集合只存本机 ct2_codex（CODEX_KEY 写死，照其余各键的治理先例）：
+   只记「见过哪些条目」的 id 清单，不绑任何身份。 */
+const CODEX_KEY='ct2_codex';
 function mkSlot(read, write){
     const slot = { failed:false, _read:read, _write:write,
         get(){ try{ return slot._read(); }catch(e){ slot.failed = true; return null; } },
@@ -1108,7 +1159,8 @@ const store = {
     theme:  mkSlot(()=>localStorage.getItem(THEME_KEY),    v=>localStorage.setItem(THEME_KEY, v)),
     dragon: mkSlot(()=>localStorage.getItem(DRAGON_KEY),   v=>localStorage.setItem(DRAGON_KEY, v)),
     bag:    mkSlot(()=>localStorage.getItem(BAG_KEY),      v=>localStorage.setItem(BAG_KEY, v)),
-    echo:   mkSlot(()=>localStorage.getItem(ECHO_KEY),     v=>localStorage.setItem(ECHO_KEY, v))
+    echo:   mkSlot(()=>localStorage.getItem(ECHO_KEY),     v=>localStorage.setItem(ECHO_KEY, v)),
+    codex:  mkSlot(()=>localStorage.getItem(CODEX_KEY),    v=>localStorage.setItem(CODEX_KEY, v))
 };
 
 /* 主题状态只从 applyUiTheme 这一处进出：换根元素类 + 存偏好 + 同步面板按钮 */
@@ -1971,6 +2023,7 @@ function createTrees(){
         trees.push(plantTree(g.x,g.z,g.isPine,g.seed));
     });
     buildTreeInstances(trees);
+    CODEX_TREE_SPOTS = trees;   // 世界图鉴（#23）：松/桦的目击判定借用植树点清单（只读引用）
 }
 
 /* ==================== 小屋 ==================== */
@@ -6262,7 +6315,7 @@ function echoArmLetterWatch(){
         const boot=document.getElementById('boot');
         const bootGone=!boot || boot.classList.contains('hide') || boot.style.display==='none';
         if(!bootGone) return;
-        const ids=['fbMask','ltMask','helpMask','voteMask','logMask','modPanel'];
+        const ids=['fbMask','ltMask','helpMask','voteMask','logMask','modPanel','codexMask'];
         for(let i=0;i<ids.length;i++){
             const el=document.getElementById(ids[i]);
             if(el && el.classList.contains('on')) return;
@@ -6934,6 +6987,278 @@ function setupTap(){
         if(dx*dx + dy*dy < 36 && dur < 500) onSceneTap(e);
     });
 }
+
+/* ==================== 世界图鉴（Issue #23） ====================
+   把世界里已有的可发现内容收成一册：植物 / 作物 / 宝物 / 天气 / 地点 / 动物。
+   条目全部声明式写在 CODEX_DEFS，逻辑只做三件事：
+   ① 巡检现有系统状态（寻宝记录 / 农场种植 / 当前天气）——命中即点亮；
+   ② 目击近似判定（镜头视锥内出现过该物 / 镜头焦点或相机到访过该地点）；
+   ③ 解锁集合经 store.codex 存本机 ct2_codex，重载不丢。
+   图鉴是纯 UI 层：不新增任何 3D 物件，draw calls 零增长。
+   kind 取值：
+     hunt    每日寻宝找到过（读 huntState.found；点亮后永久保留，不受寻宝跨天重置影响）
+     crop    农场里亲手种下过（读 farmState.cells）；可带 orVisit 作为「走到附近看过」的备选
+     weather 亲身经历过（读 weatherModes[weatherIndex]）
+     view    目击：spots() 给世界坐标，任一进镜头视锥且距离 < 85 即点亮
+     visit   到访：镜头焦点或相机本体（2D）进入 anchor 的半径 r 内
+     inside  进屋后参观焦点靠近室内家具（local 坐标经 roomToWorld 换算）；无 at 即进屋本身
+     firefly 夜里累计待够约 6 秒（萤火虫是粒子群、无单体坐标，用夜间目击近似） */
+var CODEX_TREE_SPOTS=[];   // 建世界时由 buildTreeInstances 的调用方回填（植树点只读引用）
+const CODEX_CATS=[
+    { id:'plant',    name:'🌿 植物' },
+    { id:'crop',     name:'🌾 作物' },
+    { id:'treasure', name:'🎁 宝物' },
+    { id:'weather',  name:'🌦️ 天气' },
+    { id:'place',    name:'🗺️ 地点' },
+    { id:'animal',   name:'🐾 动物' }
+];
+const CODEX_DEFS=[
+    /* ---- 植物 ---- */
+    { id:'sunflower', cat:'plant', icon:'🌻', name:'向日葵', kind:'crop', key:'sunflower', orVisit:{ at:'farm', r:14 },
+      desc:'花盘追着太阳转，是花田和农田里个头最高的一株。', hint:'在农田里种下向日葵，或走到花田边看看' },
+    { id:'wildflower', cat:'plant', icon:'🌼', name:'野花', kind:'visit', at:'house', r:30,
+      desc:'小屋周围的花带里一簇簇地开，风一吹就点头。', hint:'绕着小屋散散步，花带就在屋前屋后' },
+    { id:'pine', cat:'plant', icon:'🎄', name:'松树', kind:'view', spots:'pine',
+      desc:'四季常青，树冠像一层层撑开的伞，松果就藏在枝叶里。', hint:'屋后山林和院子四周都有松树，抬头找一棵' },
+    { id:'birch', cat:'plant', icon:'🌳', name:'桦树', kind:'view', spots:'birch',
+      desc:'白树皮、圆叶子，爱站在栅栏边和湖岸上。', hint:'找一棵白树干的树，凑近看看' },
+    /* ---- 作物 ---- */
+    { id:'corn', cat:'crop', icon:'🌽', name:'玉米', kind:'crop', key:'corn',
+      desc:'秆子窜得比人还高，剥开是金黄的颗粒。', hint:'在农田的可玩格里播下玉米（点空地轮换播种）' },
+    { id:'pumpkin', cat:'crop', icon:'🎃', name:'南瓜', kind:'crop', key:'pumpkin',
+      desc:'趴在田垄上晒太阳，越长越圆。', hint:'在农田的可玩格里播下南瓜（点空地轮换播种）' },
+    /* ---- 宝物（每日寻宝） ---- */
+    { id:'acorn', cat:'treasure', icon:'🌰', name:'橡果', kind:'hunt', key:'acorn',
+      desc:'圆滚滚的橡果，是松鼠藏冬粮的好宝贝。', hint:'参加每日寻宝，找到藏起来的橡果' },
+    { id:'mushroom', cat:'treasure', icon:'🍄', name:'蘑菇', kind:'hunt', key:'mushroom',
+      desc:'林子里冒出来的小伞，红盖子配白点点。', hint:'参加每日寻宝，找到藏起来的蘑菇' },
+    { id:'feather', cat:'treasure', icon:'🪶', name:'羽毛', kind:'hunt', key:'feather',
+      desc:'小鸟路过时掉下的一根羽毛，轻得几乎没有重量。', hint:'参加每日寻宝，找到藏起来的羽毛' },
+    { id:'pinecone', cat:'treasure', icon:'🌲', name:'松果', kind:'hunt', key:'pinecone',
+      desc:'松树落在地上的果子，鳞片会一张一合。', hint:'参加每日寻宝，找到藏起来的松果' },
+    { id:'egg', cat:'treasure', icon:'🥚', name:'彩蛋', kind:'hunt', key:'egg',
+      desc:'藏得最刁钻的一件，找到它的人运气不会差。', hint:'参加每日寻宝，找到藏起来的彩蛋' },
+    /* ---- 天气 ---- */
+    { id:'w_sunny', cat:'weather', icon:'☀️', name:'晴天', kind:'weather', key:'sunny',
+      desc:'蓝天白云，适合在湖边发一整个下午的呆。', hint:'经历一次晴天（多半开局就是）' },
+    { id:'w_mist', cat:'weather', icon:'🌫️', name:'雾天', kind:'weather', key:'mist',
+      desc:'雾气漫过草地，小屋像浮在云上。', hint:'等一次雾天，或按 T 切换天气' },
+    { id:'w_rain', cat:'weather', icon:'🌧️', name:'雨天', kind:'weather', key:'rain',
+      desc:'雨点敲在屋顶和湖面上，农田自己就喝饱了水。', hint:'等一场雨，或按 T 切换天气' },
+    { id:'w_golden', cat:'weather', icon:'🌇', name:'金色时刻', kind:'weather', key:'golden',
+      desc:'太阳低下去的那一会儿，整个世界都被镀上金边。', hint:'傍晚的金色时刻最短，别错过' },
+    { id:'w_night', cat:'weather', icon:'🌙', name:'夜间', kind:'weather', key:'night',
+      desc:'月亮升起来，萤火虫和星星接管了世界。', hint:'等天黑，或把太阳高度拉低' },
+    /* ---- 地点 ---- */
+    { id:'p_house', cat:'place', icon:'🏠', name:'小屋', kind:'visit', at:'house', r:17,
+      desc:'故事开始的地方：木屋、烟囱和一圈花。', hint:'走到小屋跟前看看' },
+    { id:'p_lake', cat:'place', icon:'🌊', name:'湖', kind:'visit', at:'lake', r:14,
+      desc:'小池塘扩成的大湖，河灯能在这里漂很久。', hint:'走到湖边去' },
+    { id:'p_river', cat:'place', icon:'🏞️', name:'小河', kind:'visit', at:'river', r:8,
+      desc:'从湖里拉出来的一条小河，往东南草地淌去。', hint:'让镜头沿着湖往东南走，河在草地那头' },
+    { id:'p_farm', cat:'place', icon:'🌾', name:'农田', kind:'visit', at:'farm', r:12,
+      desc:'一格一格的田垄，种什么长什么。', hint:'去小屋左前方的农田看看' },
+    { id:'p_fire', cat:'place', icon:'🔥', name:'篝火', kind:'visit', at:'fire', r:8,
+      desc:'夜里最暖和的地方，小龙睡觉也要挨着它。', hint:'找到院子里的篝火堆' },
+    { id:'p_room', cat:'place', icon:'🛋️', name:'小屋客厅', kind:'inside',
+      desc:'壁炉、书桌和地毯——进屋的人都会先在这里站一会儿。', hint:'点开小屋的门，进屋看看' },
+    { id:'p_fireplace', cat:'place', icon:'🪵', name:'壁炉', kind:'inside', at:[-1.2,-1.95], r:2.8,
+      desc:'炉膛里的火一直烧着，柴堆就码在旁边。', hint:'进屋后走到壁炉跟前' },
+    { id:'p_shelf', cat:'place', icon:'📚', name:'书架', kind:'inside', at:[1.9,-2.02], r:2.8,
+      desc:'几十本书排得满满当当，都是这个世界的旧故事。', hint:'进屋后走到书架跟前' },
+    { id:'p_bed', cat:'place', icon:'🛏️', name:'床铺', kind:'inside', at:[2.05,1.42], r:2.8,
+      desc:'被褥叠得整整齐齐，枕头上还有阳光的味道。', hint:'进屋后走到床边看看' },
+    { id:'p_nest', cat:'place', icon:'🐾', name:'龙窝', kind:'inside', at:[-2.15,1.72], r:2.6,
+      desc:'屋角给小龙铺的窝：垫子、窝沿和一条小毯子。', hint:'进屋后去屋角看看龙窝' },
+    /* ---- 动物 ---- */
+    { id:'a_squirrel', cat:'animal', icon:'🐿️', name:'松鼠', kind:'view', spots:'squirrel',
+      desc:'抱着松果在树上探头探脑，胆子小，好奇心大。', hint:'松树和桦树上常有松鼠，盯着树冠看' },
+    { id:'a_bird', cat:'animal', icon:'🐦', name:'小鸟', kind:'view', spots:'bird',
+      desc:'站在枝头唱歌，翅膀一抖就飞走了。', hint:'听见鸟叫时，抬头找一找' },
+    { id:'a_butterfly', cat:'animal', icon:'🦋', name:'蝴蝶', kind:'view', spots:'butterfly',
+      desc:'绕着花丛慢慢飞，翅膀一下一下地扇。', hint:'花带附近常有蝴蝶打转' },
+    { id:'a_bee', cat:'animal', icon:'🐝', name:'蜜蜂', kind:'view', spots:'bee',
+      desc:'嗡嗡地在花上忙活，勤劳得让人不好意思偷懒。', hint:'花丛上空嗡嗡响的就是它' },
+    { id:'a_firefly', cat:'animal', icon:'✨', name:'萤火虫', kind:'firefly',
+      desc:'只有夜里才亮起来的小灯笼，一闪一闪。', hint:'在夜里待上一小会儿' },
+    { id:'a_dragon', cat:'animal', icon:'🐉', name:'小龙', kind:'view', spots:'dragon',
+      desc:'这个世界的守护者，奶黄色的，脾气很好。', hint:'它白天在世界里散步，夜里去篝火边睡' }
+];
+const CODEX_ANCHORS={
+    house(){ return [HOUSE_POS.x, HOUSE_POS.z]; },
+    lake(){ return [LAKE_C.x, LAKE_C.z]; },
+    river(){ if(!RIVER_PTS) buildRiverPts(); const p=RIVER_PTS[Math.floor(RIVER_PTS.length/2)]; return [p.x, p.z]; },
+    farm(){ if(typeof farmGrid!=='undefined' && farmGrid.length){ const c=farmGrid[Math.floor(farmGrid.length/2)]; return [c.x, c.z]; } return null; },
+    fire(){ return (typeof campfire!=='undefined' && campfire) ? [campfire.position.x, campfire.position.z] : null; }
+};
+let codexState=null;              // {u:[已解锁条目 id]}
+const codexNewIds=new Set();      // 本次会话新点亮的条目（开册时高亮，会话内有效）
+let codexOpen=false, codexTab='plant', codexNightSec=0, codexToastTimer=0;
+function loadCodex(){
+    if(codexState) return codexState;
+    const s=store.codex.json({ u:[] });
+    if(!s || !Array.isArray(s.u)) codexState={ u:[] }; else codexState=s;
+    return codexState;
+}
+function codexHas(id){ return loadCodex().u.indexOf(id)>=0; }
+function codexUnlock(id){
+    const s=loadCodex();
+    if(s.u.indexOf(id)>=0) return false;
+    s.u.push(id); store.codex.save(s); codexNewIds.add(id);
+    return true;
+}
+const _cxV=(typeof THREE!=='undefined') ? new THREE.Vector3() : null;
+function codexInView(x, y, z){
+    if(!_cxV || typeof camera==='undefined' || !camera) return false;
+    _cxV.set(x, y, z);
+    if(_cxV.distanceTo(camera.position)>85) return false;
+    _cxV.project(camera);
+    return _cxV.z<1 && Math.abs(_cxV.x)<1.02 && Math.abs(_cxV.y)<1.02;
+}
+function codexSpots(name){
+    const out=[];
+    try{
+        if(name==='pine' || name==='birch'){
+            const wantPine=(name==='pine');
+            for(const t of CODEX_TREE_SPOTS) if(t.isPine===wantPine) out.push([t.x, t.y+3.6, t.z]);
+        } else if(name==='squirrel'){
+            for(const a of squirrels) if(a.group) out.push([a.group.position.x, a.group.position.y, a.group.position.z]);
+        } else if(name==='bird'){
+            for(const a of birds) if(a.group) out.push([a.group.position.x, a.group.position.y, a.group.position.z]);
+        } else if(name==='butterfly'){
+            for(const a of butterflies) if(a.home) out.push([a.home.x, a.home.y, a.home.z]);
+        } else if(name==='bee'){
+            for(const a of bees) if(a.home) out.push([a.home.x, a.home.y, a.home.z]);
+        } else if(name==='dragon'){
+            if(typeof dragonAgent!=='undefined' && dragonAgent && dragonAgent.group)
+                out.push([dragonAgent.group.position.x, dragonAgent.group.position.y+1, dragonAgent.group.position.z]);
+        }
+    }catch(e){ /* 动物还没建好时这一轮跳过 */ }
+    return out;
+}
+function codexVisitHit(at, r){
+    const fn=CODEX_ANCHORS[at]; if(!fn) return false;
+    const p=fn(); if(!p) return false;
+    let d=Math.hypot(controls.target.x-p[0], controls.target.z-p[1]);
+    d=Math.min(d, Math.hypot(camera.position.x-p[0], camera.position.z-p[1]));
+    return d<r;
+}
+function codexCheck(def){
+    switch(def.kind){
+        case 'hunt':
+            return (typeof huntState!=='undefined' && huntState && Array.isArray(huntState.found)
+                && huntState.found.indexOf(def.key)>=0);
+        case 'crop': {
+            let hit=false;
+            if(typeof farmState!=='undefined' && farmState && farmState.cells){
+                for(const k in farmState.cells){ if(farmState.cells[k] && farmState.cells[k].crop===def.key){ hit=true; break; } }
+            }
+            if(!hit && def.orVisit) hit=codexVisitHit(def.orVisit.at, def.orVisit.r);
+            return hit;
+        }
+        case 'weather':
+            return weatherModes[weatherIndex]===def.key;
+        case 'view': {
+            const pts=codexSpots(def.spots);
+            for(const p of pts) if(codexInView(p[0], p[1], p[2])) return true;
+            return false;
+        }
+        case 'visit':
+            return codexVisitHit(def.at, def.r);
+        case 'inside': {
+            if(typeof Interior==='undefined' || !Interior.active) return false;
+            if(!def.at) return true;
+            const w=roomToWorld(def.at[0], ROOM.floorY, def.at[1]);
+            return Math.hypot(Interior.tgt.x-w.x, Interior.tgt.z-w.z)<def.r;
+        }
+        case 'firefly':
+            return codexNightSec>=6;
+    }
+    return false;
+}
+function codexTick(){
+    if(typeof camera==='undefined' || !camera || typeof controls==='undefined' || !controls) return;
+    if(typeof weatherModes!=='undefined' && weatherModes[weatherIndex]==='night') codexNightSec+=1.4;
+    else codexNightSec=0;
+    const fresh=[];
+    for(const def of CODEX_DEFS){
+        if(codexHas(def.id)) continue;
+        let hit=false;
+        try{ hit=codexCheck(def); }catch(e){ hit=false; }
+        if(hit && codexUnlock(def.id)) fresh.push(def);
+    }
+    if(fresh.length){
+        codexAnnounce(fresh);
+        if(codexOpen) renderCodex();
+    }
+}
+function codexAnnounce(fresh){
+    const el=document.getElementById('codexToast'); if(!el) return;
+    const s=loadCodex();
+    if(s.u.length>=CODEX_DEFS.length)
+        el.textContent='🏅 图鉴集齐啦！「世界收藏家」纪念徽章到手（'+s.u.length+'/'+CODEX_DEFS.length+'）';
+    else
+        el.textContent='📖 图鉴新增：'+fresh.map(d=>d.icon+' '+d.name).join('、')+'（'+s.u.length+'/'+CODEX_DEFS.length+'）';
+    el.classList.add('on');
+    if(codexToastTimer) clearTimeout(codexToastTimer);
+    codexToastTimer=setTimeout(()=>el.classList.remove('on'), 3400);
+}
+function renderCodex(){
+    const s=loadCodex();
+    const prog=document.getElementById('codexProg'); if(!prog) return;
+    prog.textContent='';
+    const label=document.createElement('span');
+    label.textContent='已收集 '+s.u.length+' / '+CODEX_DEFS.length;
+    const bar=document.createElement('div'); bar.className='codexBar';
+    const fill=document.createElement('i');
+    fill.style.width=(CODEX_DEFS.length ? Math.round(s.u.length/CODEX_DEFS.length*100) : 0)+'%';
+    bar.appendChild(fill); prog.appendChild(label); prog.appendChild(bar);
+    if(s.u.length>=CODEX_DEFS.length){
+        const b=document.createElement('span'); b.className='codexBadge';
+        b.textContent='🏅 世界收藏家'; prog.appendChild(b);
+    }
+    const tabs=document.getElementById('codexTabs'); tabs.textContent='';
+    for(const cat of CODEX_CATS){
+        let total=0, got=0;
+        for(const d of CODEX_DEFS) if(d.cat===cat.id){ total++; if(s.u.indexOf(d.id)>=0) got++; }
+        const btn=document.createElement('button'); btn.type='button';
+        btn.textContent=cat.name+' '+got+'/'+total+(got===total ? ' ✓' : '');
+        if(codexTab===cat.id) btn.className='on';
+        btn.addEventListener('click', ()=>{ codexTab=cat.id; renderCodex(); });
+        tabs.appendChild(btn);
+    }
+    const body=document.getElementById('codexBody'); body.textContent='';
+    const grid=document.createElement('div'); grid.className='codexGrid';
+    for(const def of CODEX_DEFS){
+        if(def.cat!==codexTab) continue;
+        const got=s.u.indexOf(def.id)>=0;
+        const card=document.createElement('div');
+        card.className='cxItem'+(got ? '' : ' lock')+(codexNewIds.has(def.id) ? ' new' : '');
+        const ic=document.createElement('div'); ic.className='cxIcon'; ic.textContent=def.icon;
+        const nm=document.createElement('div'); nm.className='cxName'; nm.textContent=got ? def.name : '？？？';
+        const ds=document.createElement('div'); ds.className='cxDesc'; ds.textContent=got ? def.desc : ('🔍 '+def.hint);
+        card.appendChild(ic); card.appendChild(nm); card.appendChild(ds);
+        grid.appendChild(card);
+    }
+    body.appendChild(grid);
+}
+function openCodex(){
+    codexOpen=true; renderCodex();
+    document.getElementById('codexMask').classList.add('on');
+}
+function closeCodex(){
+    codexOpen=false; codexNewIds.clear();
+    document.getElementById('codexMask').classList.remove('on');
+}
+(function setupCodex(){
+    const btn=document.getElementById('codexBtn');
+    if(btn) btn.addEventListener('click', openCodex);
+    const x=document.getElementById('codexX');
+    if(x) x.addEventListener('click', closeCodex);
+    const mask=document.getElementById('codexMask');
+    if(mask) mask.addEventListener('click', e=>{ if(e.target===mask) closeCodex(); });
+    setInterval(codexTick, 1400);
+})();
 
 /* ---------- 找一找：每日寻宝 ----------
    每天按日期种子从候选点里抽 5 处，藏 5 件小物；点中即收集，
@@ -7802,7 +8127,7 @@ function setupGlobal(){
     if(!app) return;
     var HIDE_MS = 3000, timer = null;
     function anyDialogOpen(){
-        var ids = ['modPanel','fbMask','ltMask','helpMask','voteMask','logMask','dragonMask','echoMask'], i, el;
+        var ids = ['modPanel','fbMask','ltMask','helpMask','voteMask','logMask','dragonMask','echoMask','codexMask'], i, el;
         for(i = 0; i < ids.length; i++){
             el = document.getElementById(ids[i]);
             if(el && el.classList.contains('on')) return true;
@@ -7820,7 +8145,7 @@ function setupGlobal(){
         app.classList.remove('bars-off');
         arm();
     }
-    ['ui','status','fbBtn','lanternBtn','modBtn','modPanel','fbMask','ltMask','helpMask','voteMask','logMask','echoMask'].forEach(function(id){
+    ['ui','status','fbBtn','lanternBtn','modBtn','modPanel','fbMask','ltMask','helpMask','voteMask','logMask','echoMask','codexMask'].forEach(function(id){
         var el = document.getElementById(id);
         if(!el) return;
         ['pointerdown','input','change','wheel'].forEach(function(ev){
