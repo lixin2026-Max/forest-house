@@ -2294,6 +2294,144 @@ function createGrass(){
     swayGroups.push({kind:'grass',inst:grassIM,count:N,data:gdata});
 }
 
+/* ==================== 行为框架（Issue #32 · 地基） ====================
+   小型 agent 框架：一个 agent = 一份行为定义（def）+ 一份实例数据。
+   def = { name, initial, states:{ 状态名: { enter / update 两个钩子 } },
+           schedule?, onPhase?, frameEnd? }
+   - 状态机：AgentKit.setState(a, 名) 切状态并走 enter 钩子；
+   - 作息表：def.schedule 是阶段名数组（与 GClock.phase() 对齐，如 ['sunny','golden']），
+     不在表内的阶段 agent 不更新；不填 = 全天活动。阶段来自游戏时钟，
+     框架每帧查一次，阶段变化的那一帧回调 def.onPhase(新阶段)；
+   - 移动：树栖/飞行 agent 的位移公式写在自己的状态 update 里（与旧版逐字一致）；
+     地面 agent 用 AgentKit.groundStep 朝目标走，落点先问 WalkMap 问路。
+   新增角色（#27 小龙）只需三步：写一份 def、建好模型、
+   种群列表.push(AgentKit.spawn(def, 数据))，不用碰 animate。
+   框架不碰浏览器接口，时间由 animate 喂入（dt/t），与时钟同源。 */
+const AgentKit = {
+    agents: [],
+    _byDef: new Map(),
+    _lastPhase: null,
+    spawn(def, data){
+        const a = Object.assign({ def:def, state:null }, data||{});
+        AgentKit.agents.push(a);
+        if(!AgentKit._byDef.has(def)) AgentKit._byDef.set(def, []);
+        AgentKit._byDef.get(def).push(a);
+        AgentKit.setState(a, def.initial || 'idle');
+        return a;
+    },
+    setState(a, name){
+        a.state = name;
+        const st = a.def.states && a.def.states[name];
+        if(st && st.enter) st.enter(a);
+    },
+    activeNow(def){
+        if(!def.schedule) return true;
+        return def.schedule.indexOf(GClock.phase()) >= 0;
+    },
+    update(dt, t){
+        const ph = GClock.phase();
+        if(ph !== AgentKit._lastPhase){
+            AgentKit._lastPhase = ph;
+            for(const def of AgentKit._byDef.keys()) if(def.onPhase) def.onPhase(ph);
+        }
+        for(const pair of AgentKit._byDef){
+            const def = pair[0], list = pair[1];
+            if(!AgentKit.activeNow(def)) continue;
+            for(const a of list){
+                const st = def.states && def.states[a.state];
+                if(st && st.update) st.update(a, dt, t);
+            }
+            if(def.frameEnd) def.frameEnd(dt, t);
+        }
+    },
+    /* 地面移动一步：朝 (tx,tz) 挪 step 长，落点先问可行走地图——不通就原地不动、返回 false */
+    groundStep(a, tx, tz, step){
+        const dx = tx - a.group.position.x, dz = tz - a.group.position.z;
+        const d = Math.hypot(dx, dz);
+        if(d < 1e-4) return true;
+        const s = Math.min(step, d) / d;
+        const nx = a.group.position.x + dx * s, nz = a.group.position.z + dz * s;
+        if(!WalkMap.isWalkable(nx, nz)) return false;
+        a.group.position.x = nx; a.group.position.z = nz;
+        a.group.position.y = terrainH(nx, nz);
+        a.group.rotation.y = Math.atan2(dx, dz);
+        return true;
+    }
+};
+
+/* ---------- 现有四类动物的行为定义（公式与框架化之前逐字一致） ---------- */
+const SQUIRREL_DEF = {
+    name: 'squirrel', initial: 'perch',
+    states: { perch: { update(a, dt){
+        a.phase += dt * 1.1;
+        a.group.position.y = a.baseY + Math.sin(a.phase) * 0.4;
+        a.group.position.x = a.baseX + Math.sin(a.phase * 0.5) * 0.3;
+        a.group.rotation.y = a.phase * 0.4;
+    } } }
+};
+const BIRD_DEF = {
+    name: 'bird', initial: 'perch',
+    states: { perch: { update(a, dt){
+        a.phase += dt * 6;
+        a.wingL.rotation.z = Math.sin(a.phase) * 0.9;
+        a.wingR.rotation.z = -Math.sin(a.phase) * 0.9;
+        a.group.rotation.y = Math.sin(a.phase * 0.15) * 0.5;
+        a.hopPhase += dt * 2;
+        a.group.position.y = a.baseY + Math.max(0, Math.sin(a.hopPhase)) * 0.06;
+    } } }
+};
+const BUTTERFLY_DEF = {
+    name: 'butterfly', initial: 'flutter',
+    states: { flutter: { update(a, dt, t){
+        a.phase += dt * a.speed;
+        dummy.position.set(
+            a.home.x + Math.cos(a.phase) * a.radius,
+            a.home.y + Math.sin(a.phase * 2) * 0.5,
+            a.home.z + Math.sin(a.phase * 0.8) * a.radius);
+        dummy.scale.set(1, 1, 1);
+        const flap = Math.sin(t * 20 + a.phase * 5) * 0.95;
+        dummy.rotation.set(0, -a.phase, 0); dummy.updateMatrix();
+        bfBodyIM.setMatrixAt(a.idx, dummy.matrix);
+        dummy.rotation.set(0, -a.phase + flap, 0); dummy.updateMatrix();
+        bfWingLIM.setMatrixAt(a.idx, dummy.matrix);
+        dummy.rotation.set(0, -a.phase - flap, 0); dummy.updateMatrix();
+        bfWingRIM.setMatrixAt(a.idx, dummy.matrix);
+    } } },
+    frameEnd(){
+        if(!bfBodyIM) return;
+        bfBodyIM.instanceMatrix.needsUpdate = true;
+        bfWingLIM.instanceMatrix.needsUpdate = true;
+        bfWingRIM.instanceMatrix.needsUpdate = true;
+    }
+};
+const BEE_DEF = {
+    name: 'bee', initial: 'buzz',
+    states: { buzz: { update(a, dt, t){
+        a.phase += dt * 1.4;
+        dummy.position.set(
+            a.home.x + Math.sin(a.phase) * 1.3,
+            a.home.y + Math.sin(a.phase * 3) * 0.25,
+            a.home.z + Math.cos(a.phase * 1.3) * 1.3);
+        dummy.scale.set(1, 1, 1);
+        const rot = -a.phase * 1.3;
+        const flap = Math.sin(t * 42 + a.phase) * 0.7;
+        dummy.rotation.set(0, rot, 0); dummy.updateMatrix();
+        beeBodyIM.setMatrixAt(a.idx, dummy.matrix);
+        beeStripeIM.setMatrixAt(a.idx, dummy.matrix);
+        dummy.rotation.set(0, rot, 0.3 + flap); dummy.updateMatrix();
+        beeWingLIM.setMatrixAt(a.idx, dummy.matrix);
+        dummy.rotation.set(0, rot, -0.3 - flap); dummy.updateMatrix();
+        beeWingRIM.setMatrixAt(a.idx, dummy.matrix);
+    } } },
+    frameEnd(){
+        if(!beeBodyIM) return;
+        beeBodyIM.instanceMatrix.needsUpdate = true;
+        beeStripeIM.instanceMatrix.needsUpdate = true;
+        beeWingLIM.instanceMatrix.needsUpdate = true;
+        beeWingRIM.instanceMatrix.needsUpdate = true;
+    }
+};
+
 /* ==================== 动物 ==================== */
 // 树木合批后不再有单棵树的 Group：把动物在树局部的落点换算成世界坐标直接挂到 scene
 function treeLocalToWorld(rec,lx,ly,lz){
@@ -2320,8 +2458,8 @@ function attachSquirrel(rec){
     const wp=treeLocalToWorld(rec,0.55,3.2*rec.s,0.3);
     sq.position.set(wp.x,wp.y,wp.z);
     scene.add(sq);
-    squirrels.push({group:sq,baseY:sq.position.y,baseX:sq.position.x,
-        phase:Math.random()*6.28,tree:rec});
+    squirrels.push(AgentKit.spawn(SQUIRREL_DEF, {group:sq, baseY:sq.position.y, baseX:sq.position.x,
+        phase:Math.random()*6.28, tree:rec}));
 }
 function attachBird(rec){
     const bird=new THREE.Group();
@@ -2344,8 +2482,8 @@ function attachBird(rec){
     const wp=treeLocalToWorld(rec,(Math.random()-0.5)*1.4,6.4,(Math.random()-0.5)*1.4);
     bird.position.set(wp.x,wp.y,wp.z);
     scene.add(bird);
-    birds.push({group:bird,wingL,wingR,phase:Math.random()*6.28,
-        hopPhase:Math.random()*6.28,baseY:bird.position.y});
+    birds.push(AgentKit.spawn(BIRD_DEF, {group:bird, wingL:wingL, wingR:wingR, phase:Math.random()*6.28,
+        hopPhase:Math.random()*6.28, baseY:bird.position.y}));
 }
 
 /* ==================== 昆虫 ==================== */
@@ -2367,8 +2505,8 @@ function createInsects(){
     for(let i=0;i<NBF;i++){
         const a=Math.random()*6.28,d=3+Math.random()*13;
         const home=new THREE.Vector3(8+Math.cos(a)*d,1.4+Math.random()*1.6,6+Math.sin(a)*d);
-        butterflies.push({idx:i,home:home,
-            phase:Math.random()*6.28,speed:0.5+Math.random()*0.8,radius:1.5+Math.random()*3.5});
+        butterflies.push(AgentKit.spawn(BUTTERFLY_DEF, {idx:i, home:home,
+            phase:Math.random()*6.28, speed:0.5+Math.random()*0.8, radius:1.5+Math.random()*3.5}));
         bfWingLIM.setColorAt(i,C(bColors[i%bColors.length]));
         bfWingRIM.setColorAt(i,C(bColors[i%bColors.length]));
     }
@@ -2395,7 +2533,7 @@ function createInsects(){
     for(let i=0;i<NBEE;i++){
         const a=Math.random()*6.28,d=3+Math.random()*12;
         const home=new THREE.Vector3(8+Math.cos(a)*d,1.1+Math.random(),6+Math.sin(a)*d);
-        bees.push({idx:i,home:home,phase:Math.random()*6.28});
+        bees.push(AgentKit.spawn(BEE_DEF, {idx:i, home:home, phase:Math.random()*6.28}));
     }
     // 萤火虫（仅夜间显示）
     const fg=new THREE.BufferGeometry();
@@ -2686,67 +2824,8 @@ function animate(){
         }
     });
 
-    // 鸟
-    birds.forEach(b=>{
-        b.phase+=dt*6;
-        b.wingL.rotation.z=Math.sin(b.phase)*0.9;
-        b.wingR.rotation.z=-Math.sin(b.phase)*0.9;
-        b.group.rotation.y=Math.sin(b.phase*0.15)*0.5;
-        b.hopPhase+=dt*2;
-        b.group.position.y=b.baseY+Math.max(0,Math.sin(b.hopPhase))*0.06;
-    });
-    // 松鼠
-    squirrels.forEach(s=>{
-        s.phase+=dt*1.1;
-        s.group.position.y=s.baseY+Math.sin(s.phase)*0.4;
-        s.group.position.x=s.baseX+Math.sin(s.phase*0.5)*0.3;
-        s.group.rotation.y=s.phase*0.4;
-    });
-    // 蝴蝶（实例矩阵逐帧更新：位置/朝向与旧版 Group 写法等价）
-    if(bfBodyIM){
-        butterflies.forEach(b=>{
-            b.phase+=dt*b.speed;
-            dummy.position.set(
-                b.home.x+Math.cos(b.phase)*b.radius,
-                b.home.y+Math.sin(b.phase*2)*0.5,
-                b.home.z+Math.sin(b.phase*0.8)*b.radius);
-            dummy.scale.set(1,1,1);
-            const flap=Math.sin(t*20+b.phase*5)*0.95;
-            dummy.rotation.set(0,-b.phase,0); dummy.updateMatrix();
-            bfBodyIM.setMatrixAt(b.idx,dummy.matrix);
-            dummy.rotation.set(0,-b.phase+flap,0); dummy.updateMatrix();
-            bfWingLIM.setMatrixAt(b.idx,dummy.matrix);
-            dummy.rotation.set(0,-b.phase-flap,0); dummy.updateMatrix();
-            bfWingRIM.setMatrixAt(b.idx,dummy.matrix);
-        });
-        bfBodyIM.instanceMatrix.needsUpdate=true;
-        bfWingLIM.instanceMatrix.needsUpdate=true;
-        bfWingRIM.instanceMatrix.needsUpdate=true;
-    }
-    // 蜜蜂（同上）
-    if(beeBodyIM){
-        bees.forEach(b=>{
-            b.phase+=dt*1.4;
-            dummy.position.set(
-                b.home.x+Math.sin(b.phase)*1.3,
-                b.home.y+Math.sin(b.phase*3)*0.25,
-                b.home.z+Math.cos(b.phase*1.3)*1.3);
-            dummy.scale.set(1,1,1);
-            const rot=-b.phase*1.3;
-            const flap=Math.sin(t*42+b.phase)*0.7;
-            dummy.rotation.set(0,rot,0); dummy.updateMatrix();
-            beeBodyIM.setMatrixAt(b.idx,dummy.matrix);
-            beeStripeIM.setMatrixAt(b.idx,dummy.matrix);
-            dummy.rotation.set(0,rot,0.3+flap); dummy.updateMatrix();
-            beeWingLIM.setMatrixAt(b.idx,dummy.matrix);
-            dummy.rotation.set(0,rot,-0.3-flap); dummy.updateMatrix();
-            beeWingRIM.setMatrixAt(b.idx,dummy.matrix);
-        });
-        beeBodyIM.instanceMatrix.needsUpdate=true;
-        beeStripeIM.instanceMatrix.needsUpdate=true;
-        beeWingLIM.instanceMatrix.needsUpdate=true;
-        beeWingRIM.instanceMatrix.needsUpdate=true;
-    }
+    // 动物：行为框架统一驱动（松鼠/小鸟/蝴蝶/蜜蜂的公式在各自 def 里，与旧版逐字一致）
+    AgentKit.update(dt, t);
     // 萤火虫飘动
     const ff=fireflies[0];
     if(ff&&ff.points.material.opacity>0.01){
