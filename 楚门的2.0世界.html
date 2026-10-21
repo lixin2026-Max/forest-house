@@ -679,6 +679,39 @@ const weatherLabels = ['晴天','雾天','夜间','雨天','金色时刻'];
 // 当前生效的天气目标值（滑杆在此基础上微调）
 const wx = { elev:45, fogMul:0, orbit:false };
 
+/* ==================== 配置区（可移植性接缝 · 集中可调参数） ====================
+   全场可调参数尽量收在这里，不散落魔法数字。将来移植到小程序/App 时，
+   平台差异只碰「适配层」（存储 store、唯一上报通道、输入绑定），
+   核心系统（时钟/行为/地图/环境）只读这里的数值与声明式数据，不碰浏览器接口。 */
+const CONFIG = {
+    autoRotateSec: 600,                          // 自动轮转间隔（秒）：#26 定 10 分钟
+    daySeq: ['sunny','golden','night','mist'],   // 昼夜轮转序列（阶段名与 weatherModes 对齐）
+    skyTransSec: 2.6                             // 天气切换过渡时长（秒）
+};
+
+/* ---------- 薄存储适配层 ----------
+   核心系统不直接碰本地存储：一律经 store.<槽> 读写。槽位与 5 个白名单键
+   一一对应，键名仍以字面量出现在下面这唯一实现处（安全审计照常钉死）。
+   移植时只换 mkSlot 底下的读写实现（小程序 storage / App 本地库），上层不动。 */
+function mkSlot(read, write){
+    const slot = { failed:false, _read:read, _write:write,
+        get(){ try{ return slot._read(); }catch(e){ slot.failed = true; return null; } },
+        set(v){ try{ slot._write(v); }catch(e){ slot.failed = true; } },
+        json(fallback){ const raw = slot.get(); if(raw === null) return fallback;
+            try{ const v = JSON.parse(raw); return (v && typeof v === 'object') ? v : fallback; }
+            catch(e){ return fallback; } },
+        save(obj){ slot.set(JSON.stringify(obj)); }
+    };
+    return slot;
+}
+const store = {
+    visits: mkSlot(()=>localStorage.getItem('ct2_visits'), v=>localStorage.setItem('ct2_visits', v)),
+    hunt:   mkSlot(()=>localStorage.getItem(HUNT_KEY),     v=>localStorage.setItem(HUNT_KEY, v)),
+    help:   mkSlot(()=>localStorage.getItem(HELP_KEY),     v=>localStorage.setItem(HELP_KEY, v)),
+    farm:   mkSlot(()=>localStorage.getItem(FARM_KEY),     v=>localStorage.setItem(FARM_KEY, v)),
+    vote:   mkSlot(()=>localStorage.getItem(VOTE_KEY),     v=>localStorage.setItem(VOTE_KEY, v))
+};
+
 /* ==================== 程序化贴图工厂 ==================== */
 function makeCanvas(w,h){ const c=document.createElement('canvas'); c.width=w; c.height=h; return c; }
 function canvasTex(c, rx, ry){
@@ -1844,7 +1877,8 @@ let farmTapBound=false, farmTapState=null, farmRainToastShown=false;
 
 function loadFarm(){
     let saved=null;
-    try{ const raw=localStorage.getItem(FARM_KEY); if(raw) saved=JSON.parse(raw); }catch(e){ saved=null; }
+    const raw=store.farm.get();
+    if(raw){ try{ saved=JSON.parse(raw); }catch(e){ saved=null; } }
     if(!saved||typeof saved!=='object') saved={day:0,harvest:0,cells:{}};
     if(typeof saved.day!=='number') saved.day=0;
     if(typeof saved.harvest!=='number') saved.harvest=0;
@@ -1853,7 +1887,7 @@ function loadFarm(){
     return saved;
 }
 function saveFarm(){
-    try{ localStorage.setItem(FARM_KEY, JSON.stringify(farmState)); }catch(e){ /* 存不了就只记在内存里 */ }
+    store.farm.save(farmState);   // 存不了时适配层静默失败，只记在内存里（与旧版一致）
 }
 function sproutGeos(){
     const parts=[];
@@ -1938,7 +1972,7 @@ function onFarmCellTap(cell){
     }
     showHuntToast('🌿 '+FARM_CROP_NAMES[st.crop]+'已经浇过水啦，就等它成熟');
 }
-// 昼夜轮转满一圈（自动时序回到 sunny）时由 updateAutoSeq 调用：浇过水的作物成熟
+// 游戏时钟发出「新的一天」时调用（buildFarmGame 里订阅）：浇过水的作物成熟
 function farmNewDay(){
     if(!farmState) return;
     farmState.day++;
@@ -1964,7 +1998,7 @@ function farmSettleByDate(){
     if(farmState.lastDate===today) return;
     if(!farmState.lastDate){ farmState.lastDate=today; saveFarm(); return; }
     farmState.lastDate=today;
-    farmNewDay();
+    GClock.newDay();   // 与轮转满圈共用同一个「新的一天」出口，靠 mature 标记防重复结算
 }
 // 雨天自动浇水：下雨时还没浇的苗一律算浇过（animate 里每帧调，未下雨时立即返回）
 function farmRainCheck(){
@@ -2014,6 +2048,7 @@ function bindFarmTap(){
 }
 function buildFarmGame(){
     farmState=loadFarm();
+    GClock.onNewDay(farmNewDay);   // 订阅游戏时钟的「新的一天」：轮转满圈/跨天进页都经它结算
     farmSettleByDate();
     renderPlayCrops();
     bindFarmTap();
@@ -2392,7 +2427,7 @@ function skySnapshot(){
 function beginSkyTrans(){
     let dAz=tgtSky.azim-curSky.azim;
     dAz=Math.atan2(Math.sin(dAz),Math.cos(dAz));
-    skyTrans={ t:0, dur:2.6, from:skySnapshot(), dAz:dAz, elevHold:false };
+    skyTrans={ t:0, dur:CONFIG.skyTransSec, from:skySnapshot(), dAz:dAz, elevHold:false };
 }
 function cloudDarkTarget(){
     const m=weatherModes[weatherIndex];
@@ -3040,10 +3075,11 @@ const HELP_KEY='ct2_help';
 let helpOpen=false;
 let helpTipTimer=0;
 function helpSeen(){
-    try{ return !!localStorage.getItem(HELP_KEY); }catch(e){ return true; }
+    const v=store.help.get();
+    return store.help.failed ? true : !!v;   // 存储读不了时按「已提示」处理，不反复打扰（与旧版一致）
 }
 function markHelpSeen(){
-    try{ localStorage.setItem(HELP_KEY,'1'); }catch(e){ /* 存不了就只当次生效 */ }
+    store.help.set('1');   // 存不了就只当次生效（与旧版一致）
 }
 function hideHelpTip(){
     const tip=fbEl('helpTip');
@@ -3143,10 +3179,10 @@ const VOTE_OPTIONS=[
 ];
 let voteOpen=false;
 function votedChoice(){
-    try{ return localStorage.getItem(VOTE_KEY)||''; }catch(e){ return ''; }
+    return store.vote.get()||'';
 }
 function markVoted(id){
-    try{ localStorage.setItem(VOTE_KEY,id); }catch(e){ /* 存不了就只在本次会话里拦住 */ }
+    store.vote.set(id);   // 存不了就只在本次会话里拦住（与旧版一致）
 }
 function voteOptionById(id){
     for(const o of VOTE_OPTIONS) if(o.id===id) return o;
@@ -3320,9 +3356,9 @@ const MODULE_HOOKS = {
         }
     },
     daynight: {
-        setup(){ autoSeqOn = true; autoSeqNext = -1; },
+        setup(){ autoSeqOn = true; GClock.nextAt = -1; },
         teardown(){ autoSeqOn = false; },
-        update(dt, t){ updateAutoSeq(t); }
+        update(dt, t){ GClock.update(t); }
     },
     roam: {
         teardown(){ roamT = 0; },
@@ -3374,7 +3410,7 @@ const TONES = [
     { n:'秋日', f:'sepia(0.28) saturate(1.35) hue-rotate(-14deg) contrast(1.04)' }
 ];
 
-const AUTO_SEQ = ['sunny','golden','night','mist'];
+const AUTO_SEQ = CONFIG.daySeq;   // 昼夜轮转序列已收进配置区（CONFIG.daySeq），此名仅作旧引用别名
 
 let actx=null, aMaster=null, aBgm=null, aAmb=null;
 let ambWind=null, ambRain=null, ambFire=null, audioTimer=null;
@@ -3386,13 +3422,45 @@ let campfire=null, campfireLight=null, fireOn=false;
 let doorMesh=null, doorOpen=false, tapState=null;
 let doorPivot=null, doorGlowMesh=null, doorGlowF=0, doorTarget=0;
 
-let autoSeqOn=false, autoSeqNext=0, autoSeqAt=0;
-/* 自动轮转（Issue #26）：顶栏独立开关，与相机「自动巡游」是两回事。
-   开关默认开，每 AUTO_ROTATE_INTERVAL 秒自动换一次天气；
-   玩家手动选天气/拖滑杆即「接管」，开关自动关、轮转停下，随时可再打开。
-   autoSeqNext=-1 是哨兵：下一次 update 时按当前时刻重新排满一个间隔。 */
-const AUTO_ROTATE_INTERVAL=600;
+let autoSeqOn=false;
 let autoRotate=true;
+/* ==================== 游戏时钟（Issue #30 · 地基） ====================
+   全场唯一的时间来源：游戏内累计秒、当前昼夜阶段，外加两类订阅——
+   onPhase（阶段变化时通知）与 onNewDay（「新的一天」时通知）。
+   昼夜轮转、种田成熟、动物作息都只认这一个时钟，不再各自数秒；
+   时钟不碰任何浏览器接口，时间由 animate 每帧喂进来（移植时换喂入源即可）。
+
+   自动轮转规则（Issue #26，规则一字未改，只是改由时钟驱动）：
+   顶栏独立开关、与相机「自动巡游」是两回事；开关默认开，
+   每 CONFIG.autoRotateSec 秒沿 CONFIG.daySeq 换一个阶段；
+   玩家手动选天气/拖滑杆即「接管」，开关自动关、轮转停下，随时可再打开。
+   nextAt=-1 是哨兵：下一次 update 时按当前时刻重新排满一个间隔。
+   「新的一天」只有这一个出口：轮转满一圈与跨天进页（种田按真实日期判断）
+   两条路都经 newDay() 触发，订阅方靠自身标记防重复结算，谁先到都只结一次。 */
+const GClock = {
+    now: 0,          // 游戏内累计秒（最近一次 update 喂入的 t）
+    seqAt: 0,        // 当前阶段在 CONFIG.daySeq 中的下标
+    nextAt: 0,       // 下一次自动轮转的时刻；-1 为哨兵（见上）
+    _phaseCbs: [],
+    _dayCbs: [],
+    phase(){ return CONFIG.daySeq[this.seqAt]; },
+    onPhase(cb){ this._phaseCbs.push(cb); },
+    onNewDay(cb){ this._dayCbs.push(cb); },
+    newDay(){ for(const cb of this._dayCbs) cb(); },
+    update(t){
+        this.now = t;
+        if(!FEAT.daynight.on || !autoSeqOn || !autoRotate) return;
+        if(this.nextAt < 0){ this.nextAt = t + CONFIG.autoRotateSec; return; }
+        if(t < this.nextAt) return;
+        this.seqAt = (this.seqAt + 1) % CONFIG.daySeq.length;
+        if(this.seqAt === 0) this.newDay();   // 轮转满一圈 = 新的一天
+        const idx = weatherModes.indexOf(CONFIG.daySeq[this.seqAt]);
+        if(idx >= 0) setWeather(idx);
+        this.nextAt = t + CONFIG.autoRotateSec;
+        for(const cb of this._phaseCbs) cb(this.phase());
+    }
+};
+const AUTO_ROTATE_INTERVAL = CONFIG.autoRotateSec;   // 旧名保留，数值以配置区为准
 let toneIndex=0, viewIndex=0;
 let roamAngle=0.22*Math.PI, roamT=0;
 let perfAcc=0, perfFrames=0, perfHold=0;
@@ -3687,16 +3755,14 @@ function huntDaySeed(){
 }
 function loadHunt(){
     let saved=null;
-    try{
-        const raw=localStorage.getItem(HUNT_KEY);
-        if(raw) saved=JSON.parse(raw);
-    }catch(e){ saved=null; }
+    const raw=store.hunt.get();
+    if(raw){ try{ saved=JSON.parse(raw); }catch(e){ saved=null; } }
     if(!saved||saved.day!==huntToday()||!Array.isArray(saved.found))
         saved={day:huntToday(),found:[]};
     return saved;
 }
 function saveHunt(){
-    try{ localStorage.setItem(HUNT_KEY, JSON.stringify(huntState)); }catch(e){ /* 存不了就只记在内存里 */ }
+    store.hunt.save(huntState);   // 存不了就只记在内存里（与旧版一致）
 }
 function buildHuntItem(def){
     const g=new THREE.Group();
@@ -3989,22 +4055,14 @@ function setAutoRotate(v){
     autoRotate = !!v;
     const c = document.getElementById('autoRotChk'); if(c) c.checked = autoRotate;
     const b = document.getElementById('autoRotV'); if(b) b.textContent = autoRotate ? '开' : '关';
-    if(autoRotate) autoSeqNext = -1;   // 重新打开：从此刻起重新计满 10 分钟，不立刻跳
+    if(autoRotate) GClock.nextAt = -1;   // 重新打开：从此刻起重新计满 10 分钟，不立刻跳
 }
 /* 玩家手动干预（点天气按钮 / T 键 / 拖太阳或雾气滑杆）＝接管：轮转自动让位 */
 function playerTakeover(){
     if(autoRotate) setAutoRotate(false);
 }
-function updateAutoSeq(t){
-    if(!FEAT.daynight.on || !autoSeqOn || !autoRotate) return;
-    if(autoSeqNext < 0){ autoSeqNext = t + AUTO_ROTATE_INTERVAL; return; }
-    if(t < autoSeqNext) return;
-    autoSeqAt = (autoSeqAt + 1) % AUTO_SEQ.length;
-    if(autoSeqAt===0) farmNewDay();   // 昼夜轮转满一圈：种田那边浇过水的作物成熟
-    const idx = weatherModes.indexOf(AUTO_SEQ[autoSeqAt]);
-    if(idx >= 0) setWeather(idx);
-    autoSeqNext = t + AUTO_ROTATE_INTERVAL;
-}
+/* 自动轮转的推进已收进游戏时钟（GClock.update）：daynight 模块每帧喂时间，
+   满一圈时时钟发「新的一天」事件，种田在 buildFarmGame 里订阅它结算成熟。 */
 
 /* ---------- 注册表 UI ---------- */
 function refreshModUI(){
@@ -4445,10 +4503,11 @@ function applyLowQuality(){
 function setupGlobal(){
     /* 访问统计：只在本机浏览器累加，不上传任何请求 */
     let visits=1;
-    try{
-        visits=(parseInt(localStorage.getItem('ct2_visits')||'0',10)||0)+1;
-        localStorage.setItem('ct2_visits', String(visits));
-    }catch(e){ /* 隐私模式禁用存储时静默跳过 */ }
+    const rawVisits=store.visits.get();
+    if(!store.visits.failed){   // 隐私模式禁用存储时静默跳过（与旧版一致）
+        visits=(parseInt(rawVisits||'0',10)||0)+1;
+        store.visits.set(String(visits));
+    }
     const st=document.getElementById('mpStat');
     if(st) st.textContent='你第 '+visits+' 次来到这里 · 这个数字只存在本机浏览器，不上传';
 
