@@ -904,6 +904,9 @@
     <div class="mpSub">界面主题（仅面板配色）</div>
     <div class="mpThemes" id="mpThemes"></div>
     <div class="mpSep"></div>
+    <div class="mpSub">沉浸氛围 · 柔光 Bloom 档位</div>
+    <div class="mpViews" id="atmoBloomBtns"></div>
+    <div class="mpSep"></div>
     <div class="mpSound">
         <button type="button" id="muteBtn" class="mpMute">🔇 声音已关闭</button>
         <span class="mpTip">浏览器要求先点一下才能出声</span>
@@ -2902,6 +2905,7 @@ function createHouse(){
     house.add(step);
     const potMat=new THREE.MeshStandardMaterial({color:0xa8502e,roughness:0.95});
     const bushMat=new THREE.MeshStandardMaterial({color:PALETTE.stem,roughness:1});
+    AtmoSys.registerWindMat(bushMat, {amp:0.035, bendH:0.30});   // #81 灌木风摆：登记进统一风摆名册（开关在 AtmoSys）
     const bloomMat=new THREE.MeshStandardMaterial({color:0xe86a8a,roughness:0.8});
     [-1.18,1.18].forEach(px=>{
         const pot=new THREE.Mesh(new THREE.CylinderGeometry(0.17,0.13,0.26,8),potMat);
@@ -4473,6 +4477,7 @@ function createOutskirts(){
     tufts.count=placedT;
     tufts.instanceMatrix.needsUpdate=true;
     scene.add(tufts);
+    AtmoSys.registerWindMat(tufts.material, {amp:0.045, bendH:0.62});   // #81 草丛灌木层风摆登记
     // ④ 碎石：合并成一个 mesh 散在野地里（#36：同岸边石，逐块灰调＋压扁拉伸）
     const PEB_TINTS=[0x8a8f94,0x7d838a,0x97928a,0x868b90,0x9aa0a2];
     const pebGeos=[];
@@ -4509,6 +4514,7 @@ function createGrass(){
         new THREE.MeshStandardMaterial({color:0x557a35,roughness:1}),90);
     weedIM.receiveShadow=true;
     scene.add(weedIM);
+    AtmoSys.registerWindMat(weedIM.material, {amp:0.022, bendH:0.20});   // #81 低矮杂草灌木层风摆登记
 
     const rnd=mulberry32(4242);
     for(let i=0;i<90;i++){
@@ -8521,6 +8527,428 @@ const Season = {
     }
 };
 
+/* ==================== 沉浸氛围系统（Issue #81 · v5.0） ====================
+   目标：身临其境的治愈森林沉浸感。六件套全部解耦、各自独立开关、互不调用：
+   本节的 tickFog / tickLight / tickBloom / tickAudio 只被各自的模块钩子驱动，
+   windSet 只被微风植被钩子驱动；关掉哪件，只有哪件停摆并复原它动过的状态。
+   状态源只读地基：天气与昼夜读 curSky 与天气模式、风力雨强季节读 Env 镜像，
+   本节不自判天气、不新增存储键、不加载任何外部资源。
+
+   【开关清单 · #75 中枢页收编照此表接线】
+   - FEAT.atmoFog   沉浸·分层雾：近清远柔的雾密度与色调分层＋远景雾带。
+   - FEAT.atmoLight 沉浸·柔和天光：日月光晕柔化、色温平滑、暗部地板。
+   - FEAT.atmoWind  沉浸·微风植被：树冠与灌木风摆，统一走 #73 的
+     window.__windSway 入口，与 Env.sway 同源同相位，本节不自做风摆公式。
+   - FEAT.atmoBloom 沉浸·柔光 Bloom：只柔光斑与丁达尔光束、不全屏泛光；
+     强度三档见 AtmoSys.bloomTier（0 关 / 1 低 / 2 中），面板按钮容器
+     id 为 atmoBloomBtns，另有 window.__atmoTier 可供中枢页直接切档；
+     移动端与弱网低画质下自动档默认 0（保底零负担：整组隐藏、零绘制）。
+   - FEAT.atmoAudio 沉浸·环境音分层：风声、树叶沙沙、远处鸟鸣三层程序
+     合成（WebAudio 噪声与振荡器，零音频文件），独立增益支路挂总线，
+     与 FEAT.bgm 背景音乐、FEAT.ambience 旧环境音效互不影响。
+   双档：电脑拉满档五件默认全开、Bloom 中档；手机保底档雾/光/风/音保留
+   低档、Bloom 默认关。性能：雾带与 Bloom 全是少量透明片，关档即隐藏，
+   不走后处理管线，保底档零额外绘制。探针：window.__atmoProbe。 */
+const ATMO_CFG = {
+    fogSeasonMul: { spring: 1.08, summer: 1.0, autumn: 1.14, winter: 1.22 },
+    fogBankMax: 0.50,          // 远景雾带不透明度上限
+    windTreeAmp: 0.075,        // 阔叶树冠叶尖摆幅（米，低幅慢频走统一风摆着色器）
+    windNeedleAmp: 0.050,      // 松针摆幅
+    bloomRayMax: 0.34,         // 丁达尔光束不透明度上限
+    audioBirdP: { spring: 0.85, summer: 0.70, autumn: 0.40, winter: 0.12 }
+};
+const atmoClamp = (v, a, b)=>Math.max(a, Math.min(b, v));
+/* 雾色点缀（线性空间，与 curSky 同口径）：雨灰、晨蓝、冬青白、黄昏暖 */
+const ATMO_FOG_TINT = { rain: C(0x707c8a), morn: C(0xbdd6ee), pale: C(0xdfe9f2), dusk: C(0xf2c184) };
+/* 天光色（灯光色按全场既有口径用未转换的十六进制色） */
+const ATMO_LIGHT_COL = {
+    ambDay: new THREE.Color(0xdcecf7), ambWarm: new THREE.Color(0xffe3c0),
+    ambCool: new THREE.Color(0xbdd2f2), hemiSky: new THREE.Color(0xbfdff2),
+    hemiGround: new THREE.Color(0x3a5a2f), hemiWarmGround: new THREE.Color(0x6b5136)
+};
+const AtmoSys = {
+    _built: false, _mode: 'sunny', _season: 'summer',
+    _night: 0, _rain: 0, _wind: 1, _day: 1, _sunUp: 1, _dusk: 0,
+    _duskS: 0, _tempS: 0, _coolS: 0,
+    _fogDens: null, _fogColSm: null, _bankOp: 0,
+    _windMats: [], _windOn: false,
+    bloomTier: 2, _tierAuto: true, _rayS: 0, _rayOp: 0,
+    _au: null, _auOn: true, _prox: 0, _proxT: 0, _birdNext: 0,
+    /* 每帧感知：只读地基状态（Env 镜像 / curSky / 天气模式），不自判天气 */
+    _sense(dt){
+        this._mode = (typeof weatherModes !== 'undefined') ? (weatherModes[weatherIndex] || 'sunny') : 'sunny';
+        this._night = (typeof nightF !== 'undefined') ? nightF : (this._mode === 'night' ? 1 : 0);
+        this._rain = (typeof Env !== 'undefined') ? (Env.rainK || 0) : 0;
+        this._wind = (typeof Env !== 'undefined') ? (Env.windK || 1) : 1;
+        this._season = (typeof Env !== 'undefined' && Env.season) ? Env.season : 'summer';
+        const elev = (typeof curSky !== 'undefined') ? curSky.elev : 45;
+        const sunI = (typeof curSky !== 'undefined') ? curSky.sunI : 1;
+        this._sunUp = atmoClamp((elev - 3) / 12, 0, 1) * (this._mode === 'night' ? 0 : 1);
+        this._dusk = (this._mode === 'golden') ? 1
+            : atmoClamp(1 - Math.abs(elev - 10) / 10, 0, 1) * (this._mode === 'night' ? 0 : 1);
+        this._day = atmoClamp((sunI - 0.25) / 1.6, 0, 1) * (1 - this._night);
+        const k = Math.min(1, dt * 1.1 + 0.001);
+        this._duskS += (this._dusk - this._duskS) * k;
+        this._tempS += (this._dusk - this._tempS) * Math.min(1, dt * 0.7 + 0.001);
+        this._coolS += ((this._night * 0.8 + (this._mode === 'mist' ? 0.35 : 0)) - this._coolS) * k;
+    },
+    build(){
+        if(this._built) return;
+        this._built = true;
+        this._fogColSm = new THREE.Color(0xa8cfe8);
+        if(typeof scene !== 'undefined' && scene){
+            /* 远景雾带：3 张大软边精灵贴在远山与林缘方向，只柔远景不糊近处 */
+            const bankTex = smokeTexture();
+            this._banks = new THREE.Group(); this._banks.name = 'atmoFogBanks';
+            this._bankMats = []; this._bankSprites = [];
+            [[-120, -70, 175, 26], [125, -55, 155, 22], [0, -155, 195, 30]].forEach(s=>{
+                const m = new THREE.SpriteMaterial({ map: bankTex, transparent: true,
+                    opacity: 0, depthWrite: false, fog: false });
+                const sp = new THREE.Sprite(m);
+                sp.position.set(s[0], s[3] * 0.42, s[1]);
+                sp.scale.set(s[2], s[3], 1);
+                this._banks.add(sp); this._bankMats.push(m); this._bankSprites.push(sp);
+            });
+            this._banks.visible = false;
+            scene.add(this._banks);
+            /* Bloom 组：日月光晕 + 丁达尔光束 + 林间光斑，全是加色透明片 */
+            this._bloomGroup = new THREE.Group(); this._bloomGroup.name = 'atmoBloom';
+            this._haloSun = new THREE.Sprite(new THREE.SpriteMaterial({
+                map: glowTexture('rgba(255,244,200,0.9)', 'rgba(255,210,110,0.35)'),
+                transparent: true, opacity: 0, depthWrite: false, fog: false,
+                blending: THREE.AdditiveBlending }));
+            this._haloSun.scale.setScalar(95);
+            this._bloomGroup.add(this._haloSun);
+            this._haloMoon = new THREE.Sprite(new THREE.SpriteMaterial({
+                map: glowTexture('rgba(215,228,255,0.85)', 'rgba(150,175,255,0.30)'),
+                transparent: true, opacity: 0, depthWrite: false, fog: false,
+                blending: THREE.AdditiveBlending }));
+            this._haloMoon.scale.setScalar(52);
+            this._bloomGroup.add(this._haloMoon);
+            const rc = makeCanvas(64, 256), rg = rc.getContext('2d');
+            const grd = rg.createLinearGradient(0, 0, 0, 256);
+            grd.addColorStop(0, 'rgba(255,255,255,0.85)');
+            grd.addColorStop(0.55, 'rgba(255,255,255,0.28)');
+            grd.addColorStop(1, 'rgba(255,255,255,0)');
+            rg.fillStyle = grd; rg.fillRect(0, 0, 64, 256);
+            rg.globalCompositeOperation = 'destination-in';
+            const grd2 = rg.createLinearGradient(0, 0, 64, 0);
+            grd2.addColorStop(0, 'rgba(255,255,255,0)');
+            grd2.addColorStop(0.5, 'rgba(255,255,255,1)');
+            grd2.addColorStop(1, 'rgba(255,255,255,0)');
+            rg.fillStyle = grd2; rg.fillRect(0, 0, 64, 256);
+            this._rayMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(rc),
+                color: 0xffe9bb, transparent: true, opacity: 0, depthWrite: false,
+                side: THREE.DoubleSide, fog: false, blending: THREE.AdditiveBlending });
+            this._rays = [];
+            [[-16, -13, 4.2], [9, -15, 3.2], [19, 5, 5.0]].forEach(rp=>{
+                const geo = new THREE.PlaneGeometry(rp[2], 17);
+                geo.translate(0, -8.5, 0);
+                const ray = new THREE.Mesh(geo, this._rayMat);
+                ray.position.set(rp[0], terrainH(rp[0], rp[1]) + 14.5, rp[1]);
+                this._bloomGroup.add(ray); this._rays.push(ray);
+            });
+            this._spotMat = new THREE.MeshBasicMaterial({ map: softDiscTexture(),
+                color: 0xfff2c0, transparent: true, opacity: 0, depthWrite: false,
+                fog: false, blending: THREE.AdditiveBlending });
+            [[-12, -8, 7], [5, 5, 5.5], [14, -2, 6.5], [-2, 11, 5]].forEach(sp2=>{
+                const spot = new THREE.Mesh(new THREE.PlaneGeometry(sp2[2], sp2[2]), this._spotMat);
+                spot.rotation.x = -Math.PI / 2;
+                spot.position.set(sp2[0], terrainH(sp2[0], sp2[1]) + 0.14, sp2[1]);
+                this._bloomGroup.add(spot);
+            });
+            this._bloomGroup.visible = false;
+            scene.add(this._bloomGroup);
+        }
+        this.registerWindCore();
+        this.bloomTier = (typeof IS_MOBILE !== 'undefined' && IS_MOBILE) ? 0 : 2;
+        this._tierAuto = true;
+    },
+    /* ---------- 模块 1：分层雾 ---------- */
+    tickFog(dt){
+        if(typeof scene === 'undefined' || !scene || !scene.fog) return;
+        this._sense(dt);
+        const seasonMul = ATMO_CFG.fogSeasonMul[this._season] || 1;
+        const modeMul = (this._mode === 'mist') ? 1.10 : 1;
+        const base = ((typeof curSky !== 'undefined') ? curSky.dens : 0.0016)
+            * (1 + ((typeof wx !== 'undefined') ? wx.fogMul : 0) * 4);
+        const target = base * seasonMul * modeMul;
+        if(this._fogDens === null){ this._fogDens = target; this._fogColSm.copy(curSky.fog); }
+        this._fogDens += (target - this._fogDens) * Math.min(1, dt * 1.4 + 0.001);
+        scene.fog.density = this._fogDens;
+        const tc = this._fogColSm;
+        tc.copy(curSky.fog);
+        if(this._rain > 0.03) tc.lerp(ATMO_FOG_TINT.rain, 0.55 * this._rain);
+        if(this._mode === 'mist') tc.lerp(ATMO_FOG_TINT.morn, 0.35);
+        if(this._season === 'winter') tc.lerp(ATMO_FOG_TINT.pale, 0.25);
+        if(this._duskS > 0.03) tc.lerp(ATMO_FOG_TINT.dusk, 0.22 * this._duskS);
+        scene.fog.color.copy(tc);
+        const densN = atmoClamp((this._fogDens - 0.0012) / 0.010, 0, 1);
+        const bankTarget = densN * ATMO_CFG.fogBankMax;
+        this._bankOp += (bankTarget - this._bankOp) * Math.min(1, dt * 1.2 + 0.001);
+        if(this._banks){
+            this._banks.visible = this._bankOp > 0.02;
+            if(this._banks.visible){
+                this._bankMats.forEach((m, i)=>{
+                    m.opacity = this._bankOp * (0.75 + 0.25 * Math.sin(i * 2.1));
+                    m.color.copy(tc).lerp(new THREE.Color(1, 1, 1), 0.25);
+                });
+            }
+        }
+    },
+    fogOff(){
+        /* 密度与雾色由天气补间每帧复原，本件只需收雾带、下次开启重新播种 */
+        if(this._banks) this._banks.visible = false;
+        this._bankOp = 0; this._fogDens = null;
+    },
+    /* ---------- 模块 2：柔和天光 ---------- */
+    tickLight(dt){
+        if(typeof ambient === 'undefined' || !ambient || typeof hemi === 'undefined' || !hemi) return;
+        this._sense(dt);
+        /* 暗部地板：树荫与夜里不死黑，只抬下限、不动天气给的上限 */
+        const ambFloor = 0.085 + 0.045 * this._day + 0.02 * this._night;
+        if(ambient.intensity < ambFloor) ambient.intensity = ambFloor;
+        const hemiFloor = 0.09 + 0.05 * this._day + 0.03 * this._night;
+        if(hemi.intensity < hemiFloor) hemi.intensity = hemiFloor;
+        /* 主光柔化：正午峰值轻轻收一成，无生硬强光 */
+        if(typeof sun !== 'undefined' && sun && typeof curSky !== 'undefined')
+            sun.intensity = curSky.sunI * (1 - 0.08 * this._day);
+        /* 色温平滑：内部平滑值追赶黄昏与夜凉，光色跟着缓变不跳变 */
+        ambient.color.copy(ATMO_LIGHT_COL.ambDay)
+            .lerp(ATMO_LIGHT_COL.ambWarm, this._tempS * 0.55)
+            .lerp(ATMO_LIGHT_COL.ambCool, this._coolS * 0.30);
+        hemi.color.copy(ATMO_LIGHT_COL.hemiSky)
+            .lerp(curSky.top, 0.30)
+            .lerp(ATMO_LIGHT_COL.ambWarm, this._tempS * 0.30);
+        hemi.groundColor.copy(ATMO_LIGHT_COL.hemiGround)
+            .lerp(ATMO_LIGHT_COL.hemiWarmGround, this._tempS * 0.45);
+        /* 日月光晕随色温与昼夜缓扩，做漫射光晕而非硬点光 */
+        if(typeof sunMesh !== 'undefined' && sunMesh)
+            sunMesh.children.forEach(ch=>{ if(ch.isSprite)
+                ch.scale.setScalar(38 * (1 + 0.10 * this._day + 0.30 * this._tempS)); });
+        if(typeof moonMesh !== 'undefined' && moonMesh)
+            moonMesh.children.forEach(ch=>{ if(ch.isSprite)
+                ch.scale.setScalar(20 * (1 + 0.30 * this._night)); });
+    },
+    lightOff(){
+        /* 强度由天气补间每帧复原；本件只复原它改过的颜色与光晕尺度 */
+        if(typeof ambient !== 'undefined' && ambient) ambient.color.set(0xdcecf7);
+        if(typeof hemi !== 'undefined' && hemi){
+            hemi.color.set(0xbfdff2); hemi.groundColor.set(0x3a5a2f);
+        }
+        if(typeof sunMesh !== 'undefined' && sunMesh)
+            sunMesh.children.forEach(ch=>{ if(ch.isSprite) ch.scale.setScalar(38); });
+        if(typeof moonMesh !== 'undefined' && moonMesh)
+            moonMesh.children.forEach(ch=>{ if(ch.isSprite) ch.scale.setScalar(20); });
+        this._tempS = 0; this._coolS = 0;
+    },
+    /* ---------- 模块 3：微风植被（统一风摆入口） ---------- */
+    registerWindMat(mat, opts){
+        if(!mat) return;
+        for(let i = 0; i < this._windMats.length; i++)
+            if(this._windMats[i].mat === mat) return;
+        const rec = { mat: mat, opts: opts || { amp: 0.06, bendH: 1 },
+            origCompile: mat.onBeforeCompile, origKey: mat.customProgramCacheKey, on: false };
+        this._windMats.push(rec);
+        if(this._windOn) this._windApply(rec, true);
+    },
+    registerWindCore(){
+        if(typeof LEAF_A !== 'undefined'){
+            this.registerWindMat(LEAF_A, { amp: ATMO_CFG.windTreeAmp, bendH: 7.2 });
+            this.registerWindMat(LEAF_B, { amp: ATMO_CFG.windTreeAmp, bendH: 7.2 });
+        }
+        if(typeof NEEDLE_A !== 'undefined'){
+            this.registerWindMat(NEEDLE_A, { amp: ATMO_CFG.windNeedleAmp, bendH: 8.5 });
+            this.registerWindMat(NEEDLE_B, { amp: ATMO_CFG.windNeedleAmp, bendH: 8.5 });
+        }
+    },
+    _windApply(rec, on){
+        if(on && !rec.on){
+            if(typeof window !== 'undefined' && window.__windSway)
+                window.__windSway.apply(rec.mat, rec.opts);
+            rec.on = true; rec.mat.needsUpdate = true;
+        }else if(!on && rec.on){
+            rec.mat.onBeforeCompile = rec.origCompile;
+            rec.mat.customProgramCacheKey = rec.origKey;
+            rec.on = false; rec.mat.needsUpdate = true;
+        }
+    },
+    windSet(on){
+        this._windOn = !!on;
+        this._windMats.forEach(rec=>this._windApply(rec, this._windOn));
+    },
+    /* ---------- 模块 4：Bloom 柔光与丁达尔 ---------- */
+    effTier(){
+        if(this._tierAuto && typeof lowQuality !== 'undefined' && lowQuality) return 0;
+        return this.bloomTier || 0;
+    },
+    setBloomTier(n){
+        this.bloomTier = Math.max(0, Math.min(2, n | 0));
+        this._tierAuto = false;
+        this.refreshBloomUI();
+    },
+    refreshBloomUI(){
+        const box = (typeof document !== 'undefined') ? document.getElementById('atmoBloomBtns') : null;
+        if(!box) return;
+        for(let i = 0; i < box.children.length; i++)
+            box.children[i].classList.toggle('on', i === this.bloomTier);
+    },
+    buildBloomUI(){
+        const box = (typeof document !== 'undefined') ? document.getElementById('atmoBloomBtns') : null;
+        if(!box || box.children.length) { this.refreshBloomUI(); return; }
+        ['关', '低', '中'].forEach((lab, i)=>{
+            const b = document.createElement('button');
+            b.type = 'button'; b.textContent = '柔光·' + lab;
+            b.addEventListener('click', ()=>{
+                this.setBloomTier(i);
+                if(i > 0 && typeof FEAT !== 'undefined' && FEAT.atmoBloom && !FEAT.atmoBloom.on)
+                    toggleFeat('atmoBloom', true);
+            });
+            box.appendChild(b);
+        });
+        this.refreshBloomUI();
+    },
+    tickBloom(dt, t){
+        if(!this._bloomGroup) return;
+        this._sense(dt);
+        const tier = this.effTier();
+        if(tier <= 0){ this._bloomGroup.visible = false; this._rayOp = 0; this._rayS = 0; return; }
+        this._bloomGroup.visible = true;
+        const tierK = (tier === 1) ? 0.45 : 0.85;
+        const shaftK = this._sunUp * (1 - this._rain) * (1 - this._night) * (0.45 + 0.55 * this._duskS);
+        this._rayS += ((tierK * shaftK) - this._rayS) * Math.min(1, dt * 1.5 + 0.001);
+        if(this._rayMat) this._rayMat.opacity = ATMO_CFG.bloomRayMax * this._rayS;
+        this._rayOp = this._rayMat ? this._rayMat.opacity : 0;
+        const sunOp = (typeof sunOpF !== 'undefined') ? sunOpF : 0;
+        const moonOp = (typeof moonOpF !== 'undefined') ? moonOpF : 0;
+        if(this._haloSun){
+            if(typeof sunMesh !== 'undefined' && sunMesh) this._haloSun.position.copy(sunMesh.position);
+            this._haloSun.material.opacity = 0.26 * tierK * sunOp * (0.6 + 0.4 * this._day);
+        }
+        if(this._haloMoon){
+            if(typeof moonMesh !== 'undefined' && moonMesh) this._haloMoon.position.copy(moonMesh.position);
+            this._haloMoon.material.opacity = 0.20 * tierK * moonOp;
+        }
+        if(this._spotMat)
+            this._spotMat.opacity = 0.13 * tierK * this._day * (1 - this._rain)
+                * (0.75 + 0.25 * Math.sin(t * 0.9));
+        if(this._rays && typeof camera !== 'undefined' && camera){
+            let tx = 0.35, tz = 0.1;
+            if(typeof sun !== 'undefined' && sun){
+                const L = Math.hypot(sun.position.x, sun.position.y, sun.position.z) || 1;
+                tx = sun.position.x / L; tz = sun.position.z / L;
+            }
+            this._rays.forEach(ray=>{
+                ray.rotation.set(tz * 0.5,
+                    Math.atan2(camera.position.x - ray.position.x, camera.position.z - ray.position.z),
+                    -tx * 0.55);
+            });
+        }
+    },
+    bloomOff(){
+        if(this._bloomGroup) this._bloomGroup.visible = false;
+        this._rayS = 0; this._rayOp = 0;
+    },
+    /* ---------- 模块 5：环境音分层（程序合成，独立支路） ---------- */
+    audioSet(on){
+        this._auOn = !!on;
+        if(this._au && typeof actx !== 'undefined' && actx)
+            this._au.master.gain.setTargetAtTime(on ? 0.9 : 0.0001, actx.currentTime, 0.35);
+    },
+    computeProx(){
+        if(typeof camera === 'undefined' || !camera) return 0;
+        const px = camera.position.x, pz = camera.position.z;
+        let best = 1e9;
+        const tops = (typeof window !== 'undefined' && window.__treeTops) || [];
+        for(let i = 0; i < tops.length; i++){
+            const dx = tops[i].x - px, dz = tops[i].z - pz, d = dx * dx + dz * dz;
+            if(d < best) best = d;
+        }
+        [[8, 6], [23, -9], [-7, -4]].forEach(f=>{
+            const dx = f[0] - px, dz = f[1] - pz, d = dx * dx + dz * dz;
+            if(d < best) best = d;
+        });
+        return atmoClamp(1 - (Math.sqrt(best) - 2.5) / 9, 0, 1);
+    },
+    chirpBird(){
+        if(!this._au) return;
+        const f = 1850 + Math.random() * 750;
+        audioNote(f, 0.13, 0.055, 'sine', 0.01, this._au.bird);
+        audioNote(f * 1.26, 0.11, 0.034, 'sine', 0.012, this._au.bird);
+    },
+    tickAudio(dt){
+        if(typeof actx === 'undefined' || !actx || !this._au) return;
+        this._sense(dt);
+        const now = actx.currentTime;
+        const windT = (0.035 + 0.045 * atmoClamp(this._wind, 0, 2) + 0.05 * this._rain)
+            * (this._mode === 'mist' ? 0.7 : 1);
+        this._au.windGain.gain.setTargetAtTime(windT, now, 0.9);
+        this._proxT -= dt;
+        if(this._proxT <= 0){ this._proxT = 0.3; this._prox = this.computeProx(); }
+        const leafT = (0.012 + 0.030 * atmoClamp(this._wind, 0, 2))
+            * (0.45 + 1.15 * this._prox) * (this._mode === 'night' ? 0.65 : 1);
+        this._au.leafGain.gain.setTargetAtTime(leafT, now, 0.5);
+        if(this._au.leafFlt) this._au.leafFlt.frequency.setTargetAtTime(4300 + 1900 * this._prox, now, 0.5);
+        if(now >= this._birdNext){
+            this._birdNext = now + 3.5 + Math.random() * 5.5;
+            const birdP = ATMO_CFG.audioBirdP[this._season] || 0.5;
+            if(this._day > 0.25 && this._night < 0.3 && this._rain < 0.2 && Math.random() < birdP)
+                this.chirpBird();
+        }
+    },
+    probe(){
+        const sc = (typeof scene !== 'undefined' && scene) ? scene : null;
+        return {
+            built: !!this._built, mode: this._mode, season: this._season,
+            fogDens: (sc && sc.fog) ? sc.fog.density : null,
+            fogCol: (sc && sc.fog) ? [sc.fog.color.r, sc.fog.color.g, sc.fog.color.b] : null,
+            bankOp: Math.round(this._bankOp * 1000) / 1000,
+            banksVisible: this._banks ? !!this._banks.visible : false,
+            amb: (typeof ambient !== 'undefined' && ambient) ? ambient.intensity : null,
+            hemi: (typeof hemi !== 'undefined' && hemi) ? hemi.intensity : null,
+            tempS: Math.round(this._tempS * 1000) / 1000,
+            duskS: Math.round(this._duskS * 1000) / 1000,
+            bloomTier: this.bloomTier, effTier: this.effTier(),
+            bloomVisible: this._bloomGroup ? !!this._bloomGroup.visible : false,
+            rayOp: Math.round(this._rayOp * 1000) / 1000,
+            haloSunOp: this._haloSun ? Math.round(this._haloSun.material.opacity * 1000) / 1000 : null,
+            haloMoonOp: this._haloMoon ? Math.round(this._haloMoon.material.opacity * 1000) / 1000 : null,
+            windMats: this._windMats.length,
+            windOnCount: this._windMats.filter(r=>r.on).length,
+            audioBuilt: !!this._au, audioOn: !!this._auOn,
+            prox: Math.round(this._prox * 1000) / 1000,
+            calls: (typeof renderer !== 'undefined' && renderer) ? renderer.info.render.calls : null,
+            tris: (typeof renderer !== 'undefined' && renderer) ? renderer.info.render.triangles : null
+        };
+    }
+};
+window.__atmo = AtmoSys;
+window.__atmoTier = function(n){ AtmoSys.setBloomTier(n); };
+window.__atmoProbe = function(){ return AtmoSys.probe(); };
+/* #81 环境音建图：在音频上下文创建时由 audioEnsure 顺带调用（钩子 setup 也会
+   尝试，幂等）。三层噪声/鸟鸣挂独立增益支路到总线，与 BGM、旧环境音互不串扰。 */
+function atmoNoiseLoop(dest, gain, type, freq, q){
+    const src = actx.createBufferSource(); src.buffer = audioNoise(); src.loop = true;
+    const flt = actx.createBiquadFilter(); flt.type = type; flt.frequency.value = freq;
+    if(q) flt.Q.value = q;
+    const g = actx.createGain(); g.gain.value = gain;
+    src.connect(flt); flt.connect(g); g.connect(dest); src.start();
+    return { gain: g, flt: flt };
+}
+function atmoAudioBuild(){
+    if(!actx || AtmoSys._au) return;
+    try{
+        const master = actx.createGain();
+        master.gain.value = (typeof FEAT !== 'undefined' && FEAT.atmoAudio && FEAT.atmoAudio.on) ? 0.9 : 0.0001;
+        master.connect(aMaster);
+        const wind = atmoNoiseLoop(master, 0.05, 'lowpass', 360, 1);
+        const leaf = atmoNoiseLoop(master, 0.02, 'bandpass', 5200, 0.6);
+        const bird = actx.createGain(); bird.gain.value = 0.55; bird.connect(master);
+        AtmoSys._au = { master: master, windGain: wind.gain, leafGain: leaf.gain, leafFlt: leaf.flt, bird: bird };
+        AtmoSys._auOn = !((typeof FEAT !== 'undefined') && FEAT.atmoAudio && !FEAT.atmoAudio.on);
+    }catch(err){ AtmoSys._au = null; }
+}
+
 /* ==================== 动画 ==================== */
 function animate(){
     requestAnimationFrame(animate);
@@ -9994,7 +10422,12 @@ const FEAT = {
     tone:      { on:true, label:'色调氛围' },
     hunt:      { on:true, label:'找一找（每日寻宝）' },
     lantern:   { on:true, label:'放河灯（池塘许愿）' },
-    codex:     { on:true, label:'世界图鉴' }
+    codex:     { on:true, label:'世界图鉴' },
+    atmoFog:   { on:true, label:'沉浸·分层雾' },
+    atmoLight: { on:true, label:'沉浸·柔和天光' },
+    atmoWind:  { on:true, label:'沉浸·微风植被' },
+    atmoBloom: { on:true, label:'沉浸·柔光 Bloom' },
+    atmoAudio: { on:true, label:'沉浸·环境音分层' }
 };
 
 /* ---------- 模块生命周期钩子 ----------
@@ -10075,6 +10508,32 @@ const MODULE_HOOKS = {
         teardown(){ closeCodex();
             const b=document.getElementById('codexBtn');
             if(b) b.style.display='none'; }
+    },
+    /* 沉浸氛围五件（Issue #81）：实现全在 AtmoSys 一节，钩子只转发开关，
+       各件互不调用——关掉哪件只有哪件停摆/复原，详见 AtmoSys 头注的开关清单 */
+    atmoFog: {
+        setup(){ AtmoSys.build(); },
+        teardown(){ AtmoSys.fogOff(); },
+        update(dt, t){ AtmoSys.tickFog(dt, t); }
+    },
+    atmoLight: {
+        setup(){ AtmoSys.build(); },
+        teardown(){ AtmoSys.lightOff(); },
+        update(dt, t){ AtmoSys.tickLight(dt, t); }
+    },
+    atmoWind: {
+        setup(){ AtmoSys.build(); AtmoSys.windSet(true); },
+        teardown(){ AtmoSys.windSet(false); }
+    },
+    atmoBloom: {
+        setup(){ AtmoSys.build(); AtmoSys.buildBloomUI(); },
+        teardown(){ AtmoSys.bloomOff(); },
+        update(dt, t){ AtmoSys.tickBloom(dt, t); }
+    },
+    atmoAudio: {
+        setup(){ atmoAudioBuild(); AtmoSys.audioSet(true); },
+        teardown(){ AtmoSys.audioSet(false); },
+        update(dt, t){ AtmoSys.tickAudio(dt, t); }
     }
 };
 
@@ -10172,6 +10631,7 @@ function audioEnsure(){
         aBgm = actx.createGain(); aBgm.gain.value = 0.22; aBgm.connect(aMaster);
         aAmb = actx.createGain(); aAmb.gain.value = 0.40; aAmb.connect(aMaster);
         audioBuildAmb();
+        atmoAudioBuild();   // #81 环境音分层：与风/雨/篝火同批建图，但走独立增益支路
     }catch(err){ actx = null; }
     return actx;
 }
@@ -12544,6 +13004,7 @@ function buildExpansion(){
         tufts.count=ti;
         tufts.instanceMatrix.needsUpdate=true;
         scene.add(tufts);
+        AtmoSys.registerWindMat(tufts.material, {amp:0.045, bendH:0.62});   // #81 新区草丛灌木层风摆登记
         // 野花：复用花田摆放（两色实例网格一次成型）
         const fpts=[]; guard=0;
         while(fpts.length<110 && guard++<3000){
