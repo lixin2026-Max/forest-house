@@ -7,19 +7,20 @@
 // 小龙（#36 / #40 / #27），draw calls 与三角面会合理增长。守卫只拦
 // 「没规划的暴涨」——例如某次改动让绘制次数悄悄翻倍。
 //
-// 现行实测基线（2026-10-21，本机无头 Chromium + SwiftShader，
-// 每视角采样 8 次取中位数；飞鸟入画会让屋后视角有 ± 几的尖峰，中位数免疫）：
-// 默认视角 draw calls 124 · 屋后视角 draw calls 111 · 三角面 75,582
-// 阈值 = 基线 × 约 1.5 取整：frontCalls 190 / backCalls 170 / triangles 150000
-//
+// 现行实测基线（2026-10-22，v5.0 封版按规程重订；本机无头 Chromium + SwiftShader
+// ＝保底档口径，每视角采样 8 次取中位数；飞鸟入画会让屋后视角有 ± 几的尖峰，中位数免疫）：
+// 默认视角 draw calls 161 · 屋后视角 draw calls 162 · 三角面 191,452 / 191,311
+// （桌面拉满档全景三角面约 313k，为 v5.0 双档预算内的计划值，不走本守卫口径。）
+// 阈值 = 基线 × 约 1.5 取整：frontCalls 240 / backCalls 240 / triangles 290000
+// 旧基线（2026-10-21）：calls 124 / 111 · 三角面 75,582，caps 190 / 170 / 150000。
 // 计划内大优化落地后绘制必然上涨，届时：
 // 1) 先重跑本测试，记下新的实测中位数；
 // 2) 经负责人确认属于计划内增长后，按「新实测 × 1.5 取整」上调 PERF_CAPS，
 // 并同步更新本段注释里的基线数值与日期；
 // 3) 非计划内的暴涨不许抬基线——先定位是哪次提交带进来的。
 // ========================================================================
-const PERF_BASELINE = { frontCalls: 124, backCalls: 111, triangles: 75582, date: '2026-10-21'};
-const PERF_CAPS = { frontCalls: 190, backCalls: 170, triangles: 150000};
+const PERF_BASELINE = { frontCalls: 161, backCalls: 162, triangles: 191452, date: '2026-10-22'};
+const PERF_CAPS = { frontCalls: 240, backCalls: 240, triangles: 290000};
 
 const { spawn} = require('child_process');
 const fs = require('fs');
