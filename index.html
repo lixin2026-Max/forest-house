@@ -441,6 +441,7 @@
         <div class="hrow"><b>敲门</b><span>点小屋的门：先轻敲两下，门会朝外打开透出暖光</span></div>
         <div class="hrow"><b>篝火</b><span>点篝火堆可以点火、再点熄火</span></div>
         <div class="hrow"><b>每日寻宝</b><span>每天藏 5 件小物（橡果、蘑菇、羽毛、松果、彩蛋），走近点中即收集，集齐有祝贺</span></div>
+        <div class="hrow"><b>种田</b><span>点农田里空着的地块播种，再点一下浇水（雨天自动浇），等昼夜轮转一圈成熟后，再点一下收获</span></div>
         <div class="hrow"><b>放河灯</b><span>左下角「🏮 放河灯」，写一句愿望，让它在湖上漂一会儿</span></div>
         <div class="hrow"><b>界面隐藏</b><span>顶栏与底栏停手 3 秒会自动隐藏，点屏幕右缘的小圆钮可以唤回</span></div>
         <div class="hrow"><b>更多设置</b><span>右下角齿轮里有功能开关、预设视角、色调与声音</span></div>
@@ -1589,10 +1590,14 @@ const FARM_RECT={lx0:-16, lz0:1.0, cols:4, rows:5, cellW:1.5, cellD:1.4};
 const FARM_LAYOUT=[
     ['sunflower','sunflower','sunflower','sunflower'],
     ['corn','corn','corn','corn'],
-    ['pumpkin','pumpkin','pumpkin','pumpkin'],
-    ['corn','pumpkin','corn','pumpkin'],
+    ['pumpkin',null,'pumpkin',null],
+    ['corn',null,'corn',null],
     ['sunflower',null,'pumpkin',null]
 ];
+/* 种田玩法（Issue #4）的可玩格：第 3/4/5 行的第 2/4 列，共 6 块。
+   这些格在 FARM_LAYOUT 里留空、不摆观赏作物，运行时由玩法动态种；
+   其余格保持纯观赏（摆着看的行与可玩格互不干扰）。 */
+const PLAYABLE_CELLS={'2,1':1,'2,3':1,'3,1':1,'3,3':1,'4,1':1,'4,3':1};
 const farmGrid=[];
 function farmCellCenter(r,c){
     return [FARM_RECT.lx0+(c+0.5)*FARM_RECT.cellW, FARM_RECT.lz0+(r+0.5)*FARM_RECT.cellD];
@@ -1684,7 +1689,8 @@ function createFarm(){
         const crop=FARM_LAYOUT[r][c];
         const cell=farmCellCenter(r,c);
         const w=houseLocal(cell[0],cell[1]);
-        farmGrid.push({row:r,col:c,lx:cell[0],lz:cell[1],x:w[0],z:w[1],crop:crop});
+        farmGrid.push({row:r,col:c,lx:cell[0],lz:cell[1],x:w[0],z:w[1],crop:crop,
+            playable:!!PLAYABLE_CELLS[r+','+c]});
         if(!crop) continue;
         const parts= crop==='sunflower' ? farmSunflowerGeos()
                    : crop==='corn' ? farmCornGeos() : farmPumpkinGeos(rnd);
@@ -1703,6 +1709,178 @@ function createFarm(){
     farm.castShadow=farm.receiveShadow=true;
     farm.name='farmPlot';
     scene.add(farm);
+}
+
+/* ==================== 种田玩法（Issue #4） ====================
+   循环：点可玩格播种（向日葵→玉米→南瓜轮换）→ 点苗浇水（雨天自动算浇过）→
+   昼夜轮转满一圈（自动时序 sunny→golden→night→mist 走完回到 sunny）成熟 → 点一下收获。
+   可玩格的土贴片与各阶段作物合并成一个 mesh，状态变化时整体重建（绘制 +1）。
+   状态与收获数存本机 ct2_farm（FARM_KEY 写死，照 ct2_hunt / ct2_help 的治理先例）。 */
+const FARM_KEY='ct2_farm';
+const FARM_CROPS=['sunflower','corn','pumpkin'];
+const FARM_CROP_NAMES={sunflower:'向日葵',corn:'玉米',pumpkin:'南瓜'};
+let farmState=null;        // {day, harvest, cells:{'r,c':{crop,watered,mature}}}
+let playCropMesh=null;
+let farmNextCrop=0;        // 播种轮换指针（会话内即可，不入存档）
+let farmTapBound=false, farmTapState=null, farmRainToastShown=false;
+
+function loadFarm(){
+    let saved=null;
+    try{ const raw=localStorage.getItem(FARM_KEY); if(raw) saved=JSON.parse(raw); }catch(e){ saved=null; }
+    if(!saved||typeof saved!=='object') saved={day:0,harvest:0,cells:{}};
+    if(typeof saved.day!=='number') saved.day=0;
+    if(typeof saved.harvest!=='number') saved.harvest=0;
+    if(!saved.cells||typeof saved.cells!=='object') saved.cells={};
+    return saved;
+}
+function saveFarm(){
+    try{ localStorage.setItem(FARM_KEY, JSON.stringify(farmState)); }catch(e){ /* 存不了就只记在内存里 */ }
+}
+function sproutGeos(){
+    const parts=[];
+    const stem=new THREE.CylinderGeometry(0.03,0.045,0.34,5); stem.translate(0,0.17,0);
+    parts.push(paintGeo(stem,0x55802f));
+    for(const s of [-1,1]){
+        const leaf=new THREE.SphereGeometry(0.13,5,4); leaf.scale(1,0.25,0.55);
+        leaf.rotateZ(s*0.5); leaf.translate(s*0.11,0.34,0);
+        parts.push(paintGeo(leaf,0x63963a));
+    }
+    return parts;
+}
+function cropGeosAt(crop,cell,stage){
+    // stage: 0 刚发芽（通用嫩芽） 1 已浇水长成半大 2 成熟（全尺寸）
+    if(stage===0) return sproutGeos();
+    const parts= crop==='sunflower' ? farmSunflowerGeos()
+               : crop==='corn' ? farmCornGeos() : farmPumpkinGeos(mulberry32(cell.row*10+cell.col+3));
+    const sc= stage===2 ? 1.0 : 0.55;
+    const m=new THREE.Matrix4().makeRotationY((cell.row*7+cell.col*3)%6);
+    m.setPosition(cell.lx,0.24,cell.lz);
+    m.multiply(new THREE.Matrix4().makeScale(sc,sc,sc));
+    parts.forEach(g=>g.applyMatrix4(m));
+    return parts;
+}
+// 可玩格的全部动态内容（土贴片＋作物）合并成一个 mesh，状态变化时整体重建
+function renderPlayCrops(){
+    if(playCropMesh){
+        scene.remove(playCropMesh);
+        if(playCropMesh.geometry) playCropMesh.geometry.dispose();
+        playCropMesh=null;
+    }
+    const geos=[];
+    farmGrid.forEach(function(cell){
+        if(!cell.playable) return;
+        const st=farmState?farmState.cells[cell.row+','+cell.col]:null;
+        // 土贴片压在田垄上：干土偏亮、浇过水变深，一眼能分清哪块浇过
+        const patch=new THREE.BoxGeometry(FARM_RECT.cellW*0.9,0.06,FARM_RECT.cellD*0.5);
+        patch.translate(cell.lx,0.225,cell.lz);
+        geos.push(paintGeo(patch, st&&st.watered?0x5e4126:0x9a7448));
+        if(!st||!st.crop) return;
+        const stage= st.mature?2:(st.watered?1:0);
+        if(stage===0){
+            const m=new THREE.Matrix4().makeRotationY((cell.row*7+cell.col*3)%6);
+            m.setPosition(cell.lx,0.24,cell.lz);
+            sproutGeos().forEach(g=>{ g.applyMatrix4(m); geos.push(g); });
+        }else{
+            cropGeosAt(st.crop,cell,stage).forEach(g=>geos.push(g));
+        }
+    });
+    if(!geos.length) return;
+    const merged=mergePaintedGeos(geos);
+    const world=new THREE.Matrix4().makeRotationY(HOUSE_ROT);
+    world.setPosition(HOUSE_POS.x,0,HOUSE_POS.z);
+    merged.applyMatrix4(world);
+    playCropMesh=new THREE.Mesh(merged,new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.95}));
+    playCropMesh.castShadow=true;
+    playCropMesh.name='playCrops';
+    scene.add(playCropMesh);
+}
+function onFarmCellTap(cell){
+    const key=cell.row+','+cell.col;
+    const st=farmState.cells[key];
+    if(!st||!st.crop){
+        const crop=FARM_CROPS[farmNextCrop%FARM_CROPS.length]; farmNextCrop++;
+        farmState.cells[key]={crop:crop,watered:false,mature:false};
+        saveFarm(); renderPlayCrops();
+        showHuntToast('🌱 种下了'+FARM_CROP_NAMES[crop]+'，再点它一下浇浇水');
+        return;
+    }
+    if(st.mature){
+        farmState.harvest++;
+        delete farmState.cells[key];
+        saveFarm(); renderPlayCrops(); updateStatus();
+        showHuntToast('🎉 收获了'+FARM_CROP_NAMES[st.crop]+'！已收获 '+farmState.harvest+' 个');
+        return;
+    }
+    if(!st.watered){
+        st.watered=true;
+        saveFarm(); renderPlayCrops();
+        showHuntToast('💧 浇好水了，等昼夜轮转一圈就成熟');
+        return;
+    }
+    showHuntToast('🌿 '+FARM_CROP_NAMES[st.crop]+'已经浇过水啦，就等它成熟');
+}
+// 昼夜轮转满一圈（自动时序回到 sunny）时由 updateAutoSeq 调用：浇过水的作物成熟
+function farmNewDay(){
+    if(!farmState) return;
+    farmState.day++;
+    let ripe=0;
+    Object.keys(farmState.cells).forEach(function(key){
+        const st=farmState.cells[key];
+        if(st&&st.crop&&st.watered&&!st.mature){ st.mature=true; ripe++; }
+    });
+    saveFarm();
+    if(ripe>0){ renderPlayCrops(); showHuntToast('🌾 有 '+ripe+' 块地的作物成熟啦，点一点就能收获'); }
+}
+// 雨天自动浇水：下雨时还没浇的苗一律算浇过（animate 里每帧调，未下雨时立即返回）
+function farmRainCheck(){
+    if(!farmState) return;
+    if(weatherModes[weatherIndex]!=='rain'){ farmRainToastShown=false; return; }
+    let n=0;
+    Object.keys(farmState.cells).forEach(function(key){
+        const st=farmState.cells[key];
+        if(st&&st.crop&&!st.watered&&!st.mature){ st.watered=true; n++; }
+    });
+    if(n>0){
+        saveFarm(); renderPlayCrops();
+        if(!farmRainToastShown){ farmRainToastShown=true; showHuntToast('🌧️ 下雨啦，地里的苗都算浇过水了'); }
+    }
+}
+function onFarmTap(ev){
+    if(!farmState||!renderer||!camera) return;
+    const r=renderer.domElement.getBoundingClientRect();
+    const nx=((ev.clientX-r.left)/Math.max(1,r.width))*2-1;
+    const ny=-((ev.clientY-r.top)/Math.max(1,r.height))*2+1;
+    const ray=new THREE.Raycaster();
+    ray.setFromCamera({x:nx,y:ny},camera);
+    const pt=new THREE.Vector3();
+    if(!ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),-0.2),pt)) return;
+    let best=null, bd=1e9;
+    farmGrid.forEach(function(cell){
+        if(!cell.playable) return;
+        const d=Math.hypot(pt.x-cell.x,pt.z-cell.z);
+        if(d<bd){ bd=d; best=cell; }
+    });
+    if(best&&bd<1.05) onFarmCellTap(best);
+}
+function bindFarmTap(){
+    if(farmTapBound||!renderer) return;
+    farmTapBound=true;
+    const el=renderer.domElement;
+    el.addEventListener('pointerdown',function(e){
+        farmTapState={ x:e.clientX, y:e.clientY, t:performance.now() };
+    });
+    el.addEventListener('pointerup',function(e){
+        if(!farmTapState) return;
+        const dx=e.clientX-farmTapState.x, dy=e.clientY-farmTapState.y;
+        const dur=performance.now()-farmTapState.t;
+        farmTapState=null;
+        if(dx*dx+dy*dy<36&&dur<500) onFarmTap(e);
+    });
+}
+function buildFarmGame(){
+    farmState=loadFarm();
+    renderPlayCrops();
+    bindFarmTap();
 }
 
 /* ==================== 花带与四周丰润（Issue #14） ====================
@@ -2262,6 +2440,7 @@ function animate(){
 
     lerpWeather(dt);
     updateModules(dt, t);
+    farmRainCheck();
 
     // 风吹摆动（强度随天气）
     const windK=weatherModes[weatherIndex]==='rain'?1.6:weatherModes[weatherIndex]==='mist'?0.3:1;
@@ -2456,6 +2635,7 @@ function updateStatus(){
     frag.appendChild(statusLine('松鼠:',squirrels.length+' 鸟:'+birds.length));
     frag.appendChild(statusLine('蝴蝶:',butterflies.length+' 蜜蜂:'+bees.length));
     frag.appendChild(statusLine('寻宝:',(huntState?huntState.found.length:0)+'/5'));
+    frag.appendChild(statusLine('收获:',(farmState?farmState.harvest:0)+''));
     frag.appendChild(statusLine('天气:',
         weatherLabels[weatherIndex]||'-','#ffd97a'));
     s.textContent='';
@@ -3496,6 +3676,7 @@ function updateAutoSeq(t){
     if(!FEAT.daynight.on || !autoSeqOn) return;
     if(t < autoSeqNext) return;
     autoSeqAt = (autoSeqAt + 1) % AUTO_SEQ.length;
+    if(autoSeqAt===0) farmNewDay();   // 昼夜轮转满一圈：种田那边浇过水的作物成熟
     const idx = weatherModes.indexOf(AUTO_SEQ[autoSeqAt]);
     if(idx >= 0) setWeather(idx);
     autoSeqNext = t + 55;
@@ -3697,6 +3878,7 @@ function init(){
     createSunflowers();
     createGrass();
     createFarm();
+    buildFarmGame();
     createFlowerBands();
     createOutskirts();
     createInsects();
