@@ -1526,6 +1526,164 @@ function createFarm(){
     farm.name='farmPlot';
     scene.add(farm);
 }
+
+/* ==================== 花带与四周丰润（Issue #14） ====================
+   负责人口径：留白可以，但要饱和自然。花沿房子前侧与两侧铺成带；
+   场地边缘与空地用草色斑块、野花、草丛、碎石低成本散布，巡游一圈不显空。
+   全部走实例化/合并绘制，新增绘制调用个位数。 */
+function wildStemGeo(){
+    const g=new THREE.CylinderGeometry(0.025,0.04,0.55,5); g.translate(0,0.275,0); return g;
+}
+function wildHeadGeo(){ return new THREE.IcosahedronGeometry(0.115,0); }
+const WILD_TINTS=[0xe86a8a,0xf2c230,0x9a7ec8,0xf5e6a8,0xe86a3a,0xf2f2f2];
+function placeWildflowers(pts,rnd){
+    if(!pts.length) return;
+    const stems=new THREE.InstancedMesh(wildStemGeo(),
+        new THREE.MeshStandardMaterial({color:0x4f7a2e,roughness:1}),pts.length);
+    const heads=new THREE.InstancedMesh(wildHeadGeo(),
+        new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.85}),pts.length);
+    pts.forEach((p,i)=>{
+        const y=terrainH(p[0],p[1]), sc=0.85+rnd()*0.45;
+        dummy.position.set(p[0],y,p[1]);
+        dummy.rotation.set((rnd()-0.5)*0.16,rnd()*6.28,(rnd()-0.5)*0.16);
+        dummy.scale.setScalar(sc);
+        dummy.updateMatrix();
+        stems.setMatrixAt(i,dummy.matrix);
+        dummy.position.y=y+0.53*sc;
+        dummy.updateMatrix();
+        heads.setMatrixAt(i,dummy.matrix);
+        heads.setColorAt(i, C(WILD_TINTS[(rnd()*WILD_TINTS.length)|0]));
+    });
+    stems.instanceMatrix.needsUpdate=true;
+    heads.instanceMatrix.needsUpdate=true;
+    if(heads.instanceColor) heads.instanceColor.needsUpdate=true;
+    scene.add(stems,heads);
+}
+function createFlowerBands(){
+    const rnd=mulberry32(20260314);
+    const pts=[];
+    const push=(lx,lz)=>{ const w=houseLocal(lx,lz); pts.push(w); };
+    // 屋前两排交错成带（台阶正前方留空，门前花盆已在台阶两侧）
+    for(let lx=-4.7; lx<=4.7; lx+=0.58) push(lx+(rnd()-0.5)*0.16, 3.62+(rnd()-0.5)*0.14);
+    for(let lx=-4.4; lx<=4.4; lx+=0.62) push(lx+(rnd()-0.5)*0.16, 4.28+(rnd()-0.5)*0.14);
+    // 两侧各一排半，顺墙根走
+    for(const s of [-1,1]){
+        for(let lz=-2.9; lz<=2.9; lz+=0.58) push(s*3.95+(rnd()-0.5)*0.14, lz+(rnd()-0.5)*0.16);
+        for(let lz=-2.2; lz<=2.2; lz+=0.85) push(s*4.52+(rnd()-0.5)*0.14, lz+(rnd()-0.5)*0.16);
+        for(let i=0;i<4;i++) push(s*(1.4+rnd()*0.5), 3.3+rnd()*0.45);  // 台阶两侧小簇
+    }
+    placeWildflowers(pts,rnd);
+}
+// 散布避让：房子与花带、农田、池塘、石板路、篝火、寻宝点、屋后山丘都不压
+function scatterClear(x,z){
+    if(Math.hypot(x-HOUSE_POS.x,z-HOUSE_POS.z)<8.5) return false;
+    const rx=x-HOUSE_POS.x, rz=z-HOUSE_POS.z;
+    const lx=rx*HOUSE_R.x+rz*HOUSE_R.z, lz=rx*HOUSE_F.x+rz*HOUSE_F.z;
+    if(lx>FARM_RECT.lx0-1.2 && lx<-8.6 && lz>FARM_RECT.lz0-1.2 && lz<9.4) return false;
+    if(Math.hypot(x-20,z+12)<6.3) return false;
+    if(x>-3.4 && x<9.6 && z>1.4 && z<4.0) return false;
+    if(Math.hypot(x+8.5,z-8.5)<2.2) return false;
+    if(!hillClear(x,z,-2)) return false;
+    for(const sp of HUNT_SPOTS) if(Math.hypot(x-sp[0],z-sp[1])<1.3) return false;
+    return true;
+}
+function scatterPoint(rnd,cx,cz,rMin,rMax){
+    for(let t=0;t<14;t++){
+        const a=rnd()*Math.PI*2, d=rMin+rnd()*(rMax-rMin);
+        const x=cx+Math.cos(a)*d, z=cz+Math.sin(a)*d;
+        if(scatterClear(x,z)) return [x,z];
+    }
+    return null;
+}
+function softDiscTexture(){
+    const c=makeCanvas(128,128), g=c.getContext('2d');
+    const gr=g.createRadialGradient(64,64,6,64,64,62);
+    gr.addColorStop(0,'rgba(255,255,255,0.9)');
+    gr.addColorStop(0.7,'rgba(255,255,255,0.45)');
+    gr.addColorStop(1,'rgba(255,255,255,0)');
+    g.fillStyle=gr; g.fillRect(0,0,128,128);
+    return new THREE.CanvasTexture(c);
+}
+function createOutskirts(){
+    const rnd=mulberry32(20260414);
+    // ① 草色深浅斑块：软边圆盘合并成一个 mesh，贴在草地上拉开大色块层次
+    const patchCols=[0x3f5c31,0x678f4e,0x86934c,0x4a6b3a];
+    const patchGeos=[];
+    for(let i=0;i<18;i++){
+        const p=scatterPoint(rnd,4,0,16,55);
+        if(!p) continue;
+        const cg=new THREE.CircleGeometry(2.6+rnd()*4.2,18);
+        cg.rotateX(-Math.PI/2);
+        cg.translate(p[0],terrainH(p[0],p[1])+0.04,p[1]);
+        patchGeos.push(paintGeo(cg,patchCols[i%patchCols.length]));
+    }
+    if(patchGeos.length){
+        const patches=new THREE.Mesh(mergePaintedGeos(patchGeos),
+            new THREE.MeshBasicMaterial({map:softDiscTexture(),transparent:true,opacity:0.5,
+                vertexColors:true,depthWrite:false}));
+        patches.renderOrder=1;
+        scene.add(patches);
+    }
+    // ② 野花小簇：普撒 + 池塘岸环 + 栅栏外一条
+    const wpts=[];
+    const NW=IS_MOBILE?110:170;
+    for(let i=0;i<NW;i++){
+        const p=scatterPoint(rnd,4,0,13,56);
+        if(p) wpts.push(p);
+    }
+    for(let i=0;i<26;i++){
+        const a=rnd()*Math.PI*2, d=6.5+rnd()*3.0;
+        const x=20+Math.cos(a)*d, z=-12+Math.sin(a)*d;
+        if(scatterClear(x,z)) wpts.push([x,z]);
+    }
+    for(let i=0;i<22;i++){
+        const x=-19+rnd()*38, z=fenceZAt(x)-2.2-rnd()*4.5;
+        if(scatterClear(x,z)) wpts.push([x,z]);
+    }
+    placeWildflowers(wpts,rnd);
+    // ③ 草丛加密：与现有草簇同几何，再铺一层到远处
+    const blades=[];
+    for(let k=0;k<4;k++){
+        const b=new THREE.ConeGeometry(0.05,0.6,4);
+        b.translate((k%2?0.1:-0.1),0.3,(k<2?0.08:-0.08));
+        b.rotateZ((k-1.5)*0.28);
+        blades.push(b);
+    }
+    const tuftGeo=concatGeos(blades.map(g=>g.toNonIndexed()));
+    const NT=IS_MOBILE?150:240;
+    const tufts=new THREE.InstancedMesh(tuftGeo,
+        new THREE.MeshStandardMaterial({color:0x5c8a38,roughness:1}),NT);
+    tufts.receiveShadow=true;
+    let placedT=0;
+    for(let i=0;i<NT;i++){
+        const p=scatterPoint(rnd,4,0,12,58);
+        if(!p) continue;
+        dummy.position.set(p[0],terrainH(p[0],p[1]),p[1]);
+        dummy.rotation.set((rnd()-0.5)*0.3,rnd()*6.28,(rnd()-0.5)*0.3);
+        dummy.scale.setScalar(0.7+rnd()*1.1);
+        dummy.updateMatrix();
+        tufts.setMatrixAt(placedT++,dummy.matrix);
+    }
+    tufts.count=placedT;
+    tufts.instanceMatrix.needsUpdate=true;
+    scene.add(tufts);
+    // ④ 碎石：合并成一个 mesh 散在野地里
+    const pebGeos=[];
+    for(let i=0;i<80;i++){
+        const p=scatterPoint(rnd,4,0,13,50);
+        if(!p) continue;
+        const d=new THREE.DodecahedronGeometry(0.13+rnd()*0.17,0);
+        d.rotateY(rnd()*3); d.scale(1,0.6,1);
+        d.translate(p[0],terrainH(p[0],p[1])+0.05,p[1]);
+        pebGeos.push(d);
+    }
+    if(pebGeos.length){
+        const pebbles=new THREE.Mesh(mergeGeos(pebGeos),
+            new THREE.MeshStandardMaterial({color:0x8a8f94,roughness:1}));
+        pebbles.receiveShadow=true;
+        scene.add(pebbles);
+    }
+}
 function createGrass(){
     // 草簇：4 片叶子合并成一次实例
     const blades=[];
@@ -3273,6 +3431,8 @@ function init(){
     createSunflowers();
     createGrass();
     createFarm();
+    createFlowerBands();
+    createOutskirts();
     createInsects();
 
     controls=makeOrbitControls(camera,renderer.domElement);
