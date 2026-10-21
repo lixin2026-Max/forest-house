@@ -348,6 +348,31 @@ test('建议回音：回执码本机生成、署名三档、采纳匹配与隐�
     must(/id="echoMask"/.test(html) && /id="logCreditsBody"/.test(html) && /id="echoQuery"/.test(html),
         '专属信/回音墙/查状态入口缺一');
 });
+test('玩家立牌：审核制投稿入口 + 声明式呈现 + 气泡（Issue #19）', ()=>{
+    // 投稿入口：意见表单新增「立牌投稿」类型与子表单，走既有分类白名单
+    must(/<option value="立牌投稿">/.test(html),'分类缺「立牌投稿」选项');
+    must(/'立牌投稿'/.test(inlineJs),'FB_CATS 缺「立牌投稿」');
+    must(/id="sdForm"/.test(html) && /id="sdName"/.test(html) && /id="sdIntro"/.test(html)
+        && /id="sdColor"/.test(html) && /id="sdAcc"/.test(html) && /name="sdKind"/.test(html),
+        '立牌子表单字段缺一');
+    // 不支持传图必须在投稿说明里写清，且表单内不得有文件上传控件（无后端、审核制）
+    must(/不支持上传图片/.test(html),'投稿说明未写清「不支持上传图片」');
+    must(!/type="file"/.test(html),'页面出现文件上传控件（立牌投稿不收图）');
+    must(/function submitStandeePost\(/.test(inlineJs),'缺少立牌投稿提交 submitStandeePost');
+    must(/kind:'standee'/.test(inlineJs) && /meta\.kind==='standee'/.test(inlineJs),
+        '立牌投稿未走 sendFeedback 的 standee 分支');
+    must(/审核/.test(html.slice(html.indexOf('id="sdForm"'), html.indexOf('id="sdForm"')+400)),
+        '投稿说明未写明审核制');
+    // 世界呈现：声明式数据表 + 上限 + 程序建模 + 气泡；清单初期为空（未审不进场景）
+    must(/const STANDEES\s*=\s*\[/.test(inlineJs),'缺少已过审立牌清单 STANDEES');
+    must(/const STANDEE_MAX=6/.test(inlineJs),'缺少立牌数量上限 STANDEE_MAX=6');
+    must(/function buildStandees\(/.test(inlineJs),'缺少 buildStandees');
+    must(/function buildStandeeModel\(/.test(inlineJs),'缺少程序建模 buildStandeeModel');
+    must(/id="sdBubble"/.test(html) && /function showStandeeBubble\(/.test(inlineJs),'缺少立牌气泡');
+    const arr = inlineJs.slice(inlineJs.indexOf('const STANDEES=['), inlineJs.indexOf('];', inlineJs.indexOf('const STANDEES=[')));
+    must(!/\{\s*name:/.test(arr.replace(/\/\*[\s\S]*?\*\//g,'')), 'STANDEES 正式清单必须为空（只有过审数据才能登记）');
+});
+
 test('FB 回传必须显式带 Referer（FormSubmit 靠它判来源）', ()=>{
     // 线上曾因 <meta name="referrer" content="no-referrer"> 被抹掉 Referer，
     // FormSubmit 回「not a web server」而拒收；修法是在 fetch 上单独指定。
