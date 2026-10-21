@@ -174,7 +174,8 @@ test('MOBILE 旋转后触摸拖动方向已补偿', ()=>{
 });
 test('MOBILE 性能降档生效（阴影/实例数量）', ()=>{
     must(/mapSize\.set\(IS_MOBILE\?1024:2048/.test(inlineJs),'阴影分辨率未降档');
-    must(/IS_MOBILE\?140:260/.test(inlineJs),'草地实例未降档');
+    // #73 起草地降档走 GRASS_CFG 双档（grassTierAuto：移动端/低画质 → lite 档实例数）
+    must(/function grassTierAuto\(\)\{\s*return \(IS_MOBILE \|\|/.test(inlineJs),'草地实例未降档');
 });
 
 // ---------- AC9: 部署与端侧判定 ----------
