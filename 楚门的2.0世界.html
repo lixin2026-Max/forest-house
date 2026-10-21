@@ -1122,6 +1122,22 @@
         <div class="dgSec">化身形态（小龙本体，或小龙少女三款造型）</div>
         <div class="dgOpts" id="dgAvatar"></div>
         <div class="dgHint">少女是小龙的另一个形态：名字、性格、成长都照旧生效，下面的体色/部件/配饰是小龙本体的样子，变回来原样还在。</div>
+        <div class="dgSec">少女自由搭配（二期部件库：每一类都能单独换）</div>
+        <div class="dgHint">点任意一件就会变身成少女并立刻换上（身后就是实时预览）。帽子会盖住丸子头/单马尾的发顶团、袜子盖住小腿、靴筒盖住袜口——遮挡关系都写在部件库里，不会穿模。搭配只存部件组合，还是用原来的存档，不占新位置。上面三款少女是官方预设，点一下整套套用。</div>
+        <div class="dgRow"><span class="dgLab">发型</span><div class="dgOpts" id="dgGp_hairStyle"></div></div>
+        <div class="dgRow"><span class="dgLab">发色</span><div class="dgOpts" id="dgGp_hairColor"></div></div>
+        <div class="dgRow"><span class="dgLab">发饰</span><div class="dgOpts" id="dgGp_hairAcc"></div></div>
+        <div class="dgRow"><span class="dgLab">耳饰</span><div class="dgOpts" id="dgGp_earring"></div></div>
+        <div class="dgRow"><span class="dgLab">项链</span><div class="dgOpts" id="dgGp_necklace"></div></div>
+        <div class="dgRow"><span class="dgLab">上装</span><div class="dgOpts" id="dgGp_top"></div></div>
+        <div class="dgRow"><span class="dgLab">下装</span><div class="dgOpts" id="dgGp_bottom"></div></div>
+        <div class="dgRow"><span class="dgLab">袜子</span><div class="dgOpts" id="dgGp_socks"></div></div>
+        <div class="dgRow"><span class="dgLab">鞋子</span><div class="dgOpts" id="dgGp_shoes"></div></div>
+        <div class="dgRow"><span class="dgLab">龙角</span><div class="dgOpts" id="dgGp_horn"></div></div>
+        <div class="dgRow"><span class="dgLab">耳鳍</span><div class="dgOpts" id="dgGp_fin"></div></div>
+        <div class="dgRow"><span class="dgLab">翅膀</span><div class="dgOpts" id="dgGp_wing"></div></div>
+        <div class="dgRow"><span class="dgLab">尾巴</span><div class="dgOpts" id="dgGp_tail"></div></div>
+        <div class="dgRow"><button type="button" id="dgGpRandom">🎲 随机一套</button></div>
         <div class="dgSec">名字</div>
         <div class="dgRow">
             <input type="text" id="dgName" maxlength="16" placeholder="给小龙起个名字">
@@ -5628,16 +5644,172 @@ function sanitizeDragonName(s){
     if(chars.length > 8) s = chars.slice(0, 8).join('');
     return s || '小龙';
 }
+/* ==================== 小龙少女部件库（Issue #80 二期） ====================
+   一期（#79）三款预设拆成可自由拼装的部件：每类独立可选、存档只存
+   部件 id 组合（avatar.parts），建模按 id 分发到各分类 builder——是
+   「替换」不是「叠加」，常驻三角面与一期同级。每个部件在数据里声明：
+     mount  挂点（骨架契约里的锚点名，建模函数据此落位）；
+     layer  同挂点的叠放次序（数字大在外层，半径/深度按次序让位）；
+     hides  本件上身后要藏起的件（遮挡关系，防穿模：帽子藏发顶团、
+            袜子盖小腿、靴筒盖袜口之类，建模时按声明跳过/覆盖）。
+   兼容红线与一期相同：所有部件只挂在既有 parts 骨架上（头/颈/躯干/
+   髋/臂/腿/翅/尾枢轴），hornTip 随角型在库里给坐标——鸟停角、手势、
+   睡姿、节日挂点、进屋、一/三人称都不因换装分叉。 */
+const GIRL_PART_CATS = [
+    {key:'hairStyle', label:'发型'}, {key:'hairColor', label:'发色'},
+    {key:'hairAcc', label:'发饰'}, {key:'earring', label:'耳饰'},
+    {key:'necklace', label:'项链'}, {key:'top', label:'上装'},
+    {key:'bottom', label:'下装'}, {key:'socks', label:'袜子'},
+    {key:'shoes', label:'鞋子'}, {key:'horn', label:'龙角'},
+    {key:'fin', label:'耳鳍'}, {key:'wing', label:'翅膀'},
+    {key:'tail', label:'尾巴'}
+];
+const GIRL_PARTS = {
+    hairStyle: [
+        {id:'twin', label:'双马尾', mount:'head-cap'},
+        {id:'long', label:'长卷发', mount:'head-cap'},
+        {id:'bob', label:'波波头', mount:'head-cap'},
+        {id:'pony', label:'单马尾', mount:'head-cap', knot:'hairTopKnot'},
+        {id:'bun', label:'丸子头', mount:'head-cap', knot:'hairTopKnot'}
+    ],
+    hairColor: [
+        {id:'brown', label:'深棕', col:0x4a3226, brow:0x4a3226},
+        {id:'pink', label:'樱粉', col:0xf0a6c0, brow:0x9c5a74},
+        {id:'black', label:'乌黑', col:0x2a2320, brow:0x2a2320},
+        {id:'silver', label:'银灰', col:0xcfd2dc, brow:0x8a8fa3},
+        {id:'mint', label:'薄荷绿', col:0x63bfa5, brow:0x3d7a66},
+        {id:'grape', label:'葡萄紫', col:0x8a6fc9, brow:0x5a478a},
+        {id:'wine', label:'酒红', col:0x93354a, brow:0x62222f}
+    ],
+    hairAcc: [
+        {id:'none', label:'无发饰', mount:'head-top'},
+        {id:'ribbon', label:'酒红蝴蝶结', mount:'hair-side', layer:2},
+        {id:'hatCream', label:'奶黄鸭舌帽', mount:'head-top', layer:3, hides:['hairTopKnot'], hat:true},
+        {id:'hatDenim', label:'牛仔鸭舌帽', mount:'head-top', layer:3, hides:['hairTopKnot'], hat:true},
+        {id:'flower', label:'小花发夹', mount:'hair-side', layer:2},
+        {id:'starClip', label:'星星发夹', mount:'hair-side', layer:2}
+    ],
+    earring: [
+        {id:'none', label:'无耳饰', mount:'fin-low'},
+        {id:'cherry', label:'樱桃耳坠', mount:'fin-low', layer:1},
+        {id:'star', label:'星星耳坠', mount:'fin-low', layer:1},
+        {id:'bead', label:'橙珠耳坠', mount:'fin-low', layer:1},
+        {id:'pearl', label:'珍珠耳坠', mount:'fin-low', layer:1},
+        {id:'ring', label:'银环耳坠', mount:'fin-low', layer:1}
+    ],
+    necklace: [
+        {id:'none', label:'无项链', mount:'neck'},
+        {id:'cherry', label:'樱桃项链', mount:'neck', layer:2},
+        {id:'pearl', label:'珍珠项链', mount:'neck', layer:2},
+        {id:'bell', label:'金铃项链', mount:'neck', layer:2},
+        {id:'star', label:'星星项链', mount:'neck', layer:2}
+    ],
+    top: [
+        {id:'cherryVest', label:'樱桃背心＋夹克', mount:'torso', sleeve:'jacket'},
+        {id:'sweaterPink', label:'蓝黄条纹毛衣', mount:'torso', sleeve:'sweater', tex:'pink'},
+        {id:'sweaterWave', label:'蓝橙波浪毛衣', mount:'torso', sleeve:'sweater', tex:'wave'},
+        {id:'sailor', label:'水手服', mount:'torso', sleeve:'sailor'},
+        {id:'hoodie', label:'薄荷连帽卫衣', mount:'torso', sleeve:'hoodie'}
+    ],
+    bottom: [
+        {id:'pleated', label:'酒红百褶裙', mount:'hip'},
+        {id:'flareCream', label:'奶油蓬摆＋短裤', mount:'hip', legTop:'shorts'},
+        {id:'flareWave', label:'奶油喇叭摆＋短裤', mount:'hip', legTop:'shorts'},
+        {id:'shorts', label:'奶油短裤', mount:'hip', legTop:'shorts'},
+        {id:'denimSkirt', label:'牛仔短裙', mount:'hip'},
+        {id:'skirtMint', label:'薄荷百褶裙', mount:'hip'}
+    ],
+    socks: [
+        {id:'none', label:'光腿', mount:'shin', layer:0},
+        {id:'slouch', label:'奶油堆堆袜', mount:'shin', layer:1},
+        {id:'overknee', label:'奶黄过膝袜', mount:'shin', layer:1},
+        {id:'midBlack', label:'黑色中筒袜', mount:'shin', layer:1},
+        {id:'whiteKnee', label:'白色过膝袜', mount:'shin', layer:1},
+        {id:'stripe', label:'条纹中筒袜', mount:'shin', layer:1}
+    ],
+    shoes: [
+        {id:'platformRW', label:'红白厚底鞋', mount:'foot'},
+        {id:'sneakerWhite', label:'白色运动鞋', mount:'foot'},
+        {id:'bootsBrown', label:'棕色短靴', mount:'foot', cuff:'ankle'},
+        {id:'maryJane', label:'黑色玛丽珍', mount:'foot'},
+        {id:'sneakerMint', label:'薄荷运动鞋', mount:'foot'},
+        {id:'bootsBlack', label:'黑色短靴', mount:'foot', cuff:'ankle'}
+    ],
+    horn: [
+        {id:'classic', label:'珊瑚经典角', mount:'skull-horn', col:0xef8f4d, ring:0xd96f35, h:0.19, r:0.036, rings:2, tip:[0.149, 0.382, -0.059]},
+        {id:'bud', label:'珊瑚芽角', mount:'skull-horn', col:0xef8f4d, ring:0xd96f35, h:0.10, r:0.034, rings:1, tip:[0.128, 0.317, -0.045]},
+        {id:'long', label:'珊瑚修长角', mount:'skull-horn', col:0xef8f4d, ring:0xd96f35, h:0.27, r:0.032, rings:3, tip:[0.167, 0.440, -0.071]},
+        {id:'pearl', label:'奶白珍珠角', mount:'skull-horn', col:0xfdf3da, ring:0xef8f4d, h:0.19, r:0.036, rings:2, tip:[0.149, 0.382, -0.059]}
+    ],
+    fin: [
+        {id:'classic', label:'珊瑚耳鳍', mount:'head-fin', k:1, out:0xef8f4d, inn:0xfff3d4},
+        {id:'small', label:'小巧耳鳍', mount:'head-fin', k:0.78, out:0xef8f4d, inn:0xfff3d4},
+        {id:'large', label:'舒展耳鳍', mount:'head-fin', k:1.22, out:0xef8f4d, inn:0xfff3d4},
+        {id:'pink', label:'粉色耳鳍', mount:'head-fin', k:1, out:0xf0a6c0, inn:0xfff3d4}
+    ],
+    wing: [
+        {id:'small', label:'小翅膀', mount:'back-wing', k:0.85},
+        {id:'classic', label:'经典翅膀', mount:'back-wing', k:1},
+        {id:'large', label:'大翅膀', mount:'back-wing', k:1.18}
+    ],
+    tail: [
+        {id:'creamLeaf', label:'奶白叶尖尾', mount:'tail-seg', col:0xfdf3da, tip:'leaf'},
+        {id:'darkLeaf', label:'深色叶尖尾', mount:'tail-seg', col:0x35302c, tip:'leaf'},
+        {id:'pinkBall', label:'粉尾圆球尖', mount:'tail-seg', col:0xf6c9d4, tip:'ball'},
+        {id:'mintSpike', label:'薄荷尖刺尾', mount:'tail-seg', col:0xbfe6d8, tip:'spike'}
+    ]
+};
+/* 官方三款预设（一期造型）：一键套用 = 一组部件 id，与自由搭配同存档 */
+const GIRL_PRESETS = [
+    {id:'cherry', label:'酒红樱桃', parts:{hairStyle:'twin', hairColor:'brown', hairAcc:'ribbon',
+        earring:'cherry', necklace:'cherry', top:'cherryVest', bottom:'pleated',
+        socks:'slouch', shoes:'platformRW', horn:'classic', fin:'classic', wing:'classic', tail:'creamLeaf'}},
+    {id:'pink', label:'粉发条纹', parts:{hairStyle:'long', hairColor:'pink', hairAcc:'hatCream',
+        earring:'star', necklace:'none', top:'sweaterPink', bottom:'flareCream',
+        socks:'overknee', shoes:'sneakerWhite', horn:'classic', fin:'classic', wing:'classic', tail:'creamLeaf'}},
+    {id:'wave', label:'黑发撞色', parts:{hairStyle:'long', hairColor:'black', hairAcc:'hatDenim',
+        earring:'bead', necklace:'none', top:'sweaterWave', bottom:'flareWave',
+        socks:'midBlack', shoes:'bootsBrown', horn:'classic', fin:'classic', wing:'classic', tail:'darkLeaf'}}
+];
+function girlPartDef(catKey, id){
+    const list = GIRL_PARTS[catKey] || [];
+    for(const p of list) if(p.id === id) return p;
+    return list[0] || null;
+}
+/* 存档部件组合规范化：逐类校验 id，缺失/非法回落到当前预设款的同类件，
+   保证任何旧存档、坏存档都能拼出一套完整可建的搭配 */
+function girlPartsNormalize(raw, style){
+    const base = GIRL_PRESETS[(style === 1 || style === 2) ? style : 0].parts;
+    const out = {};
+    for(const cat of GIRL_PART_CATS){
+        const v = (raw && typeof raw === 'object') ? raw[cat.key] : null;
+        out[cat.key] = girlPartDef(cat.key, v) && girlPartDef(cat.key, v).id === v ? v : base[cat.key];
+    }
+    return out;
+}
+/* 解析本次建模的部件：ids（存档形态）+ defs（库定义） */
+function girlPartsOf(cfg){
+    const av = (cfg && cfg.avatar) || {};
+    const ids = girlPartsNormalize(av.parts, av.style || 0);
+    const defs = {};
+    for(const cat of GIRL_PART_CATS) defs[cat.key] = girlPartDef(cat.key, ids[cat.key]);
+    return {ids:ids, defs:defs};
+}
+window.__girl80 = {cats:GIRL_PART_CATS, parts:GIRL_PARTS, presets:GIRL_PRESETS, of:girlPartsOf, normalize:girlPartsNormalize};
+
 /* 化身形态（#79）：{form:'dragon'|'girl', style:0|1|2, chosen} 复用
    ct2_dragon 的 avatar 字段——不新增存储键。无字段（老存档/首次）默认
    小龙本体、未选择，首次进世界时由选择卡补上 chosen。 */
 function drgAvatarNormalize(raw){
     const a = (raw && typeof raw === 'object') ? raw : null;
-    if(!a) return {form:'dragon', style:0, chosen:false};
+    if(!a) return {form:'dragon', style:0, chosen:false, parts:girlPartsNormalize(null, 0)};
+    const style = (a.style === 1 || a.style === 2) ? a.style : 0;
     return {
         form: a.form === 'girl' ? 'girl' : 'dragon',
-        style: (a.style === 1 || a.style === 2) ? a.style : 0,
-        chosen: !!a.chosen
+        style: style,
+        chosen: !!a.chosen,
+        /* #80：自由搭配只存部件 id 组合，仍在 avatar 字段内，不新增键 */
+        parts: girlPartsNormalize(a.parts, style)
     };
 }
 function drgLoadCfg(){
@@ -6035,9 +6207,10 @@ lashes: lashMesh, acc: accParts
    比例：总高约 1.75（头顶）＋角约 1.90，约 5.8 头身的游戏化比例（设定图
    是 9 头身，原样搬会与小屋/小龙的世界比例脱节）；比小龙本体（约 1.65）
    略高，进屋、镜头、鸟停角都按这个身高实测过。
-   三款造型走 GIRL_STYLES 声明式数据（发型/发色/帽子/上装/下装/袜鞋/
-   尾色/小饰品），切换只换数据重建，不动骨架；二期自由搭配（#80）在此
-   数据层上扩部件库。成长三档对少女只做身高微调（GIRL_GROWTH 等比）。 */
+   一期三款造型走 GIRL_STYLES 声明式数据；二期（#80）起造型改走部件库
+   GIRL_PARTS/GIRL_PRESETS（文件前部小龙存档一节）：13 类部件独立可选、
+   GIRL_STYLES 仅作一期数据留档，建模不再读它。成长三档对少女只做
+   身高微调（GIRL_GROWTH 等比）。 */
 const GIRL_GROWTH = [1, 1.045, 1.09];   // 幼/少/青三档身高系数（微调，不改比例）
 const GIRL_SKIN = 0xf7dbc6, GIRL_BLUSH = 0xf2a0a0, GIRL_LIP = 0xc96f5e, GIRL_EYE = 0x3a2418;
 const GIRL_STYLES = [
@@ -6089,18 +6262,25 @@ function ggPart(geo, hex, x, y, z, o){
 
 function buildGirlModel(cfg){
     cfg = cfg || DRG_DEFAULT_CFG;
-    const st = GIRL_STYLES[Math.max(0, Math.min(2, (cfg.avatar && cfg.avatar.style) || 0))];
+    const P = girlPartsOf(cfg);            // #80：部件 id 组合 + 库定义
+    const D = P.defs;
     const K = GIRL_GROWTH[Math.max(0, Math.min(2, cfg.stage || 0))];
     girlK = K;
     const SKIN = GIRL_SKIN, CORAL = DRG_CORAL, CREAM = DRG_BELLY;
+    const HAIR = D.hairColor.col;
+    const hatOn = !!D.hairAcc.hat;
+    const hornLift = hatOn ? 0.030 : 0;
+    /* 遮挡声明落地：帽子（hides:['hairTopKnot']）在场时，发型的发顶团
+       （丸子/单马尾结，库里 knot:'hairTopKnot'）不建，免得顶穿帽面 */
+    const hideTopKnot = (D.hairAcc.hides || []).indexOf('hairTopKnot') >= 0;
     const paintMat = new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.9});
     const root = new THREE.Group(); root.name = 'girl';
     const lie = new THREE.Group(); root.add(lie);
     const body = new THREE.Group(); body.position.y = 0.88*K; lie.add(body);
-    const sweaterMat = (st.id !== 'cherry')
-        ? new THREE.MeshStandardMaterial({map:girlSweaterTexture(st.id), roughness:0.95}) : null;
+    const sweaterMat = D.top.tex
+        ? new THREE.MeshStandardMaterial({map:girlSweaterTexture(D.top.tex), roughness:0.95}) : null;
 
-    /* ---------- 躯干（body 组，髋部原点） ---------- */
+    /* ---------- 躯干（body 组，髋部原点）：颈/胸背基底 + 上装 + 下装 + 项链 ---------- */
     const torsoParts = [
         /* 颈与颈基座：颈球窝进头组的颈连接球、颈柱沉进基座，头颈成一体 */
         ggPart(new THREE.CylinderGeometry(0.050, 0.058, 0.14, 10), SKIN, 0, 0.50, 0),
@@ -6109,8 +6289,21 @@ function buildGirlModel(cfg){
         ggPart(new THREE.SphereGeometry(0.128, 14, 11), SKIN, 0, 0.345, 0.004, {s:[1.0, 0.9, 0.76]}),
         ggPart(new THREE.SphereGeometry(0.120, 12, 9), SKIN, 0, 0.175, 0, {s:[0.95, 0.85, 0.74]})
     ];
-    if(st.id === 'cherry'){
-        /* 樱桃背心：奶油壳 + 腰带边 + 胸前樱桃；敞开夹克只裹背与两侧、肩头滑落 */
+    /* 百褶裙几何（两款裙共用：圆台 + 径向揉皱造褶，颜色由部件给） */
+    function ggSkirt(skirtCol, ruffleCol, rough){
+        const parts = [];
+        const skirtGeo = new THREE.CylinderGeometry(0.150*K, 0.215*K, 0.17*K, 18, 1, true);
+        roughenRadial(skirtGeo, 1.7, rough); skirtGeo.translate(0, 0.015*K, 0);
+        parts.push(ModelKit.paint(skirtGeo, skirtCol));
+        const ruffleGeo = new THREE.CylinderGeometry(0.205*K, 0.228*K, 0.05*K, 18, 1, true);
+        roughenRadial(ruffleGeo, 4.1, rough); ruffleGeo.translate(0, -0.088*K, 0);
+        parts.push(ModelKit.paint(ruffleGeo, ruffleCol));
+        parts.push(ggPart(new THREE.TorusGeometry(0.150, 0.016, 8, 22), 0x5a3626, 0, 0.105, 0, {rx:Math.PI/2}));
+        parts.push(ggPart(new THREE.BoxGeometry(0.045, 0.032, 0.012), 0xd9a441, 0, 0.105, 0.148));
+        return parts;
+    }
+    if(D.top.id === 'cherryVest'){
+        /* 樱桃背心：奶油壳 + 胸前樱桃；敞开夹克只裹背与两侧、肩头滑落 */
         torsoParts.push(ggPart(new THREE.SphereGeometry(0.140, 14, 11), 0xfdf6ec, 0, 0.325, 0.006, {s:[1.03, 0.98, 0.80]}));
         torsoParts.push(ggPart(new THREE.CylinderGeometry(0.118, 0.126, 0.075, 12), 0xfdf6ec, 0, 0.182, 0));
         torsoParts.push(ggPart(new THREE.SphereGeometry(0.020, 8, 6), 0xc22f3a, 0.030, 0.312, 0.106));
@@ -6121,37 +6314,64 @@ function buildGirlModel(cfg){
         torsoParts.push(ggPart(new THREE.SphereGeometry(0.115, 12, 9), 0x8e2438, 0.105, 0.30, -0.045, {s:[0.62, 1.05, 0.85]}));
         torsoParts.push(ggPart(new THREE.SphereGeometry(0.075, 10, 8), 0x8e2438, -0.175, 0.425, 0, {s:[1, 0.8, 1]}));
         torsoParts.push(ggPart(new THREE.SphereGeometry(0.075, 10, 8), 0x8e2438, 0.175, 0.425, 0, {s:[1, 0.8, 1]}));
-        /* 百褶裙（圆台 + 径向揉皱造褶）+ 奶油荷叶边 + 腰带 + 腰链 */
-        const skirtGeo = new THREE.CylinderGeometry(0.150*K, 0.215*K, 0.17*K, 18, 1, true);
-        roughenRadial(skirtGeo, 1.7, 0.05); skirtGeo.translate(0, 0.015*K, 0);
-        torsoParts.push(ModelKit.paint(skirtGeo, 0x8e2438));
-        const ruffleGeo = new THREE.CylinderGeometry(0.205*K, 0.228*K, 0.05*K, 18, 1, true);
-        roughenRadial(ruffleGeo, 4.1, 0.05); ruffleGeo.translate(0, -0.088*K, 0);
-        torsoParts.push(ModelKit.paint(ruffleGeo, 0xfdf6ec));
-        torsoParts.push(ggPart(new THREE.TorusGeometry(0.150, 0.016, 8, 22), 0x5a3626, 0, 0.105, 0, {rx:Math.PI/2}));
-        torsoParts.push(ggPart(new THREE.BoxGeometry(0.045, 0.032, 0.012), 0xd9a441, 0, 0.105, 0.148));
+    } else if(D.top.id === 'sailor'){
+        /* 水手服：白壳 + 海军领圈与肩轭 + 红领结（领口在颈基座外层，不碰颈柱） */
+        torsoParts.push(ggPart(new THREE.SphereGeometry(0.140, 14, 11), 0xfdf6ec, 0, 0.325, 0.006, {s:[1.03, 0.98, 0.80]}));
+        torsoParts.push(ggPart(new THREE.CylinderGeometry(0.118, 0.126, 0.075, 12), 0xfdf6ec, 0, 0.182, 0));
+        torsoParts.push(ggPart(new THREE.TorusGeometry(0.084, 0.018, 8, 20), 0x2e4a7a, 0, 0.460, 0, {rx:Math.PI/2}));
+        torsoParts.push(ggPart(new THREE.SphereGeometry(0.130, 12, 9), 0x2e4a7a, 0, 0.40, 0, {s:[1.18, 0.62, 0.80]}));
+        torsoParts.push(ggPart(new THREE.SphereGeometry(0.020, 8, 6), 0xc22f3a, 0, 0.415, 0.105, {s:[1.3, 0.8, 0.6]}));
+        torsoParts.push(ggPart(new THREE.CylinderGeometry(0.122, 0.130, 0.045, 12), 0x2e4a7a, 0, 0.155, 0));
+    } else if(D.top.id === 'hoodie'){
+        /* 薄荷连帽卫衣：同毛衣的宽松壳型但走刷色（无贴图）+ 颈后帽兜 + 前兜 */
+        torsoParts.push(ggPart(new THREE.SphereGeometry(0.148, 14, 11), 0x9fd8c0, 0, 0.285, 0, {s:[1.07, 1.16, 0.84]}));
+        torsoParts.push(ggPart(new THREE.CylinderGeometry(0.152, 0.160, 0.10, 14), 0x9fd8c0, 0, 0.085, 0));
+        torsoParts.push(ggPart(new THREE.TorusGeometry(0.085, 0.020, 8, 18), 0x8bcdb2, 0, 0.462, -0.018, {rx:Math.PI/2 + 0.25}));
+        torsoParts.push(ggPart(new THREE.BoxGeometry(0.13, 0.07, 0.03), 0x8bcdb2, 0, 0.16, 0.125, {rx:-0.15}));
+    } else {
+        /* 条纹毛衣两款共用壳型（贴图分开）：罗纹领 + 肩轭（壳由 sweaterMat 出） */
+        torsoParts.push(ggPart(new THREE.TorusGeometry(0.082, 0.016, 8, 20),
+            D.top.id === 'sweaterPink' ? 0x86b6e0 : 0x2e5f9e, 0, 0.462, 0, {rx:Math.PI/2}));
+        torsoParts.push(ggPart(new THREE.SphereGeometry(0.130, 12, 9),
+            D.top.id === 'sweaterPink' ? 0x86b6e0 : 0x2e5f9e, 0, 0.40, 0, {s:[1.18, 0.62, 0.80]}));
+    }
+    /* 下装（髋部挂点）：裙摆在躯干空间出，短裤口在腿空间出（见腿 builder） */
+    if(D.bottom.id === 'pleated'){
+        for(const gp of ggSkirt(0x8e2438, 0xfdf6ec, 0.05)) torsoParts.push(gp);
         torsoParts.push(ggPart(new THREE.TorusGeometry(0.168, 0.007, 6, 24), 0xc9ccd4, 0, 0.055, 0, {rx:Math.PI/2, rz:0.10}));
         torsoParts.push(ggPart(new THREE.SphereGeometry(0.011, 6, 5), 0xc9ccd4, 0.055, -0.005, 0.152));
         torsoParts.push(ggPart(new THREE.SphereGeometry(0.011, 6, 5), 0xc9ccd4, -0.045, -0.012, 0.155));
-        /* 项链：银环贴颈 + 胸前一对小樱桃 */
+    } else if(D.bottom.id === 'skirtMint'){
+        for(const gp of ggSkirt(0x63bfa5, 0xfdf6ec, 0.05)) torsoParts.push(gp);
+    } else if(D.bottom.id === 'denimSkirt'){
+        const skirtGeo = new THREE.CylinderGeometry(0.150*K, 0.205*K, 0.16*K, 18, 1, true);
+        roughenRadial(skirtGeo, 1.7, 0.018); skirtGeo.translate(0, 0.020*K, 0);
+        torsoParts.push(ModelKit.paint(skirtGeo, 0x5b84ae));
+        torsoParts.push(ggPart(new THREE.TorusGeometry(0.150, 0.016, 8, 22), 0x5a3626, 0, 0.105, 0, {rx:Math.PI/2}));
+        torsoParts.push(ggPart(new THREE.BoxGeometry(0.045, 0.032, 0.012), 0xd9a441, 0, 0.105, 0.148));
+        torsoParts.push(ggPart(new THREE.TorusGeometry(0.206, 0.005, 6, 24), 0xf3e6cf, 0, -0.055, 0, {rx:Math.PI/2}));
+    } else if(D.bottom.id === 'flareCream'){
+        torsoParts.push(ggPart(new THREE.SphereGeometry(0.148, 14, 11), 0xfdf6ec, 0, 0.025, 0, {s:[1.06, 0.74, 0.84]}));
+    } else if(D.bottom.id === 'flareWave'){
+        const flareGeo = new THREE.CylinderGeometry(0.148*K, 0.200*K, 0.12*K, 16, 1, true);
+        roughenRadial(flareGeo, 2.3, 0.035); flareGeo.translate(0, 0.045*K, 0);
+        torsoParts.push(ModelKit.paint(flareGeo, 0xf3ead8));
+        torsoParts.push(ggPart(new THREE.SphereGeometry(0.146, 12, 9), 0xf3ead8, 0, 0.045, 0, {s:[1.04, 0.66, 0.82]}));
+    }
+    /* 项链（颈挂点，layer 2：在领口之外、颈柱之外，不与上装领圈同半径） */
+    if(D.necklace.id === 'cherry'){
         torsoParts.push(ggPart(new THREE.TorusGeometry(0.072, 0.0055, 6, 20), 0xc9ccd4, 0, 0.472, 0.028, {rx:Math.PI/2 + 0.35}));
         torsoParts.push(ggPart(new THREE.SphereGeometry(0.015, 8, 6), 0xc22f3a, 0.016, 0.408, 0.118));
         torsoParts.push(ggPart(new THREE.SphereGeometry(0.013, 8, 6), 0xc22f3a, -0.014, 0.402, 0.120));
-    } else {
-        /* 毛衣两款共用壳型（贴图分开）：宽松壳罩到髋 + 罗纹领 + 肩轭
-           （壳在肩高处收窄，肩轭把躯干侧面与肩头关节球咬合到一起） */
-        torsoParts.push(ggPart(new THREE.TorusGeometry(0.082, 0.016, 8, 20),
-            st.id === 'pink' ? 0x86b6e0 : 0x2e5f9e, 0, 0.462, 0, {rx:Math.PI/2}));
-        torsoParts.push(ggPart(new THREE.SphereGeometry(0.130, 12, 9),
-            st.id === 'pink' ? 0x86b6e0 : 0x2e5f9e, 0, 0.40, 0, {s:[1.18, 0.62, 0.80]}));
-        if(st.id === 'pink')
-            torsoParts.push(ggPart(new THREE.SphereGeometry(0.148, 14, 11), 0xfdf6ec, 0, 0.025, 0, {s:[1.06, 0.74, 0.84]}));
-        else {
-            const flareGeo = new THREE.CylinderGeometry(0.148*K, 0.200*K, 0.12*K, 16, 1, true);
-            roughenRadial(flareGeo, 2.3, 0.035); flareGeo.translate(0, 0.045*K, 0);
-            torsoParts.push(ModelKit.paint(flareGeo, 0xf3ead8));
-            torsoParts.push(ggPart(new THREE.SphereGeometry(0.146, 12, 9), 0xf3ead8, 0, 0.045, 0, {s:[1.04, 0.66, 0.82]}));
-        }
+    } else if(D.necklace.id === 'pearl'){
+        torsoParts.push(ggPart(new THREE.TorusGeometry(0.070, 0.009, 8, 20), 0xf7f2e8, 0, 0.470, 0.028, {rx:Math.PI/2 + 0.35}));
+        torsoParts.push(ggPart(new THREE.SphereGeometry(0.014, 8, 6), 0xf7f2e8, 0, 0.404, 0.116));
+    } else if(D.necklace.id === 'bell'){
+        torsoParts.push(ggPart(new THREE.TorusGeometry(0.070, 0.005, 6, 20), 0xd9a441, 0, 0.470, 0.028, {rx:Math.PI/2 + 0.35}));
+        torsoParts.push(ggPart(new THREE.SphereGeometry(0.019, 9, 7), 0xd9a441, 0, 0.400, 0.114, {s:[1, 0.9, 1]}));
+    } else if(D.necklace.id === 'star'){
+        torsoParts.push(ggPart(new THREE.TorusGeometry(0.070, 0.005, 6, 20), 0xc9ccd4, 0, 0.470, 0.028, {rx:Math.PI/2 + 0.35}));
+        torsoParts.push(ggPart(new THREE.ConeGeometry(0.020, 0.040, 4), 0xd9a441, 0, 0.398, 0.114, {rx:Math.PI + 0.35}));
     }
     const torsoMesh = new THREE.Mesh(ModelKit.mergePainted(torsoParts), paintMat);
     torsoMesh.castShadow = true;
@@ -6169,7 +6389,6 @@ function buildGirlModel(cfg){
 
     /* ---------- 头（组原点在面部下方，与小龙同一约定：一人称锚点） ---------- */
     const head = new THREE.Group(); head.position.set(0, 0.58*K, 0.01*K); body.add(head);
-    const hornLift = st.hat ? 0.030 : 0;
     const skullParts = [
         ggPart(new THREE.SphereGeometry(0.152, 16, 12), SKIN, 0, 0.125, -0.01, {s:[0.98, 1.06, 0.94]}),
         ggPart(new THREE.SphereGeometry(0.115, 12, 9), SKIN, 0, 0.045, 0.025, {s:[0.92, 0.82, 0.88]}),
@@ -6179,34 +6398,53 @@ function buildGirlModel(cfg){
         ggPart(new THREE.SphereGeometry(0.016, 8, 6), GIRL_LIP, 0, 0.026, 0.124, {s:[1.4, 0.45, 0.5]}),
         ggPart(new THREE.SphereGeometry(0.027, 8, 6), GIRL_BLUSH, -0.088, 0.055, 0.088, {s:[1, 0.6, 0.35]}),
         ggPart(new THREE.SphereGeometry(0.027, 8, 6), GIRL_BLUSH, 0.088, 0.055, 0.088, {s:[1, 0.6, 0.35]}),
-        ggPart(new THREE.BoxGeometry(0.046, 0.008, 0.008), st.browCol, -0.056, 0.158, 0.127, {rz:0.12}),
-        ggPart(new THREE.BoxGeometry(0.046, 0.008, 0.008), st.browCol, 0.056, 0.158, 0.127, {rz:-0.12}),
+        ggPart(new THREE.BoxGeometry(0.046, 0.008, 0.008), D.hairColor.brow, -0.056, 0.158, 0.127, {rz:0.12}),
+        ggPart(new THREE.BoxGeometry(0.046, 0.008, 0.008), D.hairColor.brow, 0.056, 0.158, 0.127, {rz:-0.12}),
         /* 睫毛：每侧两根小刺，根埋进眼球上缘（静态件，不随眨眼缩放） */
         ggPart(new THREE.BoxGeometry(0.008, 0.026, 0.006), GIRL_EYE, -0.082, 0.128, 0.118, {rz:0.5}),
         ggPart(new THREE.BoxGeometry(0.008, 0.026, 0.006), GIRL_EYE, 0.082, 0.128, 0.118, {rz:-0.5})
     ];
-    /* 龙角（珊瑚橙，带环纹）：根丘包覆 + 主锥 + 两道深色环——与小龙的角同一血统。
-       位置是硬指标：第一版角根坐在 x±0.08，被发盖（r0.162）的轮廓整个埋住、
-       近景只露个尖；现外移到发际线外侧并加长加倾，整角探出发型轮廓——
-       这是她的签名特征，也是小鸟停角（parts.hornTip 同步）的落脚点 */
-    for(const sgn of [-1, 1]){
-        skullParts.push(ggPart(new THREE.SphereGeometry(0.042, 8, 6), CORAL, sgn*0.105, 0.245 + hornLift, -0.030, {s:[1, 0.62, 1]}));
-        skullParts.push(ggPart(new THREE.ConeGeometry(0.036, 0.19, 9), CORAL, sgn*0.118, 0.295 + hornLift, -0.038, {rx:-0.22, rz:-sgn*0.34}));
-        skullParts.push(ggPart(new THREE.TorusGeometry(0.0295, 0.006, 6, 12), 0xd96f35, sgn*0.108, 0.268 + hornLift, -0.032, {rx:Math.PI/2 - 0.22, rz:-sgn*0.20}));
-        skullParts.push(ggPart(new THREE.TorusGeometry(0.0235, 0.005, 6, 12), 0xd96f35, sgn*0.118, 0.302 + hornLift, -0.042, {rx:Math.PI/2 - 0.22, rz:-sgn*0.26}));
+    /* 龙角（部件库 horn 类）：根丘包覆 + 主锥 + 环纹，尺寸/颜色/环数全走
+       库定义；角尖坐标同步进 parts.hornTip（库 tip + 帽子 hornLift），
+       小鸟停角对任何角型都落得准。外移加倾是硬指标：整角探出发轮廓。 */
+    {
+        const hd = D.horn;
+        /* 锚点公式与一期经典角逐值对齐：锥心 = 根丘心 + (0.068h, 0.263h, -0.042h)，
+           轴向 dir = R*(0,1,0) = (±0.325, 0.920, -0.218)；换角型只改 h/r，
+           角尖 = 锥心 + dir*h/2，与库里 tip 逐值一致（探针实测 gap < 0.005） */
+        for(const sgn of [-1, 1]){
+            const cx = sgn*(0.105 + hd.h*0.068), cy = 0.245 + hornLift + hd.h*0.263, cz = -0.030 - hd.h*0.042;
+            skullParts.push(ggPart(new THREE.SphereGeometry(0.042, 8, 6), hd.col, sgn*0.105, 0.245 + hornLift, -0.030, {s:[1, 0.62, 1]}));
+            skullParts.push(ggPart(new THREE.ConeGeometry(hd.r, hd.h, 9), hd.col, cx, cy, cz, {rx:-0.22, rz:-sgn*0.34}));
+            for(let ri = 0; ri < hd.rings; ri++){
+                const u = (hd.rings === 3 ? 0.26 : 0.32) + ri*(hd.rings === 3 ? 0.20 : 0.22);
+                const rr = hd.r*(1 - u) + 0.0035, off = (u - 0.5)*hd.h;
+                skullParts.push(ggPart(new THREE.TorusGeometry(rr, 0.0055, 6, 12), hd.ring,
+                    cx + sgn*0.325*off, cy + 0.920*off, cz - 0.218*off,
+                    {rx:Math.PI/2 - 0.22, rz:-sgn*0.24}));
+            }
+        }
     }
-    /* 耳坠（小件，挂在耳鳍下方） */
-    if(st.earring === 'cherry'){
+    /* 耳坠（耳鳍下方挂点 fin-low，鳍再大也只垂在鳍根下，不穿鳍面） */
+    if(D.earring.id === 'cherry'){
         for(const sgn of [-1, 1]){
             skullParts.push(ggPart(new THREE.SphereGeometry(0.008, 6, 5), 0xc9ccd4, sgn*0.150, 0.052, 0.004));
             skullParts.push(ggPart(new THREE.SphereGeometry(0.013, 8, 6), 0xc22f3a, sgn*0.152, 0.028, 0.005));
         }
-    } else if(st.earring === 'bead'){
+    } else if(D.earring.id === 'bead'){
         for(const sgn of [-1, 1])
             skullParts.push(ggPart(new THREE.SphereGeometry(0.014, 8, 6), 0xe8763a, sgn*0.152, 0.034, 0.005));
-    } else {
+    } else if(D.earring.id === 'star'){
         for(const sgn of [-1, 1])
             skullParts.push(ggPart(new THREE.ConeGeometry(0.013, 0.026, 4), 0xd9a441, sgn*0.150, 0.034, 0.005, {rx:Math.PI}));
+    } else if(D.earring.id === 'pearl'){
+        for(const sgn of [-1, 1]){
+            skullParts.push(ggPart(new THREE.SphereGeometry(0.007, 6, 5), 0xd9a441, sgn*0.150, 0.050, 0.004));
+            skullParts.push(ggPart(new THREE.SphereGeometry(0.0135, 8, 6), 0xf7f2e8, sgn*0.152, 0.028, 0.005));
+        }
+    } else if(D.earring.id === 'ring'){
+        for(const sgn of [-1, 1])
+            skullParts.push(ggPart(new THREE.TorusGeometry(0.014, 0.0035, 6, 12), 0xc9ccd4, sgn*0.152, 0.032, 0.005));
     }
     const skullMesh = new THREE.Mesh(ModelKit.mergePainted(skullParts), paintMat);
     skullMesh.castShadow = true;
@@ -6220,56 +6458,98 @@ function buildGirlModel(cfg){
     ]), paintMat);
     eyeMesh.position.set(0, 0.105*K, 0.088*K);
     head.add(eyeMesh);
-    /* 耳鳍：珊瑚外扇 + 奶油内扇（与小龙耳鳍同构：组枢轴在鳍根，睡姿可折拢） */
+    /* 耳鳍（部件库 fin 类）：珊瑚外扇 + 内扇，k 缩放与配色走库定义；
+       组枢轴在鳍根，睡姿可折拢——尺寸只在鳍面内变，不动枢轴 */
     function girlFinMesh(sign){
+        const fd = D.fin, fk = fd.k;
         return new THREE.Mesh(ModelKit.mergePainted([
-            ggPart(new THREE.ConeGeometry(0.078, 0.17, 8), CORAL, sign*0.048, 0.022, 0, {rz:-sign*1.20, s:[1, 1, 0.30]}),
-            ggPart(new THREE.ConeGeometry(0.056, 0.125, 8), CREAM, sign*0.042, 0.018, 0.012, {rz:-sign*1.20, s:[1, 1, 0.30]})
+            ggPart(new THREE.ConeGeometry(0.078*fk, 0.17*fk, 8), fd.out, sign*0.048*fk, 0.022*fk, 0, {rz:-sign*1.20, s:[1, 1, 0.30]}),
+            ggPart(new THREE.ConeGeometry(0.056*fk, 0.125*fk, 8), fd.inn, sign*0.042*fk, 0.018*fk, 0.012, {rz:-sign*1.20, s:[1, 1, 0.30]})
         ]), paintMat);
     }
     const finL = new THREE.Group(); finL.position.set(-0.150*K, 0.112*K, -0.018*K); finL.add(girlFinMesh(-1)); head.add(finL);
     const finR = new THREE.Group(); finR.position.set(0.150*K, 0.112*K, -0.018*K); finR.add(girlFinMesh(1)); head.add(finR);
-    /* 头发：发盖（球面扇，前高后低）+ 后发团 + 发型件，全走发色一色合并 */
+    /* 头发：发盖 + 后发团（发型基底）+ 发型件 + 发饰，全走发色一色合并；
+       发饰刷自己的颜色（同合并、异色点缀在一期就是这个口径） */
     const hairParts = [];
     const capGeo = new THREE.SphereGeometry(0.162*K, 14, 10, 0, Math.PI*2, 0, 1.85);
     capGeo.scale(1, 0.98, 0.97); capGeo.rotateX(-0.32); capGeo.translate(0, 0.150*K, -0.015*K);
-    hairParts.push(ModelKit.paint(capGeo, st.hairCol));
-    hairParts.push(ggPart(new THREE.SphereGeometry(0.150, 12, 9), st.hairCol, 0, 0.03, -0.060, {s:[1.03, 1.15, 0.92]}));
-    if(st.hair === 'twin'){
+    hairParts.push(ModelKit.paint(capGeo, HAIR));
+    hairParts.push(ggPart(new THREE.SphereGeometry(0.150, 12, 9), HAIR, 0, 0.03, -0.060, {s:[1.03, 1.15, 0.92]}));
+    if(D.hairStyle.id === 'twin'){
         for(const sgn of [-1, 1]){
-            hairParts.push(ggPart(new THREE.SphereGeometry(0.058, 9, 7), st.hairCol, sgn*0.150, 0.175, -0.035));
+            hairParts.push(ggPart(new THREE.SphereGeometry(0.058, 9, 7), HAIR, sgn*0.150, 0.175, -0.035));
             const segY = [0.06, -0.06, -0.17, -0.27], segR = [0.055, 0.047, 0.038, 0.030];
             for(let i = 0; i < 4; i++)
-                hairParts.push(ggPart(new THREE.SphereGeometry(segR[i], 9, 7), st.hairCol,
+                hairParts.push(ggPart(new THREE.SphereGeometry(segR[i], 9, 7), HAIR,
                     sgn*(0.163 + i*0.006), segY[i], -0.048, {s:[0.9, 1.3, 0.9]}));
-            /* 酒红蝴蝶结：结心 + 双翼 + 两条垂带（发色件同一合并，刷缎带色） */
+        }
+    } else if(D.hairStyle.id === 'long'){
+        /* 长发：后发长团 + 胸前两缕 + 两侧垂缕（错位叠球造波浪感） */
+        hairParts.push(ggPart(new THREE.SphereGeometry(0.148, 12, 9), HAIR, 0, -0.06, -0.070, {s:[1.04, 1.75, 0.90]}));
+        hairParts.push(ggPart(new THREE.SphereGeometry(0.075, 9, 7), HAIR, -0.118, -0.03, 0.062, {s:[0.42, 1.9, 0.42]}));
+        hairParts.push(ggPart(new THREE.SphereGeometry(0.075, 9, 7), HAIR, 0.118, -0.03, 0.062, {s:[0.42, 1.9, 0.42]}));
+        hairParts.push(ggPart(new THREE.SphereGeometry(0.070, 9, 7), HAIR, -0.130, -0.16, -0.045, {s:[0.45, 1.2, 0.45]}));
+        hairParts.push(ggPart(new THREE.SphereGeometry(0.070, 9, 7), HAIR, 0.130, -0.16, -0.045, {s:[0.45, 1.2, 0.45]}));
+    } else if(D.hairStyle.id === 'bob'){
+        /* 波波头：后发收到下颌线 + 两侧齐脸短缕 + 发尾内扣团 */
+        hairParts.push(ggPart(new THREE.SphereGeometry(0.148, 12, 9), HAIR, 0, -0.015, -0.062, {s:[1.05, 1.02, 0.94]}));
+        hairParts.push(ggPart(new THREE.SphereGeometry(0.072, 9, 7), HAIR, -0.130, -0.055, 0.045, {s:[0.42, 1.05, 0.42]}));
+        hairParts.push(ggPart(new THREE.SphereGeometry(0.072, 9, 7), HAIR, 0.130, -0.055, 0.045, {s:[0.42, 1.05, 0.42]}));
+        hairParts.push(ggPart(new THREE.SphereGeometry(0.075, 9, 7), HAIR, 0, -0.155, -0.055, {s:[1.55, 0.5, 0.9]}));
+    } else if(D.hairStyle.id === 'pony'){
+        /* 单马尾：右侧高束（发顶团，帽子在场时按 hides 声明跳过束根，
+           只垂低段）+ 后发短团 */
+        hairParts.push(ggPart(new THREE.SphereGeometry(0.148, 12, 9), HAIR, 0, 0.0, -0.062, {s:[1.04, 1.05, 0.92]}));
+        if(!hideTopKnot)
+            hairParts.push(ggPart(new THREE.SphereGeometry(0.052, 9, 7), HAIR, 0.148, 0.180, -0.040));
+        const segY = [0.07, -0.05, -0.16, -0.26], segR = [0.050, 0.043, 0.035, 0.027];
+        for(let i = 0; i < 4; i++)
+            hairParts.push(ggPart(new THREE.SphereGeometry(segR[i], 9, 7), HAIR,
+                0.163 + i*0.006, segY[i], -0.048, {s:[0.9, 1.3, 0.9]}));
+    } else {
+        /* 丸子头：发顶单团（发顶团，帽子在场跳过）+ 后发短团 + 两鬓短缕 */
+        hairParts.push(ggPart(new THREE.SphereGeometry(0.148, 12, 9), HAIR, 0, 0.0, -0.062, {s:[1.04, 1.05, 0.92]}));
+        if(!hideTopKnot){
+            hairParts.push(ggPart(new THREE.SphereGeometry(0.062, 10, 8), HAIR, 0, 0.295, -0.030));
+            hairParts.push(ggPart(new THREE.TorusGeometry(0.045, 0.010, 6, 14), HAIR, 0, 0.252, -0.028, {rx:Math.PI/2 + 0.2}));
+        }
+        hairParts.push(ggPart(new THREE.SphereGeometry(0.070, 9, 7), HAIR, -0.128, -0.03, 0.048, {s:[0.40, 0.95, 0.40]}));
+        hairParts.push(ggPart(new THREE.SphereGeometry(0.070, 9, 7), HAIR, 0.128, -0.03, 0.048, {s:[0.40, 0.95, 0.40]}));
+    }
+    /* 发饰（hair-side / head-top 挂点，layer 在发型之外） */
+    if(D.hairAcc.id === 'ribbon'){
+        for(const sgn of [-1, 1]){
             hairParts.push(ggPart(new THREE.SphereGeometry(0.020, 7, 6), 0x8e2438, sgn*0.150, 0.208, -0.035));
             hairParts.push(ggPart(new THREE.ConeGeometry(0.034, 0.075, 7), 0x8e2438, sgn*0.178, 0.215, -0.035, {rz:-sgn*1.1, s:[1, 1, 0.45]}));
             hairParts.push(ggPart(new THREE.ConeGeometry(0.034, 0.075, 7), 0x8e2438, sgn*0.124, 0.222, -0.035, {rz:sgn*1.1, s:[1, 1, 0.45]}));
             hairParts.push(ggPart(new THREE.BoxGeometry(0.030, 0.150, 0.008), 0x8e2438, sgn*0.158, 0.105, -0.058, {rz:-sgn*0.08}));
         }
-    } else {
-        /* 长发：后发长团 + 胸前两缕 + 两侧垂缕（错位叠球造波浪感） */
-        hairParts.push(ggPart(new THREE.SphereGeometry(0.148, 12, 9), st.hairCol, 0, -0.06, -0.070, {s:[1.04, 1.75, 0.90]}));
-        hairParts.push(ggPart(new THREE.SphereGeometry(0.075, 9, 7), st.hairCol, -0.118, -0.03, 0.062, {s:[0.42, 1.9, 0.42]}));
-        hairParts.push(ggPart(new THREE.SphereGeometry(0.075, 9, 7), st.hairCol, 0.118, -0.03, 0.062, {s:[0.42, 1.9, 0.42]}));
-        hairParts.push(ggPart(new THREE.SphereGeometry(0.070, 9, 7), st.hairCol, -0.130, -0.16, -0.045, {s:[0.45, 1.2, 0.45]}));
-        hairParts.push(ggPart(new THREE.SphereGeometry(0.070, 9, 7), st.hairCol, 0.130, -0.16, -0.045, {s:[0.45, 1.2, 0.45]}));
-    }
-    if(st.hat){
-        const hatCol = st.hat === 'cream' ? 0xf7e39b : 0x5b84ae;
+    } else if(D.hairAcc.hat){
+        const hatCol = D.hairAcc.id === 'hatCream' ? 0xf7e39b : 0x5b84ae;
         const domeGeo = new THREE.SphereGeometry(0.160*K, 14, 8, 0, Math.PI*2, 0, 1.35);
         domeGeo.scale(1, 0.92, 0.97); domeGeo.translate(0, 0.158*K, -0.012*K);
         hairParts.push(ModelKit.paint(domeGeo, hatCol));
         hairParts.push(ggPart(new THREE.CylinderGeometry(0.098, 0.102, 0.014, 12), hatCol, 0, 0.150, 0.128, {rx:0.12, s:[1.15, 1, 1.35]}));
-        if(st.hat === 'cream')
+        if(D.hairAcc.id === 'hatCream')
             hairParts.push(ggPart(new THREE.ConeGeometry(0.028, 0.014, 4), 0x86b6e0, 0, 0.248, 0.088, {rx:-0.5}));
+    } else if(D.hairAcc.id === 'flower'){
+        /* 小花发夹：贴右侧发面（x 0.150 已在发盖轮廓外 0.162 内侧咬合） */
+        hairParts.push(ggPart(new THREE.SphereGeometry(0.011, 7, 6), 0xd9a441, 0.152, 0.155, 0.075));
+        for(let pi = 0; pi < 5; pi++){
+            const a = pi/5*Math.PI*2;
+            hairParts.push(ggPart(new THREE.SphereGeometry(0.0125, 7, 6), 0xf6c9d4,
+                0.152 + Math.cos(a)*0.004, 0.155 + Math.sin(a)*0.020, 0.075 + Math.cos(a)*0.016, {s:[0.5, 1, 1]}));
+        }
+    } else if(D.hairAcc.id === 'starClip'){
+        hairParts.push(ggPart(new THREE.BoxGeometry(0.055, 0.010, 0.008), 0xc9ccd4, -0.140, 0.135, 0.085, {rz:0.25}));
+        hairParts.push(ggPart(new THREE.ConeGeometry(0.016, 0.032, 4), 0xd9a441, -0.148, 0.150, 0.092, {rz:0.4}));
     }
     const hairMesh = new THREE.Mesh(ModelKit.mergePainted(hairParts), paintMat);
     hairMesh.castShadow = true;
     head.add(hairMesh);
 
-    /* ---------- 双臂（枢轴在肩头，与小龙同一摆臂契约） ---------- */
+    /* ---------- 双臂（枢轴在肩头，袖型由上装部件的 sleeve 声明决定） ---------- */
     function girlArmMesh(sign){
         const parts = [
             ggPart(new THREE.SphereGeometry(0.070, 10, 8), SKIN, 0, -0.01, 0),
@@ -6279,10 +6559,16 @@ function buildGirlModel(cfg){
             ggPart(new THREE.SphereGeometry(0.046, 9, 7), SKIN, 0, -0.505, 0.006, {s:[0.85, 1.12, 0.92]}),
             ggPart(new THREE.SphereGeometry(0.016, 6, 5), SKIN, -sign*0.038, -0.49, 0.028)
         ];
-        if(st.id === 'cherry'){
+        if(D.top.sleeve === 'jacket'){
             /* 夹克袖：酒红宽袖罩住上臂 + 奶油袖口（夹克滑落到上臂的穿法） */
             parts.push(ggPart(new THREE.CylinderGeometry(0.058, 0.066, 0.27, 10), 0x8e2438, 0, -0.135, 0));
             parts.push(ggPart(new THREE.TorusGeometry(0.064, 0.014, 7, 14), 0xf3e6cf, 0, -0.272, 0, {rx:Math.PI/2}));
+        } else if(D.top.sleeve === 'sailor'){
+            parts.push(ggPart(new THREE.CylinderGeometry(0.058, 0.064, 0.28, 10), 0xfdf6ec, 0, -0.140, 0));
+            parts.push(ggPart(new THREE.TorusGeometry(0.062, 0.013, 7, 14), 0x2e4a7a, 0, -0.282, 0, {rx:Math.PI/2}));
+        } else if(D.top.sleeve === 'hoodie'){
+            parts.push(ggPart(new THREE.CylinderGeometry(0.062, 0.056, 0.34, 10), 0x9fd8c0, 0, -0.165, 0));
+            parts.push(ggPart(new THREE.TorusGeometry(0.055, 0.012, 7, 14), 0x8bcdb2, 0, -0.338, 0, {rx:Math.PI/2}));
         }
         const m = new THREE.Mesh(ModelKit.mergePainted(parts), paintMat);
         m.castShadow = true;
@@ -6302,40 +6588,56 @@ function buildGirlModel(cfg){
     const armR = new THREE.Group(); armR.position.set(0.198*K, 0.425*K, 0.005*K);
     armR.add(girlArmMesh(1)); armR.rotation.z = 0.10; armR.userData.baseZ = 0.10; body.add(armR);
 
-    /* ---------- 双腿（枢轴在髋，挂 lie 层，与小龙同构） ---------- */
+    /* ---------- 双腿（枢轴在髋，挂 lie 层）：大腿/膝/小腿基底 + 下装裤口
+       + 袜（layer 1，半径恒大于小腿基底 0.004 以上，整段覆盖不露肤边）
+       + 鞋（foot 挂点，靴筒 cuff 再盖袜口一截，三层让位关系写在库里） ---------- */
     function girlLegMesh(){
         const parts = [
             ggPart(new THREE.CylinderGeometry(0.068, 0.057, 0.40, 10), SKIN, 0, -0.20, 0),
-            ggPart(new THREE.SphereGeometry(0.054, 9, 7), SKIN, 0, -0.405, 0.002)
+            ggPart(new THREE.SphereGeometry(0.054, 9, 7), SKIN, 0, -0.405, 0.002),
+            ggPart(new THREE.CylinderGeometry(0.050, 0.041, 0.35, 9), SKIN, 0, -0.575, 0)
         ];
-        if(st.id === 'cherry'){
-            parts.push(ggPart(new THREE.CylinderGeometry(0.050, 0.041, 0.35, 9), SKIN, 0, -0.575, 0));
-            /* 堆堆袜：奶油高筒 + 酒红双条 + 下摆微喇 */
+        if(D.bottom.legTop === 'shorts')
+            parts.push(ggPart(new THREE.CylinderGeometry(0.074, 0.070, 0.14, 10), 0xfdf6ec, 0, -0.08, 0));
+        /* 袜子 */
+        if(D.socks.id === 'slouch'){
             parts.push(ggPart(new THREE.CylinderGeometry(0.057, 0.052, 0.30, 10), 0xfdf6ec, 0, -0.60, 0));
             parts.push(ggPart(new THREE.TorusGeometry(0.0575, 0.008, 6, 14), 0x8e2438, 0, -0.472, 0, {rx:Math.PI/2}));
             parts.push(ggPart(new THREE.TorusGeometry(0.0565, 0.008, 6, 14), 0x8e2438, 0, -0.498, 0, {rx:Math.PI/2}));
             parts.push(ggPart(new THREE.CylinderGeometry(0.064, 0.058, 0.09, 10), 0xfdf6ec, 0, -0.715, 0));
             parts.push(ggPart(new THREE.SphereGeometry(0.046, 8, 6), 0xfdf6ec, 0, -0.765, 0.004));
-            /* 红白厚底鞋：奶油鞋身 + 酒红鞋头 + 黑厚底 */
+        } else if(D.socks.id === 'overknee' || D.socks.id === 'whiteKnee'){
+            const sc = D.socks.id === 'overknee' ? 0xf7e39b : 0xf7f7f7;
+            parts.push(ggPart(new THREE.CylinderGeometry(0.055, 0.050, 0.44, 10), sc, 0, -0.565, 0));
+            parts.push(ggPart(new THREE.SphereGeometry(0.046, 8, 6), sc, 0, -0.765, 0.004));
+        } else if(D.socks.id === 'midBlack'){
+            parts.push(ggPart(new THREE.CylinderGeometry(0.054, 0.049, 0.32, 10), 0x2e2a26, 0, -0.615, 0));
+        } else if(D.socks.id === 'stripe'){
+            parts.push(ggPart(new THREE.CylinderGeometry(0.054, 0.049, 0.32, 10), 0xfdf6ec, 0, -0.615, 0));
+            parts.push(ggPart(new THREE.TorusGeometry(0.0545, 0.008, 6, 14), 0x86b6e0, 0, -0.472, 0, {rx:Math.PI/2}));
+            parts.push(ggPart(new THREE.TorusGeometry(0.0535, 0.008, 6, 14), 0xe8763a, 0, -0.500, 0, {rx:Math.PI/2}));
+        }
+        /* 鞋子（鞋底统一落 -0.862 一线，睡姿/步态的脚底基准不随鞋变） */
+        if(D.shoes.id === 'platformRW'){
             parts.push(ggPart(new THREE.SphereGeometry(0.072, 10, 8), 0xf3e6cf, 0, -0.830, 0.036, {s:[0.95, 0.60, 1.45]}));
             parts.push(ggPart(new THREE.SphereGeometry(0.055, 9, 7), 0x8e2438, 0, -0.838, 0.098, {s:[1, 0.55, 0.9]}));
             parts.push(ggPart(new THREE.BoxGeometry(0.115, 0.038, 0.235), 0x2b2320, 0, -0.862, 0.032));
-        } else if(st.id === 'pink'){
-            parts.push(ggPart(new THREE.CylinderGeometry(0.074, 0.070, 0.14, 10), 0xfdf6ec, 0, -0.08, 0));
-            /* 奶黄过膝袜 + 白厚底运动鞋 */
-            parts.push(ggPart(new THREE.CylinderGeometry(0.055, 0.050, 0.44, 10), 0xf7e39b, 0, -0.565, 0));
-            parts.push(ggPart(new THREE.SphereGeometry(0.046, 8, 6), 0xf7e39b, 0, -0.765, 0.004));
-            parts.push(ggPart(new THREE.SphereGeometry(0.074, 10, 8), 0xf7f7f7, 0, -0.828, 0.040, {s:[0.95, 0.62, 1.50]}));
+        } else if(D.shoes.id === 'sneakerWhite' || D.shoes.id === 'sneakerMint'){
+            const sc = D.shoes.id === 'sneakerWhite' ? 0xf7f7f7 : 0x9fd8c0;
+            parts.push(ggPart(new THREE.SphereGeometry(0.074, 10, 8), sc, 0, -0.828, 0.040, {s:[0.95, 0.62, 1.50]}));
             parts.push(ggPart(new THREE.BoxGeometry(0.120, 0.045, 0.240), 0xf7f7f7, 0, -0.858, 0.035));
+        } else if(D.shoes.id === 'bootsBrown' || D.shoes.id === 'bootsBlack'){
+            const bc = D.shoes.id === 'bootsBrown' ? 0xa9743f : 0x35302c;
+            const sole = D.shoes.id === 'bootsBrown' ? 0x6e4a26 : 0x201c1a;
+            parts.push(ggPart(new THREE.CylinderGeometry(0.058, 0.055, 0.17, 10), bc, 0, -0.748, 0));
+            parts.push(ggPart(new THREE.SphereGeometry(0.046, 8, 6), bc, 0, -0.770, 0.004));
+            parts.push(ggPart(new THREE.SphereGeometry(0.070, 10, 8), bc, 0, -0.836, 0.036, {s:[0.95, 0.60, 1.42]}));
+            parts.push(ggPart(new THREE.BoxGeometry(0.115, 0.040, 0.230), sole, 0, -0.862, 0.030));
         } else {
-            parts.push(ggPart(new THREE.CylinderGeometry(0.074, 0.070, 0.15, 10), 0xf3ead8, 0, -0.085, 0));
-            parts.push(ggPart(new THREE.CylinderGeometry(0.050, 0.041, 0.35, 9), SKIN, 0, -0.575, 0));
-            /* 黑中筒袜 + 棕色厚底短靴 */
-            parts.push(ggPart(new THREE.CylinderGeometry(0.054, 0.049, 0.32, 10), 0x2e2a26, 0, -0.615, 0));
-            parts.push(ggPart(new THREE.CylinderGeometry(0.058, 0.055, 0.17, 10), 0xa9743f, 0, -0.748, 0));
-            parts.push(ggPart(new THREE.SphereGeometry(0.046, 8, 6), 0xa9743f, 0, -0.770, 0.004));
-            parts.push(ggPart(new THREE.SphereGeometry(0.070, 10, 8), 0xa9743f, 0, -0.836, 0.036, {s:[0.95, 0.60, 1.42]}));
-            parts.push(ggPart(new THREE.BoxGeometry(0.115, 0.040, 0.230), 0x6e4a26, 0, -0.862, 0.030));
+            /* 玛丽珍：黑亮鞋面 + 脚背带 + 低跟底（脚背带在袜面之上） */
+            parts.push(ggPart(new THREE.SphereGeometry(0.070, 10, 8), 0x2b2320, 0, -0.834, 0.036, {s:[0.95, 0.58, 1.42]}));
+            parts.push(ggPart(new THREE.TorusGeometry(0.052, 0.009, 6, 14), 0x2b2320, 0, -0.790, 0.030, {rx:Math.PI/2 + 0.5}));
+            parts.push(ggPart(new THREE.BoxGeometry(0.112, 0.034, 0.228), 0x1d1917, 0, -0.864, 0.030));
         }
         const m = new THREE.Mesh(ModelKit.mergePainted(parts), paintMat);
         m.castShadow = true;
@@ -6344,18 +6646,17 @@ function buildGirlModel(cfg){
     const legL = new THREE.Group(); legL.position.set(-0.088*K, 0.88*K, 0); legL.add(girlLegMesh()); lie.add(legL);
     const legR = new THREE.Group(); legR.position.set(0.088*K, 0.88*K, 0); legR.add(girlLegMesh()); lie.add(legR);
 
-    /* ---------- 翅膀（奶油膜 + 珊瑚骨，与小龙同构、尺寸收小） ---------- */
+    /* ---------- 翅膀（部件库 wing 类）：尺寸系数 k 走库定义，几何后掠
+       0.45 rad 烘进几何的口径不变（翅组 rotation.y 被动画层占用） ---------- */
     function girlWingMesh(sign){
-        const mem = new THREE.SphereGeometry(0.33*K, 12, 9);
-        mem.scale(1.05, 0.09, 0.55); mem.translate(sign*0.20*K, 0.01*K, -0.06*K);
-        /* 后掠烘进几何：翅组 rotation.y 被动画层按睡姿占用（pose 驱动），
-           静止后掠只能落在几何上——翼面绕翅根往身后收 0.45 rad，
-           不再横张成滑翔机；翅骨同转保持贴合 */
+        const wk = D.wing.k;
+        const mem = new THREE.SphereGeometry(0.33*K*wk, 12, 9);
+        mem.scale(1.05, 0.09, 0.55); mem.translate(sign*0.20*K*wk, 0.01*K, -0.06*K);
         mem.rotateY(sign*0.45);
-        const spar = new THREE.CylinderGeometry(0.020*K, 0.032*K, 0.48*K, 6);
-        spar.rotateZ(sign*1.15); spar.rotateY(sign*0.10); spar.translate(sign*0.17*K, 0.02*K, 0.07*K); spar.rotateY(sign*0.45);
-        const finger = new THREE.CylinderGeometry(0.011*K, 0.017*K, 0.40*K, 5);
-        finger.rotateZ(sign*1.50); finger.translate(sign*0.25*K, -0.03*K, 0.01*K); finger.rotateY(sign*0.45);
+        const spar = new THREE.CylinderGeometry(0.020*K, 0.032*K, 0.48*K*wk, 6);
+        spar.rotateZ(sign*1.15); spar.rotateY(sign*0.10); spar.translate(sign*0.17*K*wk, 0.02*K, 0.07*K); spar.rotateY(sign*0.45);
+        const finger = new THREE.CylinderGeometry(0.011*K, 0.017*K, 0.40*K*wk, 5);
+        finger.rotateZ(sign*1.50); finger.translate(sign*0.25*K*wk, -0.03*K, 0.01*K); finger.rotateY(sign*0.45);
         return new THREE.Mesh(ModelKit.mergePainted([
             ModelKit.paint(mem, 0xfdf6ec), ModelKit.paint(spar, CORAL), ModelKit.paint(finger, CORAL)
         ]), paintMat);
@@ -6365,7 +6666,8 @@ function buildGirlModel(cfg){
     const wingR = new THREE.Group(); wingR.position.set(0.098*K, 0.365*K, -0.122*K);
     wingR.add(girlWingMesh(1)); wingR.rotation.z = 0.22; wingR.userData.base = 0.22; body.add(wingR);
 
-    /* ---------- 长尾（三节渐细 + 珊瑚环纹，根丘包覆成一体） ---------- */
+    /* ---------- 长尾（部件库 tail 类）：三节渐细 + 珊瑚环纹 + 尾尖造型
+       （叶尖/圆球/尖刺走库 tip），根丘包覆成一体 ---------- */
     function girlTailSeg(rTip, rBase, len, colr){
         const parts = [ ggPart(new THREE.CylinderGeometry(rTip, rBase, len, 10), colr, 0, 0, -len/2, {rx:-Math.PI/2}) ];
         for(const f of [0.35, 0.7]){
@@ -6375,9 +6677,9 @@ function buildGirlModel(cfg){
         return parts;
     }
     function girlTailMesh(rTip, rBase, len, jointR, rootMound){
-        const parts = girlTailSeg(rTip, rBase, len, st.tailCol);
-        if(jointR) parts.push(ggPart(new THREE.SphereGeometry(jointR, 9, 7), st.tailCol, 0, 0, -len));
-        if(rootMound) parts.push(ggPart(new THREE.SphereGeometry(0.075, 10, 8), st.tailCol, 0, 0, 0.02, {s:[1.05, 0.9, 0.7]}));
+        const parts = girlTailSeg(rTip, rBase, len, D.tail.col);
+        if(jointR) parts.push(ggPart(new THREE.SphereGeometry(jointR, 9, 7), D.tail.col, 0, 0, -len));
+        if(rootMound) parts.push(ggPart(new THREE.SphereGeometry(0.075, 10, 8), D.tail.col, 0, 0, 0.02, {s:[1.05, 0.9, 0.7]}));
         const m = new THREE.Mesh(ModelKit.mergePainted(parts), paintMat);
         m.castShadow = true;
         return m;
@@ -6387,8 +6689,15 @@ function buildGirlModel(cfg){
     const tail2 = new THREE.Group(); tail2.position.set(0, 0, -0.30*K);
     tail2.add(girlTailMesh(0.030, 0.040, 0.27, 0.032, false)); tail2.userData.droop = -0.45; tail1.add(tail2);
     const tail3 = new THREE.Group(); tail3.position.set(0, 0, -0.27*K);
-    const tipParts = girlTailSeg(0.016, 0.030, 0.24, st.tailCol);
-    tipParts.push(ggPart(new THREE.ConeGeometry(0.048, 0.14, 7), CORAL, 0, 0, -0.30, {rx:-Math.PI/2, s:[0.32, 1, 1]}));
+    const tipParts = girlTailSeg(0.016, 0.030, 0.24, D.tail.col);
+    if(D.tail.tip === 'ball'){
+        tipParts.push(ggPart(new THREE.SphereGeometry(0.046, 10, 8), CORAL, 0, 0, -0.285));
+    } else if(D.tail.tip === 'spike'){
+        /* 尖刺长度与叶尖同到达（尖端 z -0.37）：垂尾时尖不擦地（探针 idle Box3 校准） */
+        tipParts.push(ggPart(new THREE.ConeGeometry(0.034, 0.14, 8), CORAL, 0, 0, -0.30, {rx:-Math.PI/2}));
+    } else {
+        tipParts.push(ggPart(new THREE.ConeGeometry(0.048, 0.14, 7), CORAL, 0, 0, -0.30, {rx:-Math.PI/2, s:[0.32, 1, 1]}));
+    }
     const tipMesh = new THREE.Mesh(ModelKit.mergePainted(tipParts), paintMat);
     tipMesh.castShadow = true;
     tail3.add(tipMesh); tail3.userData.droop = -0.20; tail2.add(tail3);
@@ -6398,11 +6707,13 @@ function buildGirlModel(cfg){
         body: body, bodyBaseY: 0.88*K, lie: lie, head: head, eyes: eyeMesh, finL: finL, finR: finR,
         /* 少女专属动画接入点（dragonAnimate 读不到时全走小龙默认值，行为不变）：
            grow=身高系数、lieCal=侧躺支点校准、walkFreq/legSwing/armSwing=按
-           少女腿长调的步频与摆幅、hornTip=小鸟停角的角尖头局部坐标 */
+           少女腿长调的步频与摆幅、hornTip=小鸟停角的角尖头局部坐标（#80 起
+           随角型部件从库里取，帽子在场再加 hornLift） */
         grow: K, armBase: {x:0.198*K, y:0.425*K, z:0.005*K, inX:0.055*K, inZ:0.105*K},
         lieCal: {angle:1.42, px:-0.17, py:0.03, sink:0.015},   // sink 经探针 Box3 实测校准（满躺最低点距地 +0.018 → 压回 ≈+0.003）
         walkFreq: 3.4, legSwing: 0.52, armSwing: 0.42,
-        hornTip: {x:0.149, y:0.383 + hornLift, z:-0.057},
+        hornTip: {x:D.horn.tip[0], y:D.horn.tip[1] + hornLift, z:D.horn.tip[2]},
+        wingSleepK: D.wing.id === 'large' ? 0.84 : 1,   // #80：大翅膀睡姿垂搭收浅（探针 Box3 校准：翼尖不扎地、躯干仍贴地）
         armL: armL, armR: armR, legL: legL, legR: legR,
         wingL: wingL, wingR: wingR,
         tail: [tail1, tail2, tail3],
@@ -6552,7 +6863,7 @@ function dragonAnimate(a, dt, t){
     // 翅膀：步态轻扇 + 待机微扇（同 build 1）；睡着向后折拢贴背
     const wf = Math.sin(wp)*0.10*moving + Math.sin(t*2.2)*0.02;
     P.wingL.rotation.z = P.wingL.userData.base + wf - pose*0.85;  // 睡姿：倒下侧翅膀上掀离开地面
-    P.wingR.rotation.z = P.wingR.userData.base - wf + pose*2.0;   // 睡姿：上侧翅膀越过脊背垂搭下来
+    P.wingR.rotation.z = P.wingR.userData.base - wf + pose*2.0*(P.wingSleepK || 1);   // 睡姿：上侧翅膀越过脊背垂搭下来（#80：大翅膀经 wingSleepK 收浅垂搭，免翼尖扎地；小龙不设→1）
     P.wingL.rotation.y = -pose*0.85;
     P.wingR.rotation.y = pose*0.85;
     // 睡姿侧躺：lie 层整组滚倒，位置按支点反推——绕支点转而不是绕原点转，
@@ -7672,6 +7983,29 @@ function dgOptRow(id, opts, get, set){
         box.appendChild(b);
     });
 }
+/* #80：换单件 / 随机一套——都只改 avatar.parts 并走一期同一重建挂点 */
+function girlSetPart(key, id){
+    if(!dragonCfg.avatar) dragonCfg.avatar = drgAvatarNormalize(null);
+    dragonCfg.avatar.form = 'girl';
+    dragonCfg.avatar.chosen = true;
+    if(!dragonCfg.avatar.parts) dragonCfg.avatar.parts = girlPartsNormalize(null, dragonCfg.avatar.style || 0);
+    const def = girlPartDef(key, id);
+    if(def) dragonCfg.avatar.parts[key] = def.id;
+    applyDragonCfg(true);
+}
+function girlRandomParts(){
+    if(!dragonCfg.avatar) dragonCfg.avatar = drgAvatarNormalize(null);
+    const parts = {};
+    for(const cat of GIRL_PART_CATS){
+        const list = GIRL_PARTS[cat.key];
+        parts[cat.key] = list[Math.floor(Math.random()*list.length)].id;
+    }
+    dragonCfg.avatar.form = 'girl';
+    dragonCfg.avatar.chosen = true;
+    dragonCfg.avatar.parts = parts;
+    applyDragonCfg(true);
+    if(typeof showHuntToast === 'function') showHuntToast('🎲 随机搭配完成！不喜欢就再摇一次，或逐件慢慢换');
+}
 function refreshDragonPanel(){
     const c = dragonCfg;
     // #52：成长进度（只读）——当前阶段、已陪伴天数、距下一档还差几天
@@ -7692,9 +8026,16 @@ function refreshDragonPanel(){
     v => {
         if(!c.avatar) c.avatar = drgAvatarNormalize(null);
         if(v === 'dragon'){ c.avatar.form = 'dragon'; }
-        else { c.avatar.form = 'girl'; c.avatar.style = parseInt(v.slice(4), 10) || 0; }
+        else { c.avatar.form = 'girl'; c.avatar.style = parseInt(v.slice(4), 10) || 0;
+               c.avatar.parts = Object.assign({}, GIRL_PRESETS[c.avatar.style].parts); }   // #80：预设=一键套用整套部件
         c.avatar.chosen = true;
         applyDragonCfg(true); refreshDragonPanel();
+    });
+    /* #80：少女自由搭配 13 类——逐类渲染当前选中态，点选即换装重建 */
+    GIRL_PART_CATS.forEach(cat => {
+        dgOptRow('dgGp_' + cat.key, GIRL_PARTS[cat.key].map(pt => ({v:pt.id, label:pt.label})),
+            () => girlPartsOf(c).ids[cat.key],
+            v => { girlSetPart(cat.key, v); refreshDragonPanel(); });
     });
     const nameEl = document.getElementById('dgName');
     if(nameEl && document.activeElement !== nameEl) nameEl.value = c.name;
@@ -7789,6 +8130,8 @@ function setupDragonCustom(){
         if(el) el.addEventListener('input', onCol);
     });
     document.getElementById('dgCall').addEventListener('click', () => { audioEnsure(); dragonCall(); });
+    const gpRnd = document.getElementById('dgGpRandom');
+    if(gpRnd) gpRnd.addEventListener('click', () => { girlRandomParts(); refreshDragonPanel(); });
     document.getElementById('dgReset').addEventListener('click', () => {
         const keepGrow = dragonCfg.grow;   // #52：恢复默认只清外观/性格，成长是陪伴记录，不清
         const keepAvatar = dragonCfg.avatar;   // #79：化身形态是「我是谁」的选择，不是外观微调，同样不清
@@ -7839,7 +8182,8 @@ function closeAvatarCard(){
 function chooseAvatar(form, style, silent){
     if(!dragonCfg.avatar) dragonCfg.avatar = drgAvatarNormalize(null);
     dragonCfg.avatar.form = form;
-    if(form === 'girl') dragonCfg.avatar.style = style || 0;
+    if(form === 'girl'){ dragonCfg.avatar.style = style || 0;
+        dragonCfg.avatar.parts = Object.assign({}, GIRL_PRESETS[dragonCfg.avatar.style].parts); }   // #80：选择卡=预设一键套用
     dragonCfg.avatar.chosen = true;
     applyDragonCfg(true);
     closeAvatarCard();
