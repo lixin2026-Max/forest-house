@@ -650,6 +650,7 @@
 <div id="roomBar">
     <button type="button" id="enterRoomBtn" style="display:none">🚪 进屋看看</button>
     <button type="button" id="exitRoomBtn" style="display:none">🌿 回到院子</button>
+    <button type="button" id="feedFishBtn" style="display:none">🐟 投食喂鱼</button>
 </div>
 <div id="fadeCover"></div>
 
@@ -770,6 +771,7 @@
         <div class="hrow"><b>快照存图</b><span>顶栏「📸 快照存图」，把当前画面（连天气和昼夜）存成图片下载到本机</span></div>
         <div class="hrow"><b>投票选点子</b><span>顶栏「🗳️ 投票选点子」，给最想要的新点子投票，一台设备一票，票数定期公布</span></div>
         <div class="hrow"><b>放河灯</b><span>左下角「🏮 放河灯」，写一句愿望，让它在湖上漂一会儿</span></div>
+        <div class="hrow"><b>湖里的鱼</b><span>湖里养着一群小鱼，会自己巡游、偶尔跃出水面；走到湖边会出现「🐟 投食喂鱼」，花一根背包里的玉米，鱼群就会聚过来抢食。雨天它们格外活跃</span></div>
         <div class="hrow"><b>界面隐藏</b><span>顶栏与底栏停手 3 秒会自动隐藏，点屏幕右缘的小圆钮可以唤回</span></div>
         <div class="hrow"><b>更多设置</b><span>右下角齿轮里有功能开关、预设视角、色调与声音</span></div>
         <div id="helpRow">
@@ -4698,6 +4700,273 @@ function setupDragonInteract(){
     bindDragonTap();
 }
 
+/* ==================== 湖里水生生物（Issue #51 · v4.1 生态萌芽） ====================
+   湖里养一群程序小鱼：成群巡游、涟漪、跃水、投食聚抢、雨天更活跃。
+   方案口径（与现有系统冲突最小化）：
+   - 绘制：鱼群 1 个 InstancedMesh（12 条，鼻向 +Z 的低面数小鱼，逐条 instanceColor
+     给鲤鱼配色）；涟漪 1 个 InstancedMesh 圆环对象池（14 个，扩散＋变暗近似淡出，
+     无活跃涟漪时整组隐藏不占绘制）；水花 1 个 Points 池（24 点，只在跃鱼瞬间出现）；
+     龙看鱼的 👀 泡是本节自己的 1 个 Sprite（只在触发时可见）。
+     draw calls：常态 +1（鱼），峰值 +4（鱼＋涟漪＋水花＋气泡同时在场）。
+   - 投食：复用小龙背包 ct2_bag 的玉米（bagEnsure/saveBag），投一次食花玉米×1，
+     不新增任何存储键；鱼食落点取镜头目标在湖内投影，鱼群 6 秒内聚抢。
+   - 龙联动：只读 dragonAgent 的位置与 state/mode，绝不改龙的代码——龙在湖岸
+     散步/发呆时头顶冒 👀 泡，近岸 3 条鱼会凑到它面前的水边（鱼侧反应）。
+   - 季节钩子：结冰判断只读 window.__lakeFrozen 或季节系统的 lakeFrozen 方法
+     （季节系统 #21 落地后置真），读不到一律按无冰处理，本节不自己造冰；
+     结冰时鱼群与涟漪隐藏、投食按钮隐藏。
+   - 雨天：Env.rainK>0.3 时跃鱼频率与巡游速度上调（鱼更活跃）。 */
+const FishSys = {
+    N: 12, RIP_N: 14, DROP_N: 24,
+    built: false, group: null, fishIM: null, ripIM: null, dropPts: null, bubble: null,
+    fish: [], rips: [], drops: [],
+    feedT: 0, feedX: 0, feedZ: 0, ripT: 0, feedRipT: 0, btnT: 0, watchOn: false, watchX: 0, watchZ: 0,
+    dummy: null, tmpC: null,
+    waterY(){ return pondMesh ? pondMesh.position.y : 0.06; },
+    frozen(){
+        // 季节钩子：只读不造冰——读 window.__lakeFrozen 或季节系统的 lakeFrozen 方法，都没有就按无冰
+        try{
+            if(window.__lakeFrozen) return true;
+            const g = (typeof SeasonSys !== 'undefined' && SeasonSys) || (typeof Season !== 'undefined' && Season) || null;
+            const lf = g && g.lakeFrozen;
+            if(typeof lf === 'function') return !!lf.call(g);
+        }catch(e){}
+        return false;
+    },
+    // 世界坐标 → 湖椭圆归一化半径（1 = 恰在湖岸线）
+    ellR(x, z){ const dx = (x - LAKE_C.x) / LAKE_RX, dz = (z - LAKE_C.z) / LAKE_RZ; return Math.hypot(dx, dz); },
+    build(){
+        if(this.built) return; this.built = true;
+        this.dummy = new THREE.Object3D();
+        this.tmpC = new THREE.Color();
+        this.group = new THREE.Group(); this.group.name = 'fishSys';
+        // 小鱼几何：球体拉长作身 + 扁锥作尾，鼻向 +Z，合并成一个几何体走实例化
+        const body = new THREE.SphereGeometry(0.16, 7, 5); body.scale(0.78, 0.85, 2.3);
+        const tail = new THREE.ConeGeometry(0.15, 0.26, 4); tail.scale(0.25, 1, 1);
+        tail.rotateX(Math.PI / 2); tail.translate(0, 0, -0.46);
+        const fin = new THREE.ConeGeometry(0.09, 0.18, 4); fin.scale(0.2, 1, 1); fin.translate(0, 0.16, 0.02);
+        const geo = mergeGeos([body, tail, fin]);
+        // 水面 opacity 0.93 几乎不透光：鱼走透明通道排在水面之后画（renderOrder），
+        // 读作「隔着清水看见鱼」，否则巡游基本看不见（验收图实测后定的）
+        const mat = new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.08, transparent: true, opacity: 0.92, depthWrite: false });
+        this.fishIM = new THREE.InstancedMesh(geo, mat, this.N);
+        this.fishIM.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        this.fishIM.frustumCulled = false; this.fishIM.renderOrder = 3;
+        const palette = [0xff8c42, 0xfff6e8, 0xffd23e, 0xff6b5e, 0xf3e5c0, 0xffa07a];
+        for(let i = 0; i < this.N; i++){
+            const a = (i / this.N) * Math.PI * 2, r = 0.25 + (i % 4) * 0.13;
+            this.fish.push({
+                x: LAKE_C.x + Math.cos(a) * LAKE_RX * r, z: LAKE_C.z + Math.sin(a) * LAKE_RZ * r,
+                h: a + Math.PI / 2, sp: 0.8 + (i % 3) * 0.12, s: 0.85 + ((i * 37) % 5) * 0.09,
+                ph: i * 1.7, leap: null, leapWait: 2 + (i * 1.3) % 7
+            });
+            this.fishIM.setColorAt(i, this.tmpC.setHex(palette[i % palette.length]));
+        }
+        if(this.fishIM.instanceColor) this.fishIM.instanceColor.needsUpdate = true;
+        this.group.add(this.fishIM);
+        // 涟漪池：圆环实例，靠缩放扩散、instanceColor 变暗近似淡出
+        const ripGeo = new THREE.RingGeometry(0.44, 0.5, 26).rotateX(-Math.PI / 2);
+        const ripMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthWrite: false });
+        this.ripIM = new THREE.InstancedMesh(ripGeo, ripMat, this.RIP_N);
+        this.ripIM.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        this.ripIM.frustumCulled = false; this.ripIM.visible = false; this.ripIM.renderOrder = 4;
+        for(let i = 0; i < this.RIP_N; i++){ this.rips.push({ age: 9, life: 1.6, x: 0, z: 0, max: 1 }); this.ripIM.setColorAt(i, this.tmpC.setRGB(0, 0, 0)); }
+        this.group.add(this.ripIM);
+        // 水花池：跃鱼出入水时的小水点
+        const dg = new THREE.BufferGeometry();
+        dg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(this.DROP_N * 3), 3));
+        this.dropPts = new THREE.Points(dg, new THREE.PointsMaterial({ color: 0xeaf7ff, size: 0.09, transparent: true, opacity: 0.9, depthWrite: false }));
+        this.dropPts.frustumCulled = false; this.dropPts.visible = false; this.dropPts.renderOrder = 5;
+        for(let i = 0; i < this.DROP_N; i++) this.drops.push({ age: 9, x: 0, y: -5, z: 0, vx: 0, vy: 0, vz: 0 });
+        this.group.add(this.dropPts);
+        // 龙看鱼的气泡（本节自有 Sprite，只在龙盯鱼时可见）
+        const cv = document.createElement('canvas'); cv.width = cv.height = 96;
+        const cx = cv.getContext('2d'); cx.font = '64px serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+        cx.fillText('👀', 48, 52);
+        const tex = new THREE.CanvasTexture(cv);
+        this.bubble = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+        this.bubble.scale.setScalar(0.55); this.bubble.visible = false;
+        this.group.add(this.bubble);
+        scene.add(this.group);
+        const btn = document.getElementById('feedFishBtn');
+        if(btn) btn.addEventListener('click', () => this.feed());
+    },
+    spawnRipple(x, z, max){
+        let best = this.rips[0];
+        for(const r of this.rips) if(r.age >= r.life){ best = r; break; } else if(r.age / r.life > best.age / best.life) best = r;
+        best.age = 0; best.x = x; best.z = z; best.max = max || 1;
+        best.life = 1.3 + (max || 1) * 0.35;
+    },
+    spawnDrops(x, y, z, n){
+        let c = 0;
+        for(const d of this.drops){
+            if(d.age < 0.5) continue;
+            d.age = 0; d.x = x; d.y = y; d.z = z;
+            const a = Math.random() * Math.PI * 2, r = Math.random() * 0.55;
+            d.vx = Math.cos(a) * r; d.vz = Math.sin(a) * r; d.vy = 1.1 + Math.random() * 0.9;
+            if(++c >= n) break;
+        }
+    },
+    feed(){
+        if(this.frozen()){ showHuntToast('🧊 湖面结冰了，鱼儿都躲到冰下游冬啦'); return; }
+        if(this.feedT > 0){ showHuntToast('🐟 鱼儿还在抢食呢，等它们散开再撒'); return; }
+        const bag = bagEnsure();
+        if(!bag || bag.corn < 1){ showHuntToast('🌽 背包里没有玉米啦——去农田收点玉米再来喂鱼'); return; }
+        bag.corn--; saveBag();
+        // 落点：镜头目标在湖内就用它，太靠岸/在湖外则取湖心朝相机方向 0.55 处
+        let tx = controls ? controls.target.x : LAKE_C.x, tz = controls ? controls.target.z : LAKE_C.z;
+        if(this.ellR(tx, tz) > 0.78){
+            const cx = camera ? camera.position.x : LAKE_C.x, cz = camera ? camera.position.z : LAKE_C.z;
+            let dx = cx - LAKE_C.x, dz = cz - LAKE_C.z; const m = Math.hypot(dx, dz) || 1;
+            tx = LAKE_C.x + dx / m * LAKE_RX * 0.55; tz = LAKE_C.z + dz / m * LAKE_RZ * 0.55;
+        }
+        this.feedX = tx; this.feedZ = tz; this.feedT = 6;
+        for(let i = 0; i < 3; i++) this.spawnRipple(tx + (Math.random() - 0.5) * 0.8, tz + (Math.random() - 0.5) * 0.8, 1.1);
+        showHuntToast('🐟 玉米撒进湖里了，鱼儿抢食中…');
+    },
+    update(dt, t){
+        if(!scene) return;
+        this.build();
+        const frozen = this.frozen();
+        this.group.visible = !frozen;
+        // 投食按钮显隐（低频检查）：在屋外、未结冰、镜头或龙靠近湖边才出现
+        this.btnT -= dt;
+        if(this.btnT <= 0){
+            this.btnT = 0.25;
+            const btn = document.getElementById('feedFishBtn');
+            if(btn){
+                let show = !frozen && !(typeof Interior !== 'undefined' && Interior && Interior.active);
+                if(show){
+                    const nearCam = controls && this.ellR(controls.target.x, controls.target.z) < 1.9;
+                    const nearCamPos = camera && Math.hypot(camera.position.x - LAKE_C.x, camera.position.z - LAKE_C.z) < 17;
+                    const rd = (typeof dragonAgent !== 'undefined' && dragonAgent) ? this.ellR(dragonAgent.group.position.x, dragonAgent.group.position.z) : 99;
+                    show = !!(nearCam || nearCamPos || (rd > 0.8 && rd < 2.1));
+                }
+                btn.style.display = show ? '' : 'none';
+            }
+        }
+        if(frozen){ if(this.bubble) this.bubble.visible = false; return; }
+        const wy = this.waterY();
+        const rain = (typeof Env !== 'undefined' && Env) ? (Env.rainK || 0) : 0;
+        const lively = 1 + rain * 0.9;                       // 雨天更活跃
+        if(this.feedT > 0) this.feedT -= dt;
+        // —— 龙看鱼（只读龙状态）：龙在岸边散步/发呆 → 冒泡 + 定看鱼点
+        this.watchOn = false;
+        if(typeof dragonAgent !== 'undefined' && dragonAgent && dragonAgent.mode === 'auto' &&
+           (dragonAgent.state === 'roam' || dragonAgent.state === 'idle')){
+            const dp = dragonAgent.group.position, rd = this.ellR(dp.x, dp.z);
+            if(rd > 1.0 && rd < 1.5){
+                this.watchOn = true;
+                let dx = dp.x - LAKE_C.x, dz = dp.z - LAKE_C.z; const m = Math.hypot(dx, dz) || 1;
+                this.watchX = LAKE_C.x + dx / m * LAKE_RX * 0.8; this.watchZ = LAKE_C.z + dz / m * LAKE_RZ * 0.8;
+                this.bubble.visible = true;
+                this.bubble.position.set(dp.x, dp.y + 2.15 + Math.sin(t * 2.2) * 0.05, dp.z);
+            }
+        }
+        if(!this.watchOn) this.bubble.visible = false;
+        // —— 群体质心
+        let cx = 0, cz = 0; for(const f of this.fish){ cx += f.x; cz += f.z; } cx /= this.N; cz /= this.N;
+        // —— 巡游涟漪：质心处每 0.5 秒一圈小涟漪；投食中落点涟漪变密
+        this.ripT -= dt;
+        if(this.ripT <= 0){ this.ripT = 0.5; this.spawnRipple(cx + (Math.random() - 0.5) * 2, cz + (Math.random() - 0.5) * 2, 0.8); }
+        if(this.feedT > 0){ this.feedRipT -= dt; if(this.feedRipT <= 0){ this.feedRipT = 0.13; this.spawnRipple(this.feedX + (Math.random() - 0.5) * 1.5, this.feedZ + (Math.random() - 0.5) * 1.5, 1.2); } }
+        // —— 逐条鱼
+        const D = this.dummy;
+        for(let i = 0; i < this.N; i++){
+            const f = this.fish[i];
+            if(f.leap){
+                const L = f.leap; L.t += dt;
+                const p = Math.min(1, L.t / L.dur);
+                f.x += Math.cos(f.h) * f.sp * 1.15 * dt; f.z += Math.sin(f.h) * f.sp * 1.15 * dt;
+                const y = wy - 0.11 + Math.sin(p * Math.PI) * 0.62;
+                D.position.set(f.x, y, f.z);
+                D.lookAt(f.x + Math.cos(f.h), y, f.z + Math.sin(f.h));
+                D.rotateX(-Math.cos(p * Math.PI) * 0.7);
+                D.scale.setScalar(f.s * 1.3); D.updateMatrix();
+                this.fishIM.setMatrixAt(i, D.matrix);
+                if(p >= 1){ f.leap = null; f.leapWait = 2.5 + Math.random() * 7; this.spawnRipple(f.x, f.z, 1.25); this.spawnDrops(f.x, wy + 0.05, f.z, 6); }
+                continue;
+            }
+            // 转向力：漫游＋向质心聚合＋边界回收＋（投食聚抢／看鱼凑近）
+            let vx = Math.cos(f.h), vz = Math.sin(f.h);
+            vx += Math.cos(f.h + Math.PI / 2) * Math.sin(t * 0.6 + f.ph) * 0.55;   // 漫游摆头
+            vz += Math.sin(f.h + Math.PI / 2) * Math.sin(t * 0.6 + f.ph) * 0.55;
+            vx += (cx - f.x) * 0.10; vz += (cz - f.z) * 0.10;                      // 聚合
+            const r = this.ellR(f.x, f.z);
+            if(r > 0.78){ vx += (LAKE_C.x - f.x) * 0.9; vz += (LAKE_C.z - f.z) * 0.9; }   // 避岸
+            let spT = f.sp * lively;
+            if(this.feedT > 0){
+                const dx = this.feedX - f.x, dz = this.feedZ - f.z, d = Math.hypot(dx, dz);
+                vx += dx * 1.4; vz += dz * 1.4;
+                spT = d > 1.4 ? 2.0 * lively : 0.55;                               // 冲过去、到了慢下来绕食
+            } else if(this.watchOn && i < 3){
+                vx += (this.watchX - f.x) * 0.8; vz += (this.watchZ - f.z) * 0.8;  // 凑到龙面前的水边
+            }
+            const want = Math.atan2(vz, vx);
+            let dh = want - f.h; while(dh > Math.PI) dh -= Math.PI * 2; while(dh < -Math.PI) dh += Math.PI * 2;
+            f.h += Math.max(-2.3 * dt, Math.min(2.3 * dt, dh));
+            f.x += Math.cos(f.h) * spT * dt; f.z += Math.sin(f.h) * spT * dt;
+            const rr = this.ellR(f.x, f.z);                                        // 硬夹回湖内
+            if(rr > 0.92){ const k = 0.92 / rr; f.x = LAKE_C.x + (f.x - LAKE_C.x) * k; f.z = LAKE_C.z + (f.z - LAKE_C.z) * k; }
+            // 跃水判定（雨天频率 ×2.2；投食中不跃，忙着抢食）
+            if(this.feedT <= 0){
+                f.leapWait -= dt * (1 + rain * 1.2);
+                if(f.leapWait <= 0 && r < 0.8){
+                    f.leap = { t: 0, dur: 0.62 };
+                    this.spawnRipple(f.x, f.z, 1.1); this.spawnDrops(f.x, wy + 0.05, f.z, 5);
+                }
+            }
+            const y = wy - 0.12 + Math.sin(t * 1.7 + f.ph) * 0.02;
+            D.position.set(f.x, y, f.z);
+            D.lookAt(f.x + Math.cos(f.h), y, f.z + Math.sin(f.h));
+            D.rotateY(Math.sin(t * 7 + f.ph) * 0.13);                              // 尾摆近似：整体轻摆
+            D.scale.setScalar(f.s * 1.3); D.updateMatrix();
+            this.fishIM.setMatrixAt(i, D.matrix);
+        }
+        this.fishIM.instanceMatrix.needsUpdate = true;
+        // —— 涟漪池
+        let ripAlive = false;
+        for(let i = 0; i < this.RIP_N; i++){
+            const r = this.rips[i];
+            if(r.age < r.life){
+                ripAlive = true; r.age += dt;
+                const p = Math.min(1, r.age / r.life);
+                D.position.set(r.x, wy + 0.012, r.z);
+                D.rotation.set(0, 0, 0); D.scale.setScalar(0.25 + p * r.max * 1.9); D.updateMatrix();
+                this.ripIM.setMatrixAt(i, D.matrix);
+                const b = 1 - p * 0.5; this.ripIM.setColorAt(i, this.tmpC.setRGB(b, b, b));
+            } else {
+                D.position.set(0, -10, 0); D.scale.setScalar(0.001); D.updateMatrix();
+                this.ripIM.setMatrixAt(i, D.matrix);
+            }
+        }
+        this.ripIM.visible = ripAlive;
+        if(this.ripIM.instanceColor) this.ripIM.instanceColor.needsUpdate = true;
+        this.ripIM.instanceMatrix.needsUpdate = true;
+        // —— 水花池
+        let dropAlive = false;
+        const arr = this.dropPts.geometry.attributes.position.array;
+        for(let i = 0; i < this.DROP_N; i++){
+            const d = this.drops[i];
+            if(d.age < 0.5){
+                dropAlive = true; d.age += dt;
+                d.vy -= 5.5 * dt; d.x += d.vx * dt; d.y += d.vy * dt; d.z += d.vz * dt;
+                arr[i * 3] = d.x; arr[i * 3 + 1] = d.y; arr[i * 3 + 2] = d.z;
+            } else { arr[i * 3 + 1] = -10; }
+        }
+        this.dropPts.visible = dropAlive;
+        this.dropPts.geometry.attributes.position.needsUpdate = true;
+    },
+    // 验收/调试用：返回鱼群到投食点的平均距离与在场状态
+    debug(){
+        let d = -1;
+        if(this.feedT > 0){ let s = 0; for(const f of this.fish) s += Math.hypot(f.x - this.feedX, f.z - this.feedZ); d = s / this.N; }
+        return { built: this.built, frozen: this.frozen(), feedT: Math.round(this.feedT * 10) / 10, feedAvgDist: d, watchOn: this.watchOn,
+                 fish: this.fish.map(f => [Math.round(f.x * 10) / 10, Math.round(f.z * 10) / 10, !!f.leap]) };
+    }
+};
+window.FishSys = FishSys;
+
 /* ==================== 天气系统 ==================== */
 const SKY={
     sunny :{top:0x3d7bd9,bot:0xbfdff2,fog:0xa8cfe8,dens:0.0016,amb:0.20,hemi:0.30,sunC:0xfff2cc,sunI:2.60,elev:45,azim:0.9,expo:0.12,ev:1.00},
@@ -5059,6 +5328,7 @@ function animate(){
     updateDragonCam(dt);
     controls.update();
     Interior.update(dt, t);
+    FishSys.update(dt, t);
     renderer.render(scene,camera);
     fpsTick(dt);
 }
