@@ -32,8 +32,8 @@ const dangers = {
     'innerHTML/outerHTML': /(inner|outer)HTML/,
     'eval': /\beval\s*\(/,
     'new Function': /new\s+Function\s*\(/,
-    // 只允许七个具名本地键：ct2_visits 字面量、寻宝的 HUNT_KEY、帮助的 HELP_KEY、种田的 FARM_KEY、投票的 VOTE_KEY、主题的 THEME_KEY 与回执的 ECHO_KEY 常量（下方另有钉死检查）；其余一律不许
-    'localStorage（非授权键）': /localStorage\.(?:getItem|setItem)\((?!'ct2_visits'|HUNT_KEY|HELP_KEY|FARM_KEY|VOTE_KEY|THEME_KEY|ECHO_KEY)/,
+    // 只允许八个具名本地键：ct2_visits 字面量、寻宝的 HUNT_KEY、帮助的 HELP_KEY、种田的 FARM_KEY、投票的 VOTE_KEY、主题的 THEME_KEY、回执的 ECHO_KEY 与背包的 BAG_KEY 常量（下方另有钉死检查）；其余一律不许
+    'localStorage（非授权键）': /localStorage\.(?:getItem|setItem)\((?!'ct2_visits'|HUNT_KEY|HELP_KEY|FARM_KEY|VOTE_KEY|THEME_KEY|ECHO_KEY|BAG_KEY)/,
     'sessionStorage': /sessionStorage/,
     'document.cookie': /document\.cookie/,
     'XMLHttpRequest': /XMLHttpRequest/,
@@ -60,6 +60,8 @@ check('种田存储键 FARM_KEY 写死为 ct2_farm', /const FARM_KEY='ct2_farm'/
 check('投票存储键 VOTE_KEY 写死为 ct2_vote', /const VOTE_KEY='ct2_vote'/.test(html));
 // 界面主题偏好同理：只能经具名常量 THEME_KEY 使用，取值钉死
 check('主题存储键 THEME_KEY 写死为 ct2_theme', /const THEME_KEY='ct2_theme'/.test(html));
+// 小龙背包与喂食计数同理：只能经具名常量 BAG_KEY 使用，取值钉死
+check('背包存储键 BAG_KEY 写死为 ct2_bag', /const BAG_KEY='ct2_bag'/.test(html));
 // 建议回音回执同理：只能经具名常量 ECHO_KEY 使用，取值钉死
 check('回执存储键 ECHO_KEY 写死为 ct2_echo', /const ECHO_KEY='ct2_echo'/.test(html));
 

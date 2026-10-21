@@ -561,6 +561,18 @@
         backdrop-filter:blur(6px);transition:background .15s}
     #dragonBar button:hover{background:rgba(60,40,10,.9)}
     #dragonBar button.on{background:#b06f1e;border-color:#e09a35;color:#fff;font-weight:600}
+    /* ===== 小龙互动菜单（#16/#17）：贴在操控条上方的小面板，风格与 dragonBar 一套 ===== */
+    #dragonMenu{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);z-index:122;
+        background:rgba(10,20,10,.88);border:1px solid rgba(255,190,90,.45);border-radius:14px;
+        padding:10px 12px;backdrop-filter:blur(6px);text-align:center;max-width:calc(100vw - 24px)}
+    #dragonMenu .dmTitle{color:#ffe2b0;font-size:12px;margin-bottom:7px;letter-spacing:1px}
+    #dragonMenu .dmRow{display:flex;gap:6px;justify-content:center;margin-bottom:6px}
+    #dragonMenu .dmRow:last-of-type{margin-bottom:0}
+    #dragonMenu button{background:rgba(30,50,30,.9);color:#ffe2b0;border:1px solid rgba(255,190,90,.35);
+        padding:7px 11px;border-radius:18px;font-size:12.5px;font-family:inherit;cursor:pointer;transition:background .15s}
+    #dragonMenu button:hover:not(:disabled){background:rgba(90,60,15,.92)}
+    #dragonMenu button:disabled{opacity:.42;cursor:default}
+    #dragonMenu .dmHint{color:#a8bba8;font-size:11px;margin-top:6px;min-height:14px}
     #joy{position:absolute;left:26px;bottom:86px;width:112px;height:112px;border-radius:50%;z-index:121;
         background:rgba(10,20,10,.35);border:1.5px solid rgba(255,255,255,.4);display:none;touch-action:none}
     #joy.on{display:block}
@@ -569,6 +581,7 @@
         transform:translate(-50%,-50%);pointer-events:none}
     @media (max-width:600px),(pointer:coarse){
         #dragonBar{bottom:calc(64px + env(safe-area-inset-bottom, 0px))}
+        #dragonMenu{bottom:calc(118px + env(safe-area-inset-bottom, 0px))}
         #joy{bottom:calc(140px + env(safe-area-inset-bottom, 0px))}
     }
     /* ===== 进屋看看（#40）：出入按钮 + 切换淡幕（独立小块，不用主题变量） ===== */
@@ -617,6 +630,21 @@
 <div id="dragonBar">
     <button type="button" id="dragonBtn">🐉 操控小龙</button>
     <button type="button" id="viewBtn" style="display:none">👁️ 第三人称</button>
+    <button type="button" id="actBtn">🤚 互动</button>
+</div>
+<div id="dragonMenu" style="display:none">
+    <div class="dmTitle">🐉 和小龙玩</div>
+    <div class="dmRow">
+        <button type="button" id="dmPat">🖐 摸头</button>
+        <button type="button" id="dmWave">👋 打招呼</button>
+        <button type="button" id="dmSpin">🔄 转圈</button>
+    </div>
+    <div class="dmRow">
+        <button type="button" id="dmFeedP">🎃 喂南瓜</button>
+        <button type="button" id="dmFeedC">🌽 喂玉米</button>
+        <button type="button" id="dmClose">✖ 收起</button>
+    </div>
+    <div class="dmHint" id="dmHint"></div>
 </div>
 <div id="joy"><div id="joyKnob"></div></div>
 <div id="roomBar">
@@ -735,6 +763,7 @@
         <div class="hrow"><b>视角锁定</b><span>顶栏开关，锁住后拖动与巡游都不动镜头（缩放仍可用）</span></div>
         <div class="hrow"><b>敲门</b><span>点小屋的门：先轻敲两下，门会朝外打开透出暖光</span></div>
         <div class="hrow"><b>进屋看看</b><span>门开着时点门洞里的暖光、或点门口出现的「进屋看看」按钮，就能进屋参观（拖动环视、点地面走动）；操控小龙时走近门口，按钮会带它一起进屋。屋里点门或按「回到院子」出来</span></div>
+        <div class="hrow"><b>小龙互动</b><span>点小龙、或点底部「🤚 互动」：可以摸头、打招呼、让它转圈。收获的南瓜和玉米会进背包，用背包里的食物喂它，它会自己走过去吃；吃饱后它会开心地跟着你玩一阵（状态栏能看背包和喂食次数）</span></div>
         <div class="hrow"><b>篝火</b><span>点篝火堆可以点火、再点熄火</span></div>
         <div class="hrow"><b>每日寻宝</b><span>每天藏 5 件小物（橡果、蘑菇、羽毛、松果、彩蛋），走近点中即收集，集齐有祝贺</span></div>
         <div class="hrow"><b>种田</b><span>点农田里空着的地块播种，再点一下浇水（雨天自动浇），等昼夜轮转一圈、或到了第二天成熟后，再点一下收获</span></div>
@@ -947,7 +976,7 @@ const CONFIG = {
 };
 
 /* ---------- 薄存储适配层 ----------
-   核心系统不直接碰本地存储：一律经 store.<槽> 读写。槽位与 7 个白名单键
+   核心系统不直接碰本地存储：一律经 store.<槽> 读写。槽位与 8 个白名单键
    一一对应，键名仍以字面量出现在下面这唯一实现处（安全审计照常钉死）。
    移植时只换 mkSlot 底下的读写实现（小程序 storage / App 本地库），上层不动。 */
 
@@ -978,6 +1007,7 @@ const store = {
     farm:   mkSlot(()=>localStorage.getItem(FARM_KEY),     v=>localStorage.setItem(FARM_KEY, v)),
     vote:   mkSlot(()=>localStorage.getItem(VOTE_KEY),     v=>localStorage.setItem(VOTE_KEY, v)),
     theme:  mkSlot(()=>localStorage.getItem(THEME_KEY),    v=>localStorage.setItem(THEME_KEY, v)),
+    bag:    mkSlot(()=>localStorage.getItem(BAG_KEY),      v=>localStorage.setItem(BAG_KEY, v)),
     echo:   mkSlot(()=>localStorage.getItem(ECHO_KEY),     v=>localStorage.setItem(ECHO_KEY, v))
 };
 
@@ -3030,9 +3060,16 @@ function onFarmCellTap(cell){
     }
     if(st.mature){
         farmState.harvest++;
+        const gotCrop=st.crop;
         delete farmState.cells[key];
         saveFarm(); renderPlayCrops(); updateStatus();
-        showHuntToast('🎉 收获了'+FARM_CROP_NAMES[st.crop]+'！已收获 '+farmState.harvest+' 个');
+        // #17：南瓜/玉米是小龙的食物，收获自动进背包（向日葵不入包，照旧只计数）
+        if(gotCrop==='pumpkin'||gotCrop==='corn'){
+            bagAdd(gotCrop);
+            showHuntToast('🎉 收获了'+FARM_CROP_NAMES[gotCrop]+'！放进背包啦，点小龙可以喂给它');
+        }else{
+            showHuntToast('🎉 收获了'+FARM_CROP_NAMES[gotCrop]+'！已收获 '+farmState.harvest+' 个');
+        }
         return;
     }
     if(!st.watered){
@@ -3087,6 +3124,7 @@ function farmRainCheck(){
 }
 function onFarmTap(ev){
     if(!farmState||!renderer||!camera) return;
+    if(dragonTapAt && performance.now()-dragonTapAt<80) return;   // 刚点中龙开菜单，这下不算点田
     const r=renderer.domElement.getBoundingClientRect();
     const nx=((ev.clientX-r.left)/Math.max(1,r.width))*2-1;
     const ny=-((ev.clientY-r.top)/Math.max(1,r.height))*2+1;
@@ -3895,9 +3933,15 @@ function dragonAnimate(a, dt, t){
     P.tail[0].rotation.x = P.tail[0].userData.droop - pose*0.30;
     P.tail[1].rotation.x = P.tail[1].userData.droop - pose*0.26;
     P.tail[2].rotation.x = P.tail[2].userData.droop - pose*0.18;
-    P.tail[0].rotation.y = Math.sin(t*1.4)*0.10 + Math.sin(wp*0.5)*0.14*moving;
-    P.tail[1].rotation.y = Math.sin(t*1.4 - 0.7)*0.12 + Math.sin(wp*0.5 - 0.6)*0.16*moving;
-    P.tail[2].rotation.y = Math.sin(t*1.4 - 1.4)*0.14;
+    // 开心信号（#16/#17）：互动/吃饱后 happyT 倒数期间尾巴摆得更快更欢——
+    // 相位走累计量 tailT，提速时相位连续不跳变；幅度同步放大
+    a.happyT = Math.max(0, (a.happyT || 0) - dt);
+    const happyK = a.happyT > 0 ? 1 : 0;
+    a.tailT = (a.tailT || 0) + dt*(1 + 1.15*happyK);
+    const tailAmp = 1 + 0.5*happyK, tt = a.tailT;
+    P.tail[0].rotation.y = (Math.sin(tt*1.4)*0.10 + Math.sin(wp*0.5)*0.14*moving)*tailAmp;
+    P.tail[1].rotation.y = (Math.sin(tt*1.4 - 0.7)*0.12 + Math.sin(wp*0.5 - 0.6)*0.16*moving)*tailAmp;
+    P.tail[2].rotation.y = Math.sin(tt*1.4 - 1.4)*0.14*tailAmp;
     // 翅膀：步态轻扇 + 待机微扇（同 build 1）；睡着向后折拢贴背
     const wf = Math.sin(wp)*0.10*moving + Math.sin(t*2.2)*0.02;
     P.wingL.rotation.z = P.wingL.userData.base + wf - pose*0.85;  // 睡姿：倒下侧翅膀上掀离开地面
@@ -3914,6 +3958,47 @@ function dragonAnimate(a, dt, t){
         DRG_LIE_PIVOT.x - (DRG_LIE_PIVOT.x*cx - DRG_LIE_PIVOT.y*sx),
         DRG_LIE_PIVOT.y - (DRG_LIE_PIVOT.x*sx + DRG_LIE_PIVOT.y*cx) - pose*DRG_LIE_SINK,
         0);
+    /* 互动叠加（#16/#17）：在既有动画全部算完之后加算，只用已被关节验收过的
+       量程（垂头 ≤ 睡姿的 0.30、摆臂/转身走独立枢轴），不新增任何关节位移。
+       手势由 a.gesture 驱动（pat/wave/spin），啃食由 state==='eat' 驱动。 */
+    if(a.gesture){
+        const g = a.gesture;
+        g.t += dt;
+        const gp = Math.min(1, g.t/(a.gestureDur || 1.6)), genv = Math.sin(gp*Math.PI);
+        if(g.kind === 'pat'){
+            P.head.rotation.x += 0.22*genv;                       // 眯眼垂头享受（睡姿垂头 0.30 之内）
+            P.body.rotation.z += Math.sin(t*2.4)*0.05*genv;       // 身体轻轻晃
+            P.eyes.scale.y = 0.16;                                // 眯眼（盖过本帧眨眼结果，结束时复位）
+            if(gp > 0.45 && !g._h2){ g._h2 = 1; spawnHearts(6); }
+        } else if(g.kind === 'wave'){
+            P.armR.rotation.z = P.armR.userData.baseZ + 2.05*genv;  // 右臂抬到头侧（肩关节球原地转，不脱窝）
+            P.armR.rotation.x += Math.sin(t*17)*0.28*genv;          // 小幅摆手
+            P.lie.position.y += 0.12*Math.sin(gp*Math.PI);          // 顺带蹦一下（整组升降，脚不穿地）
+        } else if(g.kind === 'spin'){
+            const ge = gp < .5 ? 2*gp*gp : 1 - Math.pow(-2*gp + 2, 2)/2;
+            P.lie.rotation.y = -Math.PI*2*ge;                       // 整组绕自身竖轴转一圈，不动 group 朝向状态
+        }
+        if(gp >= 1){
+            a.gesture = null;
+            P.lie.rotation.y = 0;
+            if(pose < 0.5) P.eyes.scale.y = 1;
+            a.happyT = Math.max(a.happyT || 0, 5);                 // 玩完开心一会儿（尾巴信号）
+        }
+    }
+    if(a.state === 'eat'){
+        // 啃食：垂头 0.24 + 咀嚼起伏 0.05（峰值 0.29，仍在睡姿验收过的颈量程内），
+        // 头部 2% 咀嚼微缩放当腮帮鼓动（颈球随头同缩放、始终沉在脖颈基座里，不断链）
+        const eet = Math.min(1, (a.eatT || 0)*2.5);
+        const chew = Math.sin(t*7.5);
+        P.head.rotation.x += (0.24 + chew*0.05)*eet;
+        P.body.rotation.x += 0.10*eet;
+        const hs = 1 + chew*0.02*eet;
+        P.head.scale.set(hs, hs, hs);
+    } else {
+        P.head.scale.set(1, 1, 1);
+    }
+    if(happyK && moving < 0.3 && pose < 0.5)
+        P.body.position.y += Math.abs(Math.sin(t*5.2))*0.02;   // 开心时原地小蹦跶（只抬 body 层，同呼吸浮动一处）
     // 待机转头张望（玩家操控时由相机接管头部，见操控节）
     if(a.mode !== 'player'){
         a.lookYawT -= dt;
@@ -3959,7 +4044,9 @@ const DRAGON_DEF = {
     name: 'dragon', initial: 'idle',
     onPhase(ph){
         if(!dragonAgent || dragonAgent.mode === 'player') return;
-        if(ph === 'night' && dragonAgent.state !== 'sleep' && dragonAgent.state !== 'sleepGo')
+        // 入夜只从散步/发呆切去睡觉：互动（play）、进食（eatGo/eat）、跟随（follow）
+        // 不被阶段切换硬打断——follow 自己查夜、play/eat 结束后经 idle 的夜查去睡
+        if(ph === 'night' && (dragonAgent.state === 'idle' || dragonAgent.state === 'roam'))
             AgentKit.setState(dragonAgent, 'sleepGo');
         if(ph !== 'night' && (dragonAgent.state === 'sleep' || dragonAgent.state === 'sleepGo'))
             AgentKit.setState(dragonAgent, 'idle');
@@ -4003,6 +4090,119 @@ const DRAGON_DEF = {
         player: { update(a, dt, t){
             dragonPlayerMove(a, dt);
             dragonAnimate(a, dt, t);
+        } },
+        /* 互动演出（#16）：站定播手势（手势本身在 dragonAnimate 的叠加层里），
+           播完回 returnState（idle 或 follow）；手势中途入夜也不打断（≤1.8 秒） */
+        play: { update(a, dt, t){
+            a.moveAmt = Math.max(0, a.moveAmt - dt*5);
+            // 演出时面向访客（轨道相机注视点），转圈走 lie 层不与这里打架
+            dragonFace(a, Math.atan2(controls.target.x - a.group.position.x, controls.target.z - a.group.position.z), dt);
+            if(!a.gesture){
+                if(a.returnState === 'follow' && a.followT > 0) AgentKit.setState(a, 'follow');
+                else { a.idleT = 1.5; AgentKit.setState(a, 'idle'); }
+            }
+            dragonAnimate(a, dt, t);
+        } },
+        /* 去吃东西（#17）：走向放在地上的食物；够不着（被地形卡住或超时）时
+           近处就凑合吃、远处就退还背包，不死磕、不丢食物 */
+        eatGo: { update(a, dt, t){
+            if(!a.foodPos){ AgentKit.setState(a, 'idle'); return; }
+            const p = a.group.position;
+            const d = Math.hypot(a.foodPos.x - p.x, a.foodPos.z - p.z);
+            if(d < 0.55){ a.eatT = 0; AgentKit.setState(a, 'eat'); return; }
+            const moved = dragonWalkTo(a, a.foodPos.x, a.foodPos.z, 2.6, dt);
+            a.moveAmt += ((moved ? 1 : 0) - a.moveAmt) * Math.min(1, dt*6);
+            a.eatWait += dt;
+            if((!moved || a.eatWait > 7) && d >= 0.55){
+                if(d < 1.8){ a.eatT = 0; AgentKit.setState(a, 'eat'); return; }
+                bagAdd(foodKind); removeFood();
+                a.idleT = 1.5;
+                AgentKit.setState(a, 'idle');
+                showHuntToast('🐉 它够不着那口吃的，食物先收回背包啦');
+                return;
+            }
+            dragonAnimate(a, dt, t);
+        } },
+        /* 吃东西（#17）：低头啃食约 2.4 秒（动作在 dragonAnimate 叠加层），
+           食物同步缩小；吃完记账（喂食次数）、开心、转入跟随 */
+        eat: { update(a, dt, t){
+            a.eatT += dt;
+            a.moveAmt = Math.max(0, a.moveAmt - dt*5);
+            if(a.foodPos) dragonFace(a, Math.atan2(a.foodPos.x - a.group.position.x, a.foodPos.z - a.group.position.z), dt);
+            if(foodMesh) foodMesh.scale.setScalar(Math.max(0.2, 1 - 0.72*(a.eatT/2.4)));
+            dragonAnimate(a, dt, t);
+            if(a.eatT >= 2.4){
+                removeFood();
+                const b = bagEnsure(); b.fed++; saveBag();
+                a.happyT = 8;
+                a.followT = FOLLOW_DUR;
+                updateStatus();
+                showHuntToast('😋 吃饱啦！小龙想跟着你玩一会儿（喂食 ' + b.fed + ' 次）');
+                AgentKit.setState(a, 'follow');
+            }
+        } },
+        /* 跟随（#17）：非接管时跟着轨道相机注视点（参观主体）走，保持 2~4 单位——
+           太远走向主体外侧 3 单位处，太近就站住看着主体。结束条件：计时到点、
+           玩家接管（dragonTakeover 里清 followT 并切 player）、入夜（去睡觉）。
+           玩家进屋参观期间不跟进屋：锚点换成门口外侧，在门口等，出屋后自动续跟。 */
+        follow: { update(a, dt, t){
+            if(GClock.phase() === 'night'){ a.followT = 0; AgentKit.setState(a, 'sleepGo'); return; }
+            a.followT -= dt;
+            if(a.followT <= 0){
+                a.followT = 0; a.idleT = 1;
+                AgentKit.setState(a, 'idle');
+                showHuntToast('🐉 小龙玩够啦，自己去溜达了');
+                return;
+            }
+            let ax, az;
+            if(Interior.active){
+                const dw = roomToWorld(0, 0, 3.4);
+                ax = dw.x + HOUSE_F.x*1.8; az = dw.z + HOUSE_F.z*1.8;
+            } else { ax = controls.target.x; az = controls.target.z; }
+            const p = a.group.position;
+            const d = Math.hypot(ax - p.x, az - p.z);
+            if(d > 4.2){
+                /* 绕障：直线被树/石头挡住时 dragonWalkTo 只会贴墙滑、会卡进凹角
+                   （实测卡在距锚点 7.3 的树丛口袋里）——堵住超过 0.7 秒就立一个
+                   侧向绕行点（左右交替试），绕过去再回正轨 */
+                let tx, tz;
+                if(a.followDetour){
+                    tx = a.followDetour.x; tz = a.followDetour.z;
+                    a.followDetour.t -= dt;
+                    if(Math.hypot(tx - p.x, tz - p.z) < 0.6 || a.followDetour.t <= 0){
+                        a.followDetour = null; a.followStuck = 0;
+                    }
+                }
+                if(!a.followDetour){
+                    const ux = (p.x - ax)/d, uz = (p.z - az)/d;
+                    tx = ax + ux*3.0; tz = az + uz*3.0;
+                    if(!WalkMap.isWalkable(tx, tz)){ tx = ax; tz = az; }
+                }
+                const moved = dragonWalkTo(a, tx, tz, 2.6, dt);
+                a.moveAmt += ((moved ? 1 : 0) - a.moveAmt) * Math.min(1, dt*6);
+                if(moved) a.followStuck = Math.max(0, (a.followStuck || 0) - dt*2);
+                else{
+                    a.moveAmt = Math.max(0, a.moveAmt - dt*4);
+                    a.followStuck = (a.followStuck || 0) + dt;
+                    if(a.followStuck > 0.7 && !a.followDetour){
+                        const px2 = -(az - p.z)/d, pz2 = (ax - p.x)/d;   // 朝锚点方向的垂直向
+                        a.followSide = -(a.followSide || 1);
+                        for(const s of [a.followSide, -a.followSide]){
+                            const cx2 = p.x + px2*s*3.2 + (ax - p.x)/d*0.8;
+                            const cz2 = p.z + pz2*s*3.2 + (az - p.z)/d*0.8;
+                            if(Math.hypot(cx2, cz2) < 57 && WalkMap.isWalkable(cx2, cz2)){
+                                a.followDetour = {x:cx2, z:cz2, t:3};
+                                break;
+                            }
+                        }
+                        a.followStuck = 0;
+                    }
+                }
+            } else {
+                a.moveAmt = Math.max(0, a.moveAmt - dt*4);
+                if(d > 1.2) dragonFace(a, Math.atan2(ax - p.x, az - p.z), dt);
+            }
+            dragonAnimate(a, dt, t);
         } }
     }
 };
@@ -4018,13 +4218,22 @@ function createDragon(){
         group: g, parts: m.parts,
         target: null, idleT: 1.5, moveAmt: 0, walkPhase: 0,
         blinkT: 2 + Math.random()*2, blinkPh: -1,
-        lookYaw: 0, lookYawT: 0, pose: 0, mode: 'auto', moveTarget: null
+        lookYaw: 0, lookYawT: 0, pose: 0, mode: 'auto', moveTarget: null,
+        // #16/#17：互动手势、开心计时、尾巴相位、跟随计时、进食计时与回程状态
+        gesture: null, gestureDur: 0, happyT: 0, tailT: 0,
+        followT: 0, eatT: 0, eatWait: 0, returnState: 'idle', foodPos: null,
+        followStuck: 0, followDetour: null, followSide: 1
     });
 }
 function dragonStateLabel(){
     if(!dragonAgent) return '-';
-    if(dragonAgent.mode === 'player') return DragonCtl.fp ? '操控·一人称' : '操控·三人称';
-    return {roam:'散步', idle:'发呆', sleepGo:'去睡觉', sleep:'睡觉中'}[dragonAgent.state] || dragonAgent.state;
+    const a = dragonAgent;
+    if(a.mode === 'player') return DragonCtl.fp ? '操控·一人称' : '操控·三人称';
+    let s = {roam:'散步', idle:'发呆', sleepGo:'去睡觉', sleep:'睡觉中',
+             play:'互动中', eatGo:'去吃东西', eat:'吃东西', follow:'跟着你'}[a.state] || a.state;
+    if(a.state === 'follow') s += ' · ' + Math.max(0, Math.ceil(a.followT)) + '秒';
+    if(a.happyT > 0 && a.state !== 'sleep' && a.state !== 'sleepGo') s += ' · 开心';
+    return s;
 }
 
 /* ---------- 接管 / 放手 ---------- */
@@ -4033,6 +4242,16 @@ function dragonTakeover(){
     DragonCtl.active = true;
     dragonAgent.mode = 'player';
     dragonAgent.moveTarget = null;
+    // 接管即散场（#16/#17 互斥规矩）：跟随结束、手势复位、没吃完的食物退回背包
+    dragonAgent.followT = 0;
+    if(dragonAgent.gesture){
+        dragonAgent.gesture = null;
+        dragonAgent.parts.lie.rotation.y = 0;
+        dragonAgent.parts.eyes.scale.y = 1;
+        dragonAgent.parts.head.scale.set(1, 1, 1);
+    }
+    if(foodMesh){ bagAdd(foodKind); removeFood(); }
+    hideDragonMenu();
     AgentKit.setState(dragonAgent, 'player');
     // 互斥规矩：操控优先——巡游自动停、视角锁定自动解（与巡游/锁定互斥的既有口径一致）
     if(wx.orbit){
@@ -4213,6 +4432,262 @@ function setupDragonControls(){
     };
     joy.addEventListener('pointerup', joyEnd);
     joy.addEventListener('pointercancel', joyEnd);
+    setupDragonInteract();   // #16/#17：互动菜单、爱心粒子、背包、点龙开菜单
+}
+
+/* ==================== 小龙互动与喂食跟随（Issue #16 / #17） ====================
+   互动（#16）：点小龙或底部「🤚 互动」开菜单——摸头（眯眼垂头＋爱心粒子）、
+   打招呼（抬臂摆手＋小蹦）、转圈（整组绕竖轴一圈）。动作全部走 dragonAnimate
+   尾部的叠加层，只用关节验收过的量程，不动模型结构。玩完进入开心状态
+   （happyT：尾巴摆速/幅度提升＋原地小蹦，状态栏可见）。
+   喂食（#17）：农场收获的南瓜/玉米自动进背包（ct2_bag，本件唯一新增键，
+   治理同 ct2_farm 先例）；喂食时把食物放在龙面前地上，龙自己走过去
+   （eatGo→eat，低头啃食＋食物缩小），吃完 fed+1、开心、跟随 90 秒（follow：
+   锚点=轨道相机注视点，保持 2~4 单位；玩家进屋时在门口等、出屋续跟；
+   接管或入夜结束跟随）。
+   互斥规矩：接管中触发互动时移动输入优先——有移动输入就不起手势；
+   接管动作本身会散场（跟随结束、手势复位、未吃完的食物退回背包）。 */
+const BAG_KEY='ct2_bag';
+const FOLLOW_DUR=90;          // 喂食后跟随秒数
+let bagState=null;            // {pumpkin, corn, fed}：背包食物数与累计喂食次数（亲近程度）
+function loadBag(){
+    const b=store.bag.json({pumpkin:0, corn:0, fed:0});
+    if(typeof b.pumpkin!=='number') b.pumpkin=0;
+    if(typeof b.corn!=='number') b.corn=0;
+    if(typeof b.fed!=='number') b.fed=0;
+    return b;
+}
+function bagEnsure(){ if(!bagState) bagState=loadBag(); return bagState; }
+function saveBag(){ store.bag.save(bagEnsure()); }
+function bagAdd(crop){
+    const b=bagEnsure();
+    if(crop==='pumpkin') b.pumpkin++;
+    else if(crop==='corn') b.corn++;
+    else return;
+    saveBag(); updateStatus();
+}
+
+/* ---------- 爱心粒子（摸头）：一个 Points 池反复用，共 1 次绘制 ---------- */
+const HEART_N=14;
+let heartPts=null, heartData=null;
+function buildHearts(){
+    const cv=document.createElement('canvas'); cv.width=cv.height=64;
+    const cx=cv.getContext('2d');
+    cx.fillStyle='#ff6f91';
+    cx.beginPath();
+    cx.moveTo(32,56);
+    cx.bezierCurveTo(4,34, 8,10, 22,10);
+    cx.bezierCurveTo(28,10, 32,15, 32,21);
+    cx.bezierCurveTo(32,15, 36,10, 42,10);
+    cx.bezierCurveTo(56,10, 60,34, 32,56);
+    cx.fill();
+    const geo=new THREE.BufferGeometry();
+    const pos=new Float32Array(HEART_N*3);
+    heartData=[];
+    for(let i=0;i<HEART_N;i++){ pos[i*3+1]=-999; heartData.push({life:0, max:1, x:0, y:-999, z:0, vx:0, vz:0, ph:0}); }
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const mat=new THREE.PointsMaterial({size:0.34, map:new THREE.CanvasTexture(cv),
+        transparent:true, depthWrite:false, opacity:0.95});
+    heartPts=new THREE.Points(geo, mat);
+    heartPts.frustumCulled=false;
+    heartPts.visible=false;
+    scene.add(heartPts);
+}
+const _heartV=new THREE.Vector3();
+function spawnHearts(n){
+    if(!heartPts || !dragonAgent) return;
+    dragonAgent.parts.head.getWorldPosition(_heartV);
+    let spawned=0;
+    for(let i=0;i<HEART_N && spawned<n;i++){
+        const d=heartData[i];
+        if(d.life>0) continue;
+        d.max=1.0+Math.random()*0.5; d.life=d.max;
+        d.x=_heartV.x+(Math.random()-0.5)*0.55;
+        d.y=_heartV.y+0.28+Math.random()*0.15;
+        d.z=_heartV.z+(Math.random()-0.5)*0.55;
+        d.vx=(Math.random()-0.5)*0.22; d.vz=(Math.random()-0.5)*0.22;
+        d.ph=Math.random()*6.28;
+        spawned++;
+    }
+    if(spawned) heartPts.visible=true;
+}
+function updateDragonFx(dt, t){
+    if(!heartPts || !heartPts.visible) return;
+    const attr=heartPts.geometry.getAttribute('position');
+    let any=false;
+    for(let i=0;i<HEART_N;i++){
+        const d=heartData[i];
+        if(d.life>0){
+            any=true;
+            d.life-=dt;
+            if(d.life<=0){ d.y=-999; }
+            else{
+                d.y+=dt*0.55; d.x+=d.vx*dt+Math.sin(t*3+d.ph)*0.08*dt; d.z+=d.vz*dt;
+                if(d.life<0.22) d.y-=dt*0.9;      // 消失前下坠，代替逐粒透明度
+            }
+        }
+        attr.setXYZ(i, d.x, d.y, d.z);
+    }
+    attr.needsUpdate=true;
+    if(!any) heartPts.visible=false;
+}
+
+/* ---------- 食物（放在地上的南瓜/玉米，各 1 件合并几何，按需建、用完销毁） ---------- */
+let foodMesh=null, foodKind=null;
+function buildFoodMesh(kind){
+    let geos;
+    if(kind==='pumpkin'){
+        geos=[
+            dgPart(new THREE.SphereGeometry(0.17, 14, 10), 0xe07b24, 0, 0.125, 0, {s:[1, 0.78, 1]}),
+            dgPart(new THREE.CylinderGeometry(0.03, 0.045, 0.10, 6), PALETTE.stem, 0, 0.275, 0, {rz:0.25}),
+            dgPart(new THREE.SphereGeometry(0.09, 8, 6), PALETTE.leaf, 0.10, 0.03, 0.05, {s:[1, 0.25, 1]})
+        ];
+    }else{
+        geos=[
+            dgPart(new THREE.CylinderGeometry(0.068, 0.095, 0.46, 8), 0xf2c230, 0, 0.09, 0, {rz:1.45}),
+            dgPart(new THREE.ConeGeometry(0.068, 0.17, 8), 0xf7d774, -0.285, 0.125, 0, {rz:1.45}),
+            dgPart(new THREE.ConeGeometry(0.09, 0.30, 6), PALETTE.leaf, 0.22, 0.05, 0.02, {rz:-1.1, s:[1, 1, 0.3]})
+        ];
+    }
+    const m=new THREE.Mesh(ModelKit.mergePainted(geos),
+        new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.9}));
+    m.castShadow=true;
+    m.name='dragonFood';
+    return m;
+}
+function removeFood(){
+    if(foodMesh){
+        scene.remove(foodMesh);
+        if(foodMesh.geometry) foodMesh.geometry.dispose();
+        foodMesh=null;
+    }
+    foodKind=null;
+    if(dragonAgent) dragonAgent.foodPos=null;
+}
+/* 把食物放在龙正前方一块能落脚的地上（候选点逐个问 WalkMap） */
+function placeFood(kind){
+    removeFood();
+    foodMesh=buildFoodMesh(kind); foodKind=kind;
+    const a=dragonAgent, p=a.group.position, ry=a.group.rotation.y;
+    const fx=Math.sin(ry), fz=Math.cos(ry);
+    const cand=[
+        [p.x+fx*1.15, p.z+fz*1.15],
+        [p.x+fx*0.95+fz*0.6, p.z+fz*0.95-fx*0.6],
+        [p.x+fx*0.95-fz*0.6, p.z+fz*0.95+fx*0.6],
+        [p.x-fx*0.9, p.z-fz*0.9],
+        [p.x, p.z]
+    ];
+    let spot=null;
+    for(const c of cand){
+        if(Math.hypot(c[0], c[1])<57 && WalkMap.isWalkable(c[0], c[1])){ spot=c; break; }
+    }
+    if(!spot) spot=[p.x, p.z];
+    a.foodPos={x:spot[0], z:spot[1]};
+    foodMesh.position.set(spot[0], terrainH(spot[0], spot[1]), spot[1]);
+    scene.add(foodMesh);
+}
+
+/* ---------- 互动触发 ---------- */
+function dragonBusy(){
+    if(!dragonAgent) return true;
+    const s=dragonAgent.state;
+    return s==='play' || s==='eatGo' || s==='eat';
+}
+function dragonGesture(kind){
+    const a=dragonAgent; if(!a) return;
+    if(a.mode==='player'){
+        // 接管中：移动输入优先——正在动（按键/摇杆/步态未停）就不起手势
+        const moving = a.moveAmt>0.25 || DragonCtl.keys.size>0 ||
+            Math.abs(DragonCtl.joy.x)>0.2 || Math.abs(DragonCtl.joy.y)>0.2;
+        if(moving){ showHuntToast('🏃 移动中呢，先停下来再和它玩'); return; }
+        if(a.gesture) return;
+        a.gesture={kind:kind, t:0};
+        a.gestureDur = kind==='spin' ? 1.1 : (kind==='pat' ? 1.8 : 1.6);
+        if(kind==='pat') spawnHearts(9);
+        hideDragonMenu();
+        return;
+    }
+    if(a.state==='sleep' || a.state==='sleepGo'){ showHuntToast('💤 它睡着了，别吵它'); return; }
+    if(dragonBusy()) return;
+    a.returnState = (a.state==='follow') ? 'follow' : 'idle';
+    a.gesture={kind:kind, t:0};
+    a.gestureDur = kind==='spin' ? 1.1 : (kind==='pat' ? 1.8 : 1.6);
+    if(kind==='pat') spawnHearts(9);
+    hideDragonMenu();
+    AgentKit.setState(a, 'play');
+}
+function dragonFeed(kind){
+    const a=dragonAgent, b=bagEnsure(); if(!a) return;
+    if(a.mode==='player'){ showHuntToast('🐉 操控它的时候没法喂，先放手让它自己玩吧'); return; }
+    if(a.state==='sleep' || a.state==='sleepGo'){ showHuntToast('💤 它睡着了，等它醒了再喂'); return; }
+    if(dragonBusy()) return;
+    if(kind==='pumpkin' ? b.pumpkin<=0 : b.corn<=0){
+        showHuntToast('🎒 背包里没有' + (kind==='pumpkin' ? '南瓜' : '玉米') + '啦，去农田收获一些吧');
+        return;
+    }
+    if(kind==='pumpkin') b.pumpkin--; else b.corn--;
+    saveBag(); updateStatus();
+    a.returnState = (a.state==='follow') ? 'follow' : 'idle';
+    a.eatWait = 0;
+    placeFood(kind);
+    hideDragonMenu();
+    AgentKit.setState(a, 'eatGo');
+}
+
+/* ---------- 互动菜单 ---------- */
+function refreshDragonMenu(){
+    const b=bagEnsure();
+    const fp=document.getElementById('dmFeedP'), fc=document.getElementById('dmFeedC');
+    if(fp){ fp.textContent='🎃 喂南瓜 ×'+b.pumpkin; fp.disabled=b.pumpkin<=0; }
+    if(fc){ fc.textContent='🌽 喂玉米 ×'+b.corn; fc.disabled=b.corn<=0; }
+    const hint=document.getElementById('dmHint');
+    if(hint) hint.textContent='已喂 '+b.fed+' 次 · 喂饱后它会跟着你玩一阵';
+}
+function hideDragonMenu(){
+    const m=document.getElementById('dragonMenu');
+    if(m) m.style.display='none';
+}
+function toggleDragonMenu(){
+    const m=document.getElementById('dragonMenu'); if(!m) return;
+    if(m.style.display==='none'){ refreshDragonMenu(); m.style.display=''; }
+    else m.style.display='none';
+}
+/* 点中龙本体 = 开/关菜单（与农田点按同款轻点判定）；点别处则顺手收起菜单 */
+let dragonTapState=null, dragonTapAt=-100000;
+function bindDragonTap(){
+    const el=renderer.domElement;
+    el.addEventListener('pointerdown', e=>{
+        dragonTapState={x:e.clientX, y:e.clientY, t:performance.now()};
+    });
+    el.addEventListener('pointerup', e=>{
+        if(!dragonTapState) return;
+        const dx=e.clientX-dragonTapState.x, dy=e.clientY-dragonTapState.y;
+        const dur=performance.now()-dragonTapState.t;
+        dragonTapState=null;
+        if(dx*dx+dy*dy>=36 || dur>=500) return;
+        if(!dragonAgent || DragonCtl.active || Interior.active) return;
+        const r=el.getBoundingClientRect();
+        _dgNdc.set(((e.clientX-r.left)/r.width)*2-1, -((e.clientY-r.top)/r.height)*2+1);
+        _dgRay.setFromCamera(_dgNdc, camera);
+        if(_dgRay.intersectObject(dragonAgent.group, true).length){
+            dragonTapAt=performance.now();
+            toggleDragonMenu();
+        }else{
+            hideDragonMenu();
+        }
+    });
+}
+function setupDragonInteract(){
+    buildHearts();
+    bagEnsure();
+    document.getElementById('actBtn').addEventListener('click', toggleDragonMenu);
+    document.getElementById('dmPat').addEventListener('click', ()=>dragonGesture('pat'));
+    document.getElementById('dmWave').addEventListener('click', ()=>dragonGesture('wave'));
+    document.getElementById('dmSpin').addEventListener('click', ()=>dragonGesture('spin'));
+    document.getElementById('dmFeedP').addEventListener('click', ()=>dragonFeed('pumpkin'));
+    document.getElementById('dmFeedC').addEventListener('click', ()=>dragonFeed('corn'));
+    document.getElementById('dmClose').addEventListener('click', hideDragonMenu);
+    bindDragonTap();
 }
 
 /* ==================== 天气系统 ==================== */
@@ -4469,6 +4944,7 @@ function animate(){
     Env.refresh();
     updateModules(dt, t);
     farmRainCheck();
+    updateDragonFx(dt, t);
 
     // 风吹摆动：统一走环境风场（树/花/草共用一阵风，见 Env）
     swayGroups.forEach(sg=>{
@@ -4606,6 +5082,9 @@ function updateStatus(){
     frag.appendChild(statusLine('蝴蝶:',butterflies.length+' 蜜蜂:'+bees.length));
     frag.appendChild(statusLine('寻宝:',(huntState?huntState.found.length:0)+'/5'));
     frag.appendChild(statusLine('收获:',(farmState?farmState.harvest:0)+''));
+    const _bag=bagEnsure();
+    frag.appendChild(statusLine('背包:','南瓜×'+_bag.pumpkin+' 玉米×'+_bag.corn));
+    frag.appendChild(statusLine('喂龙:',_bag.fed+' 次'));
     frag.appendChild(statusLine('小龙:',dragonStateLabel()));
     frag.appendChild(statusLine('天气:',
         weatherLabels[weatherIndex]||'-','#ffd97a'));
