@@ -262,6 +262,23 @@
         #fbMask{padding:env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
                         env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px)}
     }
+    /* ===== 操作界面自动隐藏：无操作 3 秒后顶/底栏淡出，右缘小圆钮唤回 ===== */
+    #ui,#status,#lanternBtn,#modBtn{transition:opacity .35s ease,transform .35s ease,background .15s ease,box-shadow .3s ease}
+    #fbBtn{transition:opacity .35s ease,transform .35s ease,background .15s ease}
+    #app.bars-off #ui,#app.bars-off #status{opacity:0;pointer-events:none;transform:translateY(-12px)}
+    #app.bars-off #fbBtn,#app.bars-off #lanternBtn,#app.bars-off #modBtn{opacity:0;pointer-events:none;transform:translateY(12px)}
+    #wakeBtn{position:absolute;right:10px;top:50%;z-index:119;width:34px;height:34px;border-radius:50%;
+        transform:translateY(-50%);display:flex;align-items:center;justify-content:center;
+        background:rgba(10,20,10,.45);color:rgba(255,255,255,.88);border:1px solid rgba(255,255,255,.25);
+        font-size:20px;line-height:1;font-family:inherit;cursor:pointer;opacity:0;pointer-events:none;
+        transition:opacity .35s ease,background .15s ease;-webkit-tap-highlight-color:transparent;backdrop-filter:blur(4px)}
+    #app.bars-off #wakeBtn{opacity:.8;pointer-events:auto}
+    #wakeBtn:hover{background:rgba(30,60,30,.65);opacity:1}
+    @media (max-width:600px),(pointer:coarse){
+        #app.bars-off #status{transform:translateY(12px)}
+        #wakeBtn{right:calc(6px + env(safe-area-inset-right, 0px))}
+    }
+    body.rot90 #app.bars-off #status{transform:translateY(-12px)}
     /* 触屏手感：去掉 300ms 点击延迟与长按选中/高亮 */
     button, label, input[type=range]{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
     #scene, #scene canvas{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
@@ -360,6 +377,7 @@
 </div>
 <div id="wishBubble"></div>
 <div id="huntToast"></div>
+<button id="wakeBtn" type="button" title="显示操作界面" aria-label="显示操作界面">‹</button>
 </div><!-- /#app -->
 <div id="error"></div>
 
@@ -3244,6 +3262,54 @@ function setupGlobal(){
         }, false);
     }
 }
+
+/* ==================== 操作界面自动隐藏 ====================
+   顶栏（#ui）与底栏（#status / 放河灯 / 优化意见 / 齿轮）无操作 3 秒后淡出，
+   只留右缘中部小圆钮唤回；在任一栏里操作都会重置计时；
+   功能面板或弹窗打开时暂停隐藏，关掉后按最后一次操作重新计满 3 秒。 */
+(function(){
+    var app = document.getElementById('app');
+    if(!app) return;
+    var HIDE_MS = 3000, timer = null;
+    function anyDialogOpen(){
+        var ids = ['modPanel','fbMask','ltMask'], i, el;
+        for(i = 0; i < ids.length; i++){
+            el = document.getElementById(ids[i]);
+            if(el && el.classList.contains('on')) return true;
+        }
+        return false;
+    }
+    function arm(){
+        if(timer) clearTimeout(timer);
+        timer = setTimeout(function(){
+            if(anyDialogOpen()){ arm(); return; }
+            app.classList.add('bars-off');
+        }, HIDE_MS);
+    }
+    function poke(){
+        app.classList.remove('bars-off');
+        arm();
+    }
+    ['ui','status','fbBtn','lanternBtn','modBtn','modPanel','fbMask','ltMask'].forEach(function(id){
+        var el = document.getElementById(id);
+        if(!el) return;
+        ['pointerdown','input','change','wheel'].forEach(function(ev){
+            el.addEventListener(ev, poke, {passive:true});
+        });
+    });
+    var wake = document.getElementById('wakeBtn');
+    if(wake) wake.addEventListener('click', poke);
+    poke();
+    window.addEventListener('load', poke);
+    // 加载层还盖着时不算倒计时：等它收起后再重新计满 3 秒，保证刚打开先看清界面
+    var boot = document.getElementById('boot');
+    if(boot && !boot.classList.contains('hide')){
+        var bootWait = setInterval(function(){
+            if(boot.classList.contains('hide')){ clearInterval(bootWait); poke(); }
+        }, 250);
+        setTimeout(function(){ clearInterval(bootWait); }, 10000);
+    }
+})();
 
 window.addEventListener('load',()=>{
     try{ init(); }
