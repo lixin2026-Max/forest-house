@@ -3510,14 +3510,17 @@ function createInsects(){
     scene.add(fireflies[0].points);
 }
 
-/* ==================== 小龙（Issue #27 · v4.0 build 1） ====================
-   森林小屋原野上的一条原创幼龙：纯程序建模（零件全走 ModelKit 的
-   paint/mergePainted 合批），圆润奶黄 + 珊瑚橙背刺/耳鳍/尾尖 + 奶油肚皮，
-   造型与标志元素均为本项目原创。比例：站立高约 1.55（门高 2.36 的三分之二）、
-   身长（含尾）约 2.6，与小屋、树木、松鼠/小鸟的相对尺度按 low-poly 全场统一。
-   动画不用骨骼资源：分组节点（躯干/头/翅/腿/三节尾）做呼吸、眨眼、步态、睡姿。
-   行为走 AgentKit：白天散步/发呆，夜间走 GClock 阶段去篝火边睡；
-   玩家接管后切换为双端操控（键鼠/点击/虚拟摇杆）+ 第一/第三人称相机。 */
+/* ==================== 小龙（Issue #27 · v4.0 build 1；仿人形重做） ====================
+   森林小屋原野上的一只原创小龙：负责人拍板做「仿人形」——双足直立的 Q 版小人儿，
+   龙特征长在人形上（双角/耳鳍/短吻/一排背刺/渐细长尾/背上小翅膀）。纯程序建模，
+   零件全走 ModelKit 的 paint/mergePainted 合批，配色沿用 build 1 的系列识别色
+   （奶黄主色 + 奶油肚皮/角 + 珊瑚橙标志件 + 浅橙翅膜 + 粉腮红），造型全原创。
+   比例：约 2.5 头身，站立高约 1.64、角尖约 1.85，约为门高 2.36 的三分之二、能进门，
+   与小屋、树木、松鼠/小鸟的相对尺度按 low-poly 全场统一。
+   动画不用骨骼资源：分组节点（髋/头/双臂/双腿/双翅/三节尾 + lie 侧躺层）做呼吸、
+   眨眼、双足步态（双腿交替 + 双臂反向摆）、睡姿侧躺蜷起。行为走 AgentKit：白天
+   散步/发呆，夜间走 GClock 阶段去篝火边睡；玩家接管后切换为双端操控
+   （键鼠/点击/虚拟摇杆）+ 第一/第三人称相机。 */
 const DRG_BODY = 0xf6cd62;    // 奶黄（主色）
 const DRG_BELLY = 0xfff3d4;   // 奶油（肚皮/吻部/角/翅骨）
 const DRG_CORAL = 0xef8f4d;   // 珊瑚橙（背刺/耳鳍/尾尖）
@@ -3538,86 +3541,166 @@ function dgPart(geo, hex, x, y, z, o){
 function buildDragonModel(){
     const paintMat = new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.9});
     const root = new THREE.Group(); root.name = 'dragon';
-    const body = new THREE.Group(); body.position.y = 0.76; root.add(body);
+    /* lie：睡姿侧躺层——整个人绕髋部倒下侧的支点滚倒（支点补偿在 dragonAnimate 里算） */
+    const lie = new THREE.Group(); root.add(lie);
+    /* body：髋部枢轴（y=0.55）。躯干/头/双臂/双翅/尾都挂在它上面，
+       呼吸缩放、走路起伏与侧摆作用在这一层；双腿直接挂 lie，与髋同高。 */
+    const body = new THREE.Group(); body.position.y = 0.55; lie.add(body);
 
-    /* 躯干（1 件合并：圆肚 + 奶油肚皮 + 珊瑚背刺一排） */
+    /* 躯干（1 件合并：主球 + 髋部球 + 三片叠瓦状奶油腹甲 + 珊瑚背刺一排，大小渐变） */
     const torsoMesh = new THREE.Mesh(ModelKit.mergePainted([
-        dgPart(new THREE.SphereGeometry(0.55, 14, 11), DRG_BODY, 0, 0, 0, {s:[1, 0.92, 1.22]}),
-        dgPart(new THREE.SphereGeometry(0.46, 12, 9), DRG_BELLY, 0, -0.13, 0.13, {s:[0.85, 0.8, 1.02]}),
-        dgPart(new THREE.ConeGeometry(0.09, 0.24, 5), DRG_CORAL, 0, 0.47, 0.30, {rx:-0.25, s:[1, 1, 0.45]}),
-        dgPart(new THREE.ConeGeometry(0.10, 0.28, 5), DRG_CORAL, 0, 0.50, 0.03, {rx:-0.10, s:[1, 1, 0.45]}),
-        dgPart(new THREE.ConeGeometry(0.09, 0.24, 5), DRG_CORAL, 0, 0.46, -0.25, {rx:0.12, s:[1, 1, 0.45]}),
-        dgPart(new THREE.ConeGeometry(0.075, 0.19, 5), DRG_CORAL, 0, 0.40, -0.50, {rx:0.30, s:[1, 1, 0.45]})
+        dgPart(new THREE.SphereGeometry(0.315, 18, 14), DRG_BODY, 0, 0.24, 0, {s:[1.02, 1.08, 0.78]}),
+        dgPart(new THREE.SphereGeometry(0.25, 16, 12), DRG_BODY, 0, -0.03, 0, {s:[1.08, 0.78, 0.80]}),
+        /* 脖颈基座：躯干顶端一圈隆起，与头组里的颈球上下夹住头-躯干交界，
+           转头/垂头时交界处始终有肉身过渡，不露缝 */
+        dgPart(new THREE.SphereGeometry(0.19, 14, 10), DRG_BODY, 0, 0.50, 0, {s:[1.08, 0.66, 1.0]}),
+        dgPart(new THREE.SphereGeometry(0.205, 14, 10), DRG_BELLY, 0, 0.33, 0.169, {s:[0.88, 0.52, 0.55]}),
+        dgPart(new THREE.SphereGeometry(0.215, 14, 10), DRG_BELLY, 0, 0.185, 0.173, {s:[0.90, 0.54, 0.55]}),
+        dgPart(new THREE.SphereGeometry(0.20, 14, 10), DRG_BELLY, 0, 0.045, 0.143, {s:[0.86, 0.52, 0.55]}),
+        /* 背刺：底盘沉根之外，每根刺根部再加一颗沿锥轴压扁的根包覆丘（半径比底盘大
+           0.025）——弧面背上平底盘总有一段边沿探出表面，包覆丘把整圈盘边吞进过渡
+           件里，刺像从一颗根丘上长出来（探针按底盘圆环对 躯干∪包覆丘 复测） */
+        dgPart(new THREE.ConeGeometry(0.075, 0.20, 6), DRG_CORAL, 0, 0.47, -0.174, {rx:0.35, s:[1, 1, 0.45]}),
+        dgPart(new THREE.SphereGeometry(0.10, 10, 8), DRG_CORAL, 0, 0.385, -0.205, {rx:0.35, s:[1, 0.5, 1]}),
+        dgPart(new THREE.ConeGeometry(0.085, 0.24, 6), DRG_CORAL, 0, 0.30, -0.208, {rx:0.22, s:[1, 1, 0.45]}),
+        dgPart(new THREE.SphereGeometry(0.11, 10, 8), DRG_CORAL, 0, 0.193, -0.232, {rx:0.22, s:[1, 0.5, 1]}),
+        dgPart(new THREE.ConeGeometry(0.075, 0.20, 6), DRG_CORAL, 0, 0.12, -0.183, {rx:0.10, s:[1, 1, 0.45]}),
+        dgPart(new THREE.SphereGeometry(0.10, 10, 8), DRG_CORAL, 0, 0.030, -0.192, {rx:0.10, s:[1, 0.5, 1]}),
+        dgPart(new THREE.ConeGeometry(0.06, 0.15, 6), DRG_CORAL, 0, -0.05, -0.165, {rx:-0.05, s:[1, 1, 0.45]}),
+        dgPart(new THREE.SphereGeometry(0.085, 10, 8), DRG_CORAL, 0, -0.115, -0.162, {rx:-0.05, s:[1, 0.5, 1]})
     ]), paintMat);
     torsoMesh.castShadow = true;
     body.add(torsoMesh);
 
-    /* 头（枢轴在脖子处，转头/垂头都绕这里） */
-    const head = new THREE.Group(); head.position.set(0, 0.40, 0.50); body.add(head);
+    /* 头（组原点设在面部下方，而不是脖子根）：一人称相机锚点取的就是 head 组原点
+       （相机代码注释「镜头放在头部中心」）。原点落在躯干正上方的脖子根时，低头会被
+       圆滚滚的胸口腹甲怼满画面；锚到面部下方（配合躯干前后向收薄），低头能看到
+       胸口腹甲，行走时交替前摆的脚尖也会从肚皮下探出来。子级几何按原点位移
+       反向平移，静止外观逐点一致。 */
+    const head = new THREE.Group(); head.position.set(0, 0.79, 0.15); body.add(head);
+    const skullMesh = new THREE.Mesh(ModelKit.mergePainted([
+        dgPart(new THREE.SphereGeometry(0.325, 18, 14), DRG_BODY, 0, -0.01, -0.13, {s:[1, 0.95, 0.94]}),
+        /* 颈球：挂在头组下缘、随头一起转，底部始终沉在躯干与脖颈基座里——
+           张望/低头/睡姿垂头时脖子不断开、不露空 */
+        dgPart(new THREE.SphereGeometry(0.195, 14, 10), DRG_BODY, 0, -0.26, -0.07, {s:[1, 0.79, 1]}),
+        /* 脑后颈窝肉：补颅骨后下缘与颈球之间的月牙空缺（探针实测睡姿该处颅底
+           距躯干/颈球最远 0.12）——一团随头转的后脑勺肉把空缺填实 */
+        dgPart(new THREE.SphereGeometry(0.15, 12, 9), DRG_BODY, 0, -0.15, -0.28, {s:[1.05, 0.9, 1]}),
+        dgPart(new THREE.SphereGeometry(0.165, 14, 10), DRG_BELLY, 0, -0.125, 0.095, {s:[1.28, 0.74, 0.95]}),
+        dgPart(new THREE.SphereGeometry(0.08, 10, 8), DRG_BLUSH, -0.225, -0.11, 0.085, {s:[1, 0.75, 0.45]}),
+        dgPart(new THREE.SphereGeometry(0.08, 10, 8), DRG_BLUSH,  0.225, -0.11, 0.085, {s:[1, 0.75, 0.45]}),
+        dgPart(new THREE.SphereGeometry(0.016, 6, 5), 0x33241a, -0.055, -0.085, 0.232),
+        dgPart(new THREE.SphereGeometry(0.016, 6, 5), 0x33241a,  0.055, -0.085, 0.232),
+        dgPart(new THREE.SphereGeometry(0.03, 8, 6), 0x33241a, 0, -0.21, 0.202, {s:[1.5, 0.3, 0.6]})
+    ]), paintMat);
+    skullMesh.castShadow = true;
+    head.add(skullMesh);
     head.add(new THREE.Mesh(ModelKit.mergePainted([
-        dgPart(new THREE.SphereGeometry(0.40, 14, 11), DRG_BODY, 0, 0, 0, {s:[1, 0.94, 0.98]}),
-        dgPart(new THREE.SphereGeometry(0.21, 10, 8), DRG_BELLY, 0, -0.13, 0.28, {s:[1.2, 0.72, 0.95]}),
-        dgPart(new THREE.SphereGeometry(0.085, 8, 6), DRG_BLUSH, -0.25, -0.07, 0.27, {s:[1, 0.8, 0.5]}),
-        dgPart(new THREE.SphereGeometry(0.085, 8, 6), DRG_BLUSH,  0.25, -0.07, 0.27, {s:[1, 0.8, 0.5]})
+        /* 角：底盘加宽（0.082→0.09）做根部 flare。注：dgPart 的坐标是锥体形心，
+           底盘心还要沿锥轴往回 0.21——实测底盘深埋颅骨内（探针按真实底盘心复测），
+           高度保持原值不缩水 */
+        dgPart(new THREE.ConeGeometry(0.09, 0.42, 9), DRG_BELLY, -0.155, 0.305, -0.16, {rx:-0.30, rz:0.17}),
+        dgPart(new THREE.ConeGeometry(0.09, 0.42, 9), DRG_BELLY,  0.155, 0.305, -0.16, {rx:-0.30, rz:-0.17}),
+        dgPart(new THREE.ConeGeometry(0.07, 0.18, 6), DRG_CORAL, 0, 0.113, -0.385, {rx:0.55, s:[1, 1, 0.45]}),
+        /* 后脑刺根包覆丘：同背刺，吞掉底盘探出颅面的那段边沿 */
+        dgPart(new THREE.SphereGeometry(0.095, 10, 8), DRG_CORAL, 0, 0.044, -0.427, {rx:0.55, s:[1, 0.5, 1]})
     ]), paintMat));
-    head.add(new THREE.Mesh(ModelKit.mergePainted([
-        dgPart(new THREE.ConeGeometry(0.085, 0.30, 7), DRG_BELLY, -0.19, 0.33, -0.06, {rx:-0.55, rz:0.25}),
-        dgPart(new THREE.ConeGeometry(0.085, 0.30, 7), DRG_BELLY,  0.19, 0.33, -0.06, {rx:-0.55, rz:-0.25}),
-        dgPart(new THREE.ConeGeometry(0.16, 0.34, 6), DRG_CORAL, -0.40, 0.10, -0.03, {rz:1.15, s:[1, 1, 0.35]}),
-        dgPart(new THREE.ConeGeometry(0.16, 0.34, 6), DRG_CORAL,  0.40, 0.10, -0.03, {rz:-1.15, s:[1, 1, 0.35]})
-    ]), paintMat));
-    /* 双眼 + 鼻孔合成一件：网格原点钉在眼线上，眨眼时整体 scale.y 压扁即可 */
+    /* 耳鳍：左右各成一组（枢轴在鳍根）——睡姿侧躺时像动物压耳朵一样向上折拢到头顶，
+       否则倒下侧的鳍尖会被整组滚转压进地面（探针实测鳍尖 -0.18） */
+    function finMesh(sign){
+        return new THREE.Mesh(ModelKit.mergePainted([
+            dgPart(new THREE.ConeGeometry(0.13, 0.29, 7), DRG_CORAL, 0, 0, 0, {rz:-sign*1.15, s:[1, 1, 0.35]})
+        ]), paintMat);
+    }
+    const finL = new THREE.Group(); finL.position.set(-0.28, 0.13, -0.16); finL.add(finMesh(-1)); head.add(finL);
+    const finR = new THREE.Group(); finR.position.set(0.28, 0.13, -0.16); finR.add(finMesh(1)); head.add(finR);
     const eyeMesh = new THREE.Mesh(ModelKit.merge([
-        new THREE.SphereGeometry(0.078, 10, 8).translate(-0.165, 0, 0.335),
-        new THREE.SphereGeometry(0.078, 10, 8).translate( 0.165, 0, 0.335),
-        new THREE.SphereGeometry(0.018, 6, 5).translate(-0.06, -0.115, 0.445),
-        new THREE.SphereGeometry(0.018, 6, 5).translate( 0.06, -0.115, 0.445)
-    ]), new THREE.MeshStandardMaterial({color:0x33241a, roughness:0.3}));
-    eyeMesh.position.set(0, 0.05, 0);
+        new THREE.SphereGeometry(0.072, 12, 10).translate(-0.135, 0, 0.285),
+        new THREE.SphereGeometry(0.072, 12, 10).translate( 0.135, 0, 0.285)
+    ]), new THREE.MeshStandardMaterial({color:0x33241a, roughness:0.25}));
+    eyeMesh.position.set(0, 0.03, -0.13);
     head.add(eyeMesh);
 
-    /* 小翅膀：叶形膜 + 奶油翅骨，一侧一件，镜像复用 */
+    /* 双臂：枢轴在肩头，手臂垂在身侧（组带外倾角留出与躯干的间隙，摆臂不擦身）。
+       一件合并：肩头 + 手臂 + 圆手 + 朝前内侧的小拇指 */
+    function armMesh(sign){
+        return new THREE.Mesh(ModelKit.mergePainted([
+            /* 肩头关节球：加大到 0.108 并下沉到枢轴下——原 0.078 球与躯干侧面只是相切
+               （内缘 0.267 对躯干表面 0.267），看着像贴上去的；现在整颗球咬进躯干约 0.05，
+               摆臂/睡姿折臂时肩头始终是连在身上的关节球 */
+            dgPart(new THREE.SphereGeometry(0.108, 12, 9), DRG_BODY, 0, -0.04, 0),
+            dgPart(new THREE.CylinderGeometry(0.062, 0.052, 0.30, 10), DRG_BODY, 0, -0.16, 0),
+            dgPart(new THREE.SphereGeometry(0.068, 10, 8), DRG_BODY, 0, -0.345, 0.005, {s:[1, 1.15, 1]}),
+            dgPart(new THREE.SphereGeometry(0.028, 8, 6), DRG_BODY, -sign*0.055, -0.335, 0.032)
+        ]), paintMat);
+    }
+    const armL = new THREE.Group(); armL.position.set(-0.345, 0.44, 0.03);
+    armL.add(armMesh(-1)); armL.rotation.z = -0.14; armL.userData.baseZ = -0.14; body.add(armL);
+    const armR = new THREE.Group(); armR.position.set(0.345, 0.44, 0.03);
+    armR.add(armMesh(1)); armR.rotation.z = 0.14; armR.userData.baseZ = 0.14; body.add(armR);
+
+    /* 双腿：枢轴在髋部（与 body 同高、挂 lie 层），腿筒 + 踝关节球 + 圆头脚 + 三个奶油脚趾。
+       【连接修复】原腿筒下端（-0.33）与脚背（-0.412）之间有 0.082 的空气间隙——脚是悬空
+       吊在腿下的一块，迈步时看着像掉在地上。这次腿筒加长到 -0.45 扎进脚里，再加一颗踝
+       关节球（-0.435）把腿筒下端与脚后跟整圈包住：腿-踝-脚三段两两重叠成一体，
+       脚的位置/触地高度（底 -0.538）一丝不动，步态与防沉地结论不回退 */
+    function legMesh(){
+        return new THREE.Mesh(ModelKit.mergePainted([
+            dgPart(new THREE.CylinderGeometry(0.088, 0.10, 0.46, 10), DRG_BODY, 0, -0.22, 0),
+            dgPart(new THREE.SphereGeometry(0.102, 12, 9), DRG_BODY, 0, -0.435, 0.03, {s:[1, 0.85, 1.15]}),
+            dgPart(new THREE.SphereGeometry(0.115, 12, 9), DRG_BODY, 0, -0.475, 0.075, {s:[1, 0.55, 1.35]}),
+            dgPart(new THREE.SphereGeometry(0.032, 8, 6), DRG_BELLY, -0.055, -0.478, 0.20),
+            dgPart(new THREE.SphereGeometry(0.034, 8, 6), DRG_BELLY, 0, -0.472, 0.21),
+            dgPart(new THREE.SphereGeometry(0.032, 8, 6), DRG_BELLY, 0.055, -0.478, 0.20)
+        ]), paintMat);
+    }
+    const legL = new THREE.Group(); legL.position.set(-0.14, 0.55, 0); legL.add(legMesh()); lie.add(legL);
+    const legR = new THREE.Group(); legR.position.set(0.14, 0.55, 0); legR.add(legMesh()); lie.add(legR);
+
+    /* 背上小翅膀：叶形膜 + 奶油翅骨，一侧一件（构造沿用 build 1 的合批法，尺寸按人形收小） */
     function wingMesh(sign){
-        const mem = new THREE.SphereGeometry(0.5, 10, 7);
-        mem.scale(1.05, 0.10, 0.55); mem.translate(sign*0.30, 0, -0.10);
-        const spar = new THREE.CylinderGeometry(0.028, 0.045, 0.72, 6);
-        spar.rotateZ(sign*1.15); spar.rotateY(sign*0.35); spar.translate(sign*0.26, 0.03, 0.12);
+        const mem = new THREE.SphereGeometry(0.42, 12, 9);
+        mem.scale(1.05, 0.10, 0.55); mem.translate(sign*0.26, 0, -0.08);
+        const spar = new THREE.CylinderGeometry(0.024, 0.04, 0.62, 6);
+        spar.rotateZ(sign*1.15); spar.rotateY(sign*0.35); spar.translate(sign*0.22, 0.03, 0.10);
         return new THREE.Mesh(ModelKit.mergePainted([
             ModelKit.paint(mem, DRG_WING), ModelKit.paint(spar, DRG_BELLY)
         ]), paintMat);
     }
-    const wingL = new THREE.Group(); wingL.position.set(-0.30, 0.32, -0.08);
+    const wingL = new THREE.Group(); wingL.position.set(-0.15, 0.42, -0.20);
     wingL.add(wingMesh(-1)); wingL.rotation.z = -0.22; wingL.userData.base = -0.22; body.add(wingL);
-    const wingR = new THREE.Group(); wingR.position.set(0.30, 0.32, -0.08);
+    const wingR = new THREE.Group(); wingR.position.set(0.15, 0.42, -0.20);
     wingR.add(wingMesh(1)); wingR.rotation.z = 0.22; wingR.userData.base = 0.22; body.add(wingR);
 
-    /* 四条短腿：枢轴在髋/肩处，步态绕枢轴前后摆 */
-    function legMesh(){
-        return new THREE.Mesh(ModelKit.mergePainted([
-            dgPart(new THREE.CylinderGeometry(0.085, 0.105, 0.36, 7), DRG_BODY, 0, -0.18, 0),
-            dgPart(new THREE.SphereGeometry(0.115, 8, 6), DRG_BODY, 0, -0.37, 0.035, {s:[1, 0.55, 1.3]})
-        ]), paintMat);
-    }
-    function legAt(x, z){
-        const g = new THREE.Group(); g.position.set(x, -0.32, z); g.add(legMesh()); body.add(g); return g;
-    }
-    const legFL = legAt(-0.27, 0.33), legFR = legAt(0.27, 0.33);
-    const legBL = legAt(-0.29, -0.33), legBR = legAt(0.29, -0.33);
-
-    /* 三节尾：逐节变细，末节带珊瑚色竖扁尾尖（本龙的标志件） */
-    function tailSeg(r1, r2, len, tip){
-        const parts = [ dgPart(new THREE.CylinderGeometry(r2, r1, len, 8), DRG_BODY, 0, 0, -len/2, {rx:-Math.PI/2}) ];
-        if(tip) parts.push(dgPart(new THREE.ConeGeometry(0.13, 0.30, 6), DRG_CORAL, 0, 0.02, -len-0.10, {rx:-Math.PI/2, s:[0.4, 1, 1]}));
+    /* 三节渐细长尾：自尾根下垂拖在身后（droop 为各节基准俯角，存在 userData 里给
+       dragonAnimate 叠加摆动/睡姿压尾），每节背上一根小背刺，末节带珊瑚色竖扁尾尖 */
+    function tailSeg(rTip, rBase, len, spikeR, spikeH, jointR, rootMound){
+        const parts = [ dgPart(new THREE.CylinderGeometry(rTip, rBase, len, 10), DRG_BODY, 0, 0, -len/2, {rx:-Math.PI/2}) ];
+        if(spikeR) parts.push(dgPart(new THREE.ConeGeometry(spikeR, spikeH, 6), DRG_CORAL, 0, (rTip + rBase)*0.4, -len/2, {rx:0.3, s:[1, 1, 0.45]}));
+        /* 关节包覆球：长在本节末端、套着下一节的根部——两节相对摆动时接头始终被球包住，
+           不会像两片圆盘对顶那样在弯侧张开楔口 */
+        if(jointR) parts.push(dgPart(new THREE.SphereGeometry(jointR, 10, 8), DRG_BODY, 0, 0, -len));
+        /* 尾根丘：第一节根部的肉丘，跨在躯干后表面两侧，尾巴怎么摆根部都不脱开 */
+        if(rootMound) parts.push(dgPart(new THREE.SphereGeometry(0.125, 12, 9), DRG_BODY, 0, 0, 0.03, {s:[1.05, 0.95, 0.75]}));
         return new THREE.Mesh(ModelKit.mergePainted(parts), paintMat);
     }
-    const tail1 = new THREE.Group(); tail1.position.set(0, 0.04, -0.60); tail1.add(tailSeg(0.155, 0.115, 0.36, false)); body.add(tail1);
-    const tail2 = new THREE.Group(); tail2.position.set(0, 0, -0.36); tail2.add(tailSeg(0.115, 0.08, 0.32, false)); tail1.add(tail2);
-    const tail3 = new THREE.Group(); tail3.position.set(0, 0, -0.32); tail3.add(tailSeg(0.08, 0.05, 0.26, true)); tail2.add(tail3);
+    /* 尾根：原位（z=-0.21）底盘与躯干后表面只是相切——整组内嵌 0.055 扎进髋部，
+       再加尾根丘包覆，根部成一体（总尾长随之短 0.055，垂地余量复核见探针） */
+    const tail1 = new THREE.Group(); tail1.position.set(0, -0.04, -0.155);
+    tail1.add(tailSeg(0.082, 0.105, 0.32, 0.055, 0.13, 0.084, true)); tail1.userData.droop = -0.22; body.add(tail1);
+    const tail2 = new THREE.Group(); tail2.position.set(0, 0, -0.32);
+    tail2.add(tailSeg(0.06, 0.082, 0.28, 0.045, 0.11, 0.062, false)); tail2.userData.droop = -0.14; tail1.add(tail2);
+    const tail3 = new THREE.Group(); tail3.position.set(0, 0, -0.28);
+    tail3.add(new THREE.Mesh(ModelKit.mergePainted([
+        dgPart(new THREE.CylinderGeometry(0.038, 0.06, 0.24, 10), DRG_BODY, 0, 0, -0.12, {rx:-Math.PI/2}),
+        dgPart(new THREE.ConeGeometry(0.115, 0.30, 7), DRG_CORAL, 0, 0.02, -0.335, {rx:-Math.PI/2, s:[0.35, 1, 1]})
+    ]), paintMat));
+    tail3.userData.droop = -0.06; tail2.add(tail3);
 
     return { group: root, parts: {
-        body: body, bodyBaseY: 0.76, head: head, eyes: eyeMesh,
+        body: body, bodyBaseY: 0.55, lie: lie, head: head, eyes: eyeMesh, finL: finL, finR: finR,
+        armL: armL, armR: armR, legL: legL, legR: legR,
         wingL: wingL, wingR: wingR,
-        legFL: legFL, legFR: legFR, legBL: legBL, legBR: legBR,
         tail: [tail1, tail2, tail3]
     } };
 }
@@ -3673,20 +3756,45 @@ function dragonPickTarget(a){
 }
 
 /* ---------- 小龙的关节动画（全状态共用，靠 moveAmt / pose 两个量驱动） ---------- */
+/* 睡姿侧躺参数：整组绕髋部倒下侧支点滚 LIE_ANGLE，支点补偿让身体贴地不沉不浮
+   （数值由无头探针 Box3 实测校准：躺好后整组最低点距地 0~0.03） */
+const DRG_LIE_ANGLE = 1.45;
+const DRG_LIE_PIVOT = {x:-0.20, y:0.03};
+const DRG_LIE_SINK = 0.0;
+
 function dragonAnimate(a, dt, t){
     const P = a.parts;
     const poseT = (a.state === 'sleep') ? 1 : 0;
     a.pose += Math.max(-dt*1.6, Math.min(dt*1.6, poseT - a.pose));
-    const moving = a.moveAmt;
+    const pose = a.pose;
+    const moving = a.moveAmt * (1 - pose);        // 躺平后步态收住
     // 呼吸：醒着轻快，睡着更慢更深
-    const br = a.pose > 0.5 ? Math.sin(t*1.1)*0.035 : Math.sin(t*1.9)*0.018;
+    const br = pose > 0.5 ? Math.sin(t*1.1)*0.035 : Math.sin(t*1.9)*0.018;
     P.body.scale.set(1, 1 + br, 1);
-    // 睡姿：伏低 + 头垂下
-    P.body.position.y = P.bodyBaseY - a.pose*0.17 + Math.abs(Math.sin(a.walkPhase))*0.045*moving;
-    P.body.rotation.x = a.pose*0.10;
-    P.head.rotation.x = a.pose*0.42 + Math.sin(t*0.7)*0.03*(1 - a.pose);
+    // 双足步态：双腿交替前后摆 + 双臂与同侧腿反向摆 + 身体起伏/侧倾/微微前倾
+    a.walkPhase += dt * 4.8 * a.moveAmt;
+    const wp = a.walkPhase;
+    P.body.position.y = P.bodyBaseY + Math.abs(Math.sin(wp))*0.05*moving + Math.sin(t*0.9)*0.006*(1 - pose);
+    P.body.rotation.z = Math.sin(wp)*0.05*moving;
+    P.body.rotation.x = 0.07*moving;
+    const legSw = 0.62*moving, armSw = 0.50*moving;
+    P.legL.rotation.x = Math.sin(wp)*legSw - pose*0.65;          // 睡姿蜷腿
+    P.legR.rotation.x = Math.sin(wp + Math.PI)*legSw - pose*0.40;
+    P.legL.rotation.z = pose*0.12;                               // 睡姿双脚微微内扣，脚底外缘不压地
+    P.legR.rotation.z = -pose*0.12;
+    P.armL.rotation.x = Math.sin(wp + Math.PI)*armSw - pose*0.55; // 睡姿双臂收拢到胸前
+    P.armR.rotation.x = Math.sin(wp)*armSw - pose*0.55;
+    P.armL.rotation.z = P.armL.userData.baseZ + pose*0.8;   // 睡姿双手再向内收：倒下侧的手落在胸前地面上
+    P.armR.rotation.z = P.armR.userData.baseZ - pose*0.8;
+    P.armL.position.set(-0.345 + pose*0.055, 0.44, 0.03 + pose*0.10);  // 睡姿手臂枢轴内收+前移（胳膊收到胸前，
+    P.armR.position.set(0.345 - pose*0.055, 0.44, 0.03 + pose*0.10);   // 肩头不再是侧躺时唯一支地凸点）
+    // 头：睡着垂头并向倒下侧歪头枕地；醒着只留呼吸浮动（张望在下方单独处理）
+    P.head.rotation.x = pose*0.30 + Math.sin(t*0.7)*0.03*(1 - pose);
+    P.head.rotation.z = pose*0.18;
+    P.finL.rotation.z = -pose*0.9;   // 睡姿耳鳍向后折拢（压耳朵），鳍尖/鳍根都不扎地（角度经探针实测校准）
+    P.finR.rotation.z = pose*0.9;
     // 眨眼：随机间隔闭一下；睡着常闭
-    if(a.pose > 0.5){ P.eyes.scale.y = 0.08; }
+    if(pose > 0.5){ P.eyes.scale.y = 0.08; }
     else{
         a.blinkT -= dt;
         if(a.blinkT <= 0){ a.blinkT = 2.1 + Math.random()*2.6; a.blinkPh = 0; }
@@ -3697,24 +3805,34 @@ function dragonAnimate(a, dt, t){
             else P.eyes.scale.y = 1 - Math.sin(k*Math.PI)*0.9;
         }
     }
-    // 步态：对角步序 + 尾巴随步摆 + 小翅膀轻扇
-    a.walkPhase += dt * 4.6 * moving;
-    const sw = 0.55 * moving;
-    P.legFL.rotation.x = Math.sin(a.walkPhase) * sw;
-    P.legBR.rotation.x = Math.sin(a.walkPhase) * sw;
-    P.legFR.rotation.x = Math.sin(a.walkPhase + Math.PI) * sw;
-    P.legBL.rotation.x = Math.sin(a.walkPhase + Math.PI) * sw;
-    P.tail[0].rotation.y = Math.sin(t*1.4)*0.10 + Math.sin(a.walkPhase*0.5)*0.14*moving;
-    P.tail[1].rotation.y = Math.sin(t*1.4 - 0.7)*0.12 + Math.sin(a.walkPhase*0.5 - 0.6)*0.16*moving;
+    // 尾巴：各节基准下垂角 + 正弦滞后摆（同 build 1 的摆法）；睡着再压低贴地
+    P.tail[0].rotation.x = P.tail[0].userData.droop - pose*0.30;
+    P.tail[1].rotation.x = P.tail[1].userData.droop - pose*0.26;
+    P.tail[2].rotation.x = P.tail[2].userData.droop - pose*0.18;
+    P.tail[0].rotation.y = Math.sin(t*1.4)*0.10 + Math.sin(wp*0.5)*0.14*moving;
+    P.tail[1].rotation.y = Math.sin(t*1.4 - 0.7)*0.12 + Math.sin(wp*0.5 - 0.6)*0.16*moving;
     P.tail[2].rotation.y = Math.sin(t*1.4 - 1.4)*0.14;
-    const wf = Math.sin(a.walkPhase)*0.10*moving + Math.sin(t*2.2)*0.02;
-    P.wingL.rotation.z = P.wingL.userData.base + wf;
-    P.wingR.rotation.z = P.wingR.userData.base - wf;
+    // 翅膀：步态轻扇 + 待机微扇（同 build 1）；睡着向后折拢贴背
+    const wf = Math.sin(wp)*0.10*moving + Math.sin(t*2.2)*0.02;
+    P.wingL.rotation.z = P.wingL.userData.base + wf - pose*0.85;  // 睡姿：倒下侧翅膀上掀离开地面
+    P.wingR.rotation.z = P.wingR.userData.base - wf + pose*2.0;   // 睡姿：上侧翅膀越过脊背垂搭下来
+    P.wingL.rotation.y = -pose*0.85;
+    P.wingR.rotation.y = pose*0.85;
+    // 睡姿侧躺：lie 层整组滚倒，位置按支点反推——绕支点转而不是绕原点转，
+    // 倒下侧的脚/髋不会被甩到地面以下，躯干侧面正好落到地面上
+    const th = pose * DRG_LIE_ANGLE;
+    P.lie.rotation.z = th;
+    P.lie.rotation.x = pose * 0.10;
+    const cx = Math.cos(th), sx = Math.sin(th);
+    P.lie.position.set(
+        DRG_LIE_PIVOT.x - (DRG_LIE_PIVOT.x*cx - DRG_LIE_PIVOT.y*sx),
+        DRG_LIE_PIVOT.y - (DRG_LIE_PIVOT.x*sx + DRG_LIE_PIVOT.y*cx) - pose*DRG_LIE_SINK,
+        0);
     // 待机转头张望（玩家操控时由相机接管头部，见操控节）
     if(a.mode !== 'player'){
         a.lookYawT -= dt;
         if(a.lookYawT <= 0){ a.lookYawT = 1.6 + Math.random()*2.8; a.lookYaw = (Math.random() - 0.5)*1.1; }
-        P.head.rotation.y += (a.lookYaw*(1 - a.pose) - P.head.rotation.y) * Math.min(1, dt*3);
+        P.head.rotation.y += (a.lookYaw*(1 - pose) - P.head.rotation.y) * Math.min(1, dt*3);
     }
 }
 
