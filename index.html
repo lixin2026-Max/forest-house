@@ -97,6 +97,11 @@
     #fbMsg{margin-top:9px;font-size:12px;color:#9ee49e;min-height:17px;line-height:1.5}
     #fbMsg.err{color:#ffb4b4}
 
+    /* ===== 视角锁定（顶栏开关行，开启时整行点亮、一眼可辨） ===== */
+    #lockRow input{accent-color:#e2703a;width:16px;height:16px;cursor:pointer}
+    #lockRow.on label{color:#ffd97a;font-weight:600}
+    #lockRow.on b{color:#ffab6b}
+
     /* ===== 操作帮助（入口 / 弹窗 / 首次轻提示） ===== */
     #helpBtn{width:100%;margin-top:9px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);
         color:#dfe8df;padding:7px 4px;border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit;transition:.15s}
@@ -344,6 +349,7 @@
     <div class="row"><label>太阳高度角</label><input type="range" id="sunElev" min="3" max="80" value="45"><b id="sunElevV">45°</b></div>
     <div class="row"><label>雾气浓度</label><input type="range" id="fogAmt" min="0" max="100" value="0"><b id="fogAmtV">0%</b></div>
     <div class="row"><label>自动巡游</label><input type="checkbox" id="orbitChk"><b id="orbitV">关</b></div>
+    <div class="row" id="lockRow"><label>视角锁定</label><input type="checkbox" id="lockChk"><b id="lockV">关</b></div>
     <button type="button" id="helpBtn">❓ 操作帮助</button>
 </div>
 <div id="status">初始化中…</div>
@@ -742,17 +748,17 @@ function makeOrbitControls(cam, dom){
         target:new THREE.Vector3(0,4,0),
         theta:Math.PI*0.22, phi:Math.PI*0.30, radius:38,
         tTheta:null, tPhi:null, tRadius:null,
-        dragging:false, lastX:0, lastY:0
+        dragging:false, locked:false, lastX:0, lastY:0
     };
     function apply(){
-        if(st.tTheta!==null){
+        if(st.tTheta!==null && !st.locked){
             st.theta+=(st.tTheta-st.theta)*0.06; st.phi+=(st.tPhi-st.phi)*0.06;
             st.radius+=(st.tRadius-st.radius)*0.06;
             if(Math.abs(st.tTheta-st.theta)<0.002&&Math.abs(st.tRadius-st.radius)<0.02){
                 st.tTheta=st.tPhi=st.tRadius=null;
             }
         }
-        if(wx.orbit && !st.dragging) st.theta += 0.0016;
+        if(wx.orbit && !st.dragging && !st.locked) st.theta += 0.0016;
         const sp=Math.sin(st.phi), cp=Math.cos(st.phi);
         cam.position.set(
             st.target.x+st.radius*sp*Math.sin(st.theta),
@@ -785,9 +791,11 @@ function makeOrbitControls(cam, dom){
         if(pointers.size===1){
             let dx=e.clientX-prev.x, dy=e.clientY-prev.y;
             if(ROT){ const t=dx; dx=dy; dy=-t; }   // 画布被旋转 90°，拖动方向要跟着换
-            st.theta-=dx*0.005;
-            st.phi  -=dy*0.005;   // 上下拖动与镜头同向：往下拖镜头升高（俯视），往上拖镜头降低（仰望），不反直觉
-            st.phi=Math.max(0.1,Math.min(Math.PI/2-0.04,st.phi));
+            if(!st.locked){   // 视角锁定：单指拖动不转镜头（双指缩放仍可用）
+                st.theta-=dx*0.005;
+                st.phi  -=dy*0.005;   // 上下拖动与镜头同向：往下拖镜头升高（俯视），往上拖镜头降低（仰望），不反直觉
+                st.phi=Math.max(0.1,Math.min(Math.PI/2-0.04,st.phi));
+            }
         }else if(pointers.size===2){
             const d=fingerDist();
             if(pinchDist>0&&d>0){
@@ -818,7 +826,9 @@ function makeOrbitControls(cam, dom){
     },{passive:false});
     apply();
     return { update:apply, target:st.target,
-        flyTo(theta,phi,radius){ st.tTheta=theta; st.tPhi=phi; st.tRadius=radius; } };
+        flyTo(theta,phi,radius){ if(st.locked) return; st.tTheta=theta; st.tPhi=phi; st.tRadius=radius; },
+        setLocked(v){ st.locked=!!v; if(st.locked) st.tTheta=st.tPhi=st.tRadius=null; },
+        isLocked(){ return st.locked; } };
 }
 
 /* ==================== 天空穹顶（渐变 shader，随天气插值） ==================== */
@@ -2365,8 +2375,23 @@ function onKeyDown(e){
     if(e.key==='t'||e.key==='T')cycleWeather();
     if(e.key==='p'||e.key==='P'){
         wx.orbit=!wx.orbit;
+        if(wx.orbit&&viewLocked) setViewLock(false);   // 巡游与锁定互斥：开巡游先解锁
         document.getElementById('orbitChk').checked=wx.orbit;
         document.getElementById('orbitV').textContent=wx.orbit?'开':'关';
+    }
+}
+/* ---------- 视角锁定（Issue #7）：与自动巡游互斥，状态只从这一处进出 ---------- */
+let viewLocked=false;
+function setViewLock(v){
+    viewLocked=!!v;
+    if(controls&&controls.setLocked) controls.setLocked(viewLocked);
+    const c=document.getElementById('lockChk'); if(c) c.checked=viewLocked;
+    const b=document.getElementById('lockV'); if(b) b.textContent=viewLocked?'开':'关';
+    const r=document.getElementById('lockRow'); if(r) r.classList.toggle('on',viewLocked);
+    if(viewLocked&&wx.orbit){   // 开锁定即停巡游，两处 UI 一起归位
+        wx.orbit=false;
+        const oc=document.getElementById('orbitChk'); if(oc) oc.checked=false;
+        const ob=document.getElementById('orbitV'); if(ob) ob.textContent='关';
     }
 }
 function setupSliders(){
@@ -2381,7 +2406,11 @@ function setupSliders(){
     fa.addEventListener('input',()=>{wx.fogMul=fa.value/100;fv.textContent=fa.value+'%';});
     document.getElementById('orbitChk').addEventListener('change',e=>{
         wx.orbit=e.target.checked;
+        if(wx.orbit&&viewLocked) setViewLock(false);   // 巡游与锁定互斥：开巡游先解锁
         document.getElementById('orbitV').textContent=wx.orbit?'开':'关';
+    });
+    document.getElementById('lockChk').addEventListener('change',e=>{
+        setViewLock(e.target.checked);
     });
 }
 
