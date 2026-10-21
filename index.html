@@ -711,6 +711,33 @@
         -webkit-tap-highlight-color:transparent;backdrop-filter:blur(4px)}
     #echoHomeBtn.on{display:block}
     #echoHomeBtn:hover{background:var(--wake-hov)}
+    /* ===== 拍照模式（Issue #64）：进模式只给 #app 加一个类，界面元素自身状态一概不碰，
+       退出摘掉类即逐项原样恢复；隐藏清单覆盖顶/底/状态栏与全部浮钮、弹窗、气泡 ===== */
+    #app.photo-on #ui,#app.photo-on #status,#app.photo-on #dragonBar,#app.photo-on #dragonMenu,
+    #app.photo-on #joy,#app.photo-on #roomBar,#app.photo-on #modBtn,#app.photo-on #modPanel,
+    #app.photo-on #fbBtn,#app.photo-on #lanternBtn,#app.photo-on #wakeBtn,#app.photo-on #echoHomeBtn,
+    #app.photo-on #fbMask,#app.photo-on #ltMask,#app.photo-on #helpMask,#app.photo-on #voteMask,
+    #app.photo-on #logMask,#app.photo-on #dragonMask,#app.photo-on #echoMask,#app.photo-on #codexMask,
+    #app.photo-on #gbMask,#app.photo-on #chronMask,#app.photo-on #huntToast,#app.photo-on #helpTip,
+    #app.photo-on #wishBubble,#app.photo-on #sdBubble,#app.photo-on #codexToast{display:none !important}
+    #photoUI{display:none;position:absolute;inset:0;z-index:140;pointer-events:none}
+    #photoGrid{position:absolute;inset:0;pointer-events:none;
+        background:
+        linear-gradient(to right, transparent calc(33.333% - 1px), rgba(255,255,255,.5) 33.333%, transparent calc(33.333% + 1px)),
+        linear-gradient(to right, transparent calc(66.666% - 1px), rgba(255,255,255,.5) 66.666%, transparent calc(66.666% + 1px)),
+        linear-gradient(to bottom, transparent calc(33.333% - 1px), rgba(255,255,255,.5) 33.333%, transparent calc(33.333% + 1px)),
+        linear-gradient(to bottom, transparent calc(66.666% - 1px), rgba(255,255,255,.5) 66.666%, transparent calc(66.666% + 1px))}
+    #photoBar{position:absolute;left:50%;bottom:calc(16px + env(safe-area-inset-bottom, 0px));transform:translateX(-50%);
+        display:flex;gap:8px;align-items:center;pointer-events:auto}
+    #photoBar button{padding:9px 14px;border-radius:999px;background:var(--wake-bg);color:var(--wake-txt);
+        border:1px solid var(--ghost-line);font-size:13px;font-family:inherit;cursor:pointer;
+        -webkit-tap-highlight-color:transparent;backdrop-filter:blur(4px)}
+    #photoBar button:hover{background:var(--wake-hov)}
+    #photoShutter{width:56px;height:56px;border-radius:50% !important;font-size:24px;padding:0 !important;
+        display:flex;align-items:center;justify-content:center}
+    #photoFlash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+    #photoFlash.go{animation:photoFlashAnim .45s ease-out}
+    @keyframes photoFlashAnim{0%{opacity:.85}100%{opacity:0}}
     @media (max-width:600px),(pointer:coarse){
         #app.bars-off #status{transform:translateY(12px)}
         #wakeBtn{right:calc(6px + env(safe-area-inset-right, 0px))}
@@ -789,6 +816,7 @@
     <button type="button" id="helpBtn">❓ 操作帮助</button>
     <div class="uiBtns">
         <button type="button" id="snapBtn">📸 快照存图</button>
+        <button type="button" id="photoBtn">📷 拍照模式</button>
         <button type="button" id="voteBtn">🗳️ 投票选点子</button>
         <button type="button" id="codexBtn">📖 世界图鉴</button>
     </div>
@@ -825,6 +853,16 @@
     <button type="button" id="feedFishBtn" style="display:none">🐟 投食喂鱼</button>
 </div>
 <div id="fadeCover"></div>
+<div id="photoUI">
+    <div id="photoGrid"></div>
+    <div id="photoFlash"></div>
+    <div id="photoBar">
+        <button type="button" id="photoGridBtn">🔳 参考线·开</button>
+        <button type="button" id="photoToneBtn">🎨 色调</button>
+        <button type="button" id="photoShutter" title="拍照">📸</button>
+        <button type="button" id="photoExit">✕ 退出</button>
+    </div>
+</div>
 
 <!-- ===== 可插拔功能面板：每个功能一个独立开关，关掉即彻底停用 ===== -->
 <button id="modBtn" type="button" title="功能开关">⚙</button>
@@ -1001,6 +1039,7 @@
         <div class="hrow"><b>每日寻宝</b><span>每天藏 5 件小物（橡果、蘑菇、羽毛、松果、彩蛋），走近点中即收集，集齐有祝贺</span></div>
         <div class="hrow"><b>种田</b><span>点农田里空着的地块播种，再点一下浇水（雨天自动浇），等昼夜轮转一圈、或到了第二天成熟后，再点一下收获</span></div>
         <div class="hrow"><b>快照存图</b><span>顶栏「📸 快照存图」，把当前画面（连天气和昼夜）存成图片下载到本机</span></div>
+        <div class="hrow"><b>拍照模式</b><span>顶栏「📷 拍照模式」：藏起全部界面专心取景，三分法参考线可开关、色调可切换，点中间的快门存图（文件名带 photo），Esc 或「✕ 退出」回到世界</span></div>
         <div class="hrow"><b>投票选点子</b><span>顶栏「🗳️ 投票选点子」，给最想要的新点子投票，一台设备一票，票数定期公布</span></div>
         <div class="hrow"><b>世界图鉴</b><span>顶栏「📖 世界图鉴」：真正在世界里见过、种过、找到过的东西才会被记进图鉴，灰色条目旁有发现它的线索；集齐整本有纪念徽章</span></div>
         <div class="hrow"><b>放河灯</b><span>左下角「🏮 放河灯」，写一句愿望，让它在湖上漂一会儿</span></div>
@@ -8252,45 +8291,124 @@ function setupHelp(){
    A 方案：把当前画面存成本机 PNG。渲染器没开 preserveDrawingBuffer，
    所以必须在点击处理里先同步重绘一帧、紧接着抓画布，晚一步缓冲就被清了（黑图）。
    抓到的就是用户此刻看到的天气/昼夜画面；文件名带日期时间。 */
-function snapshotName(){
+function snapshotName(tag){
     // 文件名只用 ASCII＋日期时间：中文文件名在部分浏览器/本地打开时会丢弃 download 名、存成无名文件
+    // tag 为可选标记段（拍照模式传 'photo'），拼在日期时间前面
     const d=new Date();
-    return 'chumen-'+d.getFullYear()+pad2(d.getMonth()+1)+pad2(d.getDate())+'-'+
+    return 'chumen-'+(tag?tag+'-':'')+d.getFullYear()+pad2(d.getMonth()+1)+pad2(d.getDate())+'-'+
         pad2(d.getHours())+pad2(d.getMinutes())+pad2(d.getSeconds())+'.png';
 }
-function saveSnapshotBlob(blob){
+function saveSnapshotBlob(blob,name){
     if(!blob){ showHuntToast('📸 这次没抓成功，再试一次'); return; }
     const a=document.createElement('a');
     a.href=URL.createObjectURL(blob);
-    a.download=snapshotName();
+    a.download=name||snapshotName();
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     setTimeout(function(){ URL.revokeObjectURL(a.href); },4000);
     showHuntToast('📸 快照已存好，去下载文件夹看看');
 }
+function captureSnapshot(name){
+    if(!renderer||!scene||!camera) return;
+    try{
+        renderer.render(scene,camera);   // 同步重绘：保证抓帧时缓冲里是当前画面
+        const dom=renderer.domElement;
+        if(dom.toBlob) dom.toBlob(function(b){ saveSnapshotBlob(b,name); },'image/png');
+        else{
+            const a=document.createElement('a');
+            a.href=dom.toDataURL('image/png');
+            a.download=name||snapshotName();
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            showHuntToast('📸 快照已存好，去下载文件夹看看');
+        }
+    }catch(err){
+        showHuntToast('📸 这个浏览器不让抓图，换个浏览器试试');
+    }
+}
 function setupSnapshot(){
     const btn=document.getElementById('snapBtn');
     if(!btn) return;
-    btn.addEventListener('click',function(){
-        if(!renderer||!scene||!camera) return;
-        try{
-            renderer.render(scene,camera);   // 同步重绘：保证抓帧时缓冲里是当前画面
-            const dom=renderer.domElement;
-            if(dom.toBlob) dom.toBlob(saveSnapshotBlob,'image/png');
-            else{
-                const a=document.createElement('a');
-                a.href=dom.toDataURL('image/png');
-                a.download=snapshotName();
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                showHuntToast('📸 快照已存好，去下载文件夹看看');
-            }
-        }catch(err){
-            showHuntToast('📸 这个浏览器不让抓图，换个浏览器试试');
-        }
+    btn.addEventListener('click',function(){ captureSnapshot(snapshotName()); });
+}
+
+/* ==================== 拍照模式（Issue #64） ====================
+   在快照之上做正经取景：进入后给 #app 加 photo-on 类藏尽全部界面（顶/底/状态栏、
+   浮钮、弹窗、气泡，清单见 CSS），只剩画面＋三分法参考线＋底部极简控件。
+   界面元素自身的状态（class / inline display）一概不碰，退出摘类即逐项原样恢复；
+   #app 的 class 整串在进入时存下、退出时原样写回（挡住自动隐藏计时器在模式里
+   偷偷加 bars-off 造成的进出不一致）。镜头还是轨道相机本人，拖拽/滚轮照常；
+   会自己动镜头的三样进模式先存后停、退出按原状态恢复：自动巡游（wx.orbit＋
+   勾选框口径同 P 键）、昼夜自动轮转（setAutoRotate 唯一入口）、视角锁定
+   （setViewLock）。色调复用 applyTone 循环切 TONES，退出保留（本就是全局设置）。
+   快门复用 captureSnapshot，文件名带 photo 标记；闪白是 DOM 动画，不进成图
+   （成图只抓渲染器画布，本就不含任何 DOM——参考线同理）。不新增存储键。 */
+let photoOn=false, photoSaved=null, photoGridOn=true;
+function photoOrbitSync(){
+    const oc=document.getElementById('orbitChk'); if(oc) oc.checked=wx.orbit;
+    const ob=document.getElementById('orbitV'); if(ob) ob.textContent=wx.orbit?'开':'关';
+}
+function refreshPhotoToneBtn(){
+    const b=document.getElementById('photoToneBtn');
+    if(b && typeof TONES!=='undefined' && TONES[toneIndex]) b.textContent='🎨 '+TONES[toneIndex].n;
+}
+function enterPhotoMode(){
+    if(photoOn) return;
+    if(typeof DragonCtl!=='undefined' && DragonCtl.active){ showHuntToast('🐉 先放下小龙，再安心拍照'); return; }
+    const app=document.getElementById('app'); if(!app) return;
+    photoSaved={ appClass:app.className, orbit:!!wx.orbit,
+        autoRotate:(typeof autoRotate!=='undefined')?!!autoRotate:true,
+        locked:(typeof viewLocked!=='undefined')?!!viewLocked:false };
+    if(wx.orbit){ wx.orbit=false; photoOrbitSync(); }
+    if(photoSaved.autoRotate && typeof setAutoRotate==='function') setAutoRotate(false);
+    if(photoSaved.locked && typeof setViewLock==='function') setViewLock(false);
+    const mp=document.getElementById('modPanel'); if(mp) mp.classList.remove('on');
+    app.classList.add('photo-on');
+    const ui=document.getElementById('photoUI'); if(ui) ui.style.display='block';
+    const gd=document.getElementById('photoGrid'); if(gd) gd.style.display=photoGridOn?'':'none';
+    refreshPhotoToneBtn();
+    photoOn=true;
+}
+function exitPhotoMode(){
+    if(!photoOn) return;
+    photoOn=false;
+    const ui=document.getElementById('photoUI'); if(ui) ui.style.display='none';
+    const app=document.getElementById('app');
+    if(app && photoSaved) app.className=photoSaved.appClass;
+    if(photoSaved){
+        if(photoSaved.orbit){ wx.orbit=true; photoOrbitSync(); }
+        if(photoSaved.autoRotate && typeof setAutoRotate==='function') setAutoRotate(true);
+        if(photoSaved.locked && typeof setViewLock==='function') setViewLock(true);
+    }
+    photoSaved=null;
+}
+function setupPhotoMode(){
+    const btn=document.getElementById('photoBtn'); if(!btn) return;
+    btn.addEventListener('click', enterPhotoMode);
+    document.getElementById('photoExit').addEventListener('click', exitPhotoMode);
+    document.getElementById('photoGridBtn').addEventListener('click', function(){
+        photoGridOn=!photoGridOn;
+        const gd=document.getElementById('photoGrid'); if(gd) gd.style.display=photoGridOn?'':'none';
+        this.textContent=photoGridOn?'🔳 参考线·开':'🔳 参考线·关';
     });
+    document.getElementById('photoToneBtn').addEventListener('click', function(){
+        if(typeof TONES==='undefined'||!TONES.length) return;
+        applyTone((toneIndex+1)%TONES.length);
+        refreshPhotoToneBtn();
+    });
+    document.getElementById('photoShutter').addEventListener('click', function(){
+        captureSnapshot(snapshotName('photo'));
+        const fl=document.getElementById('photoFlash');
+        if(fl){ fl.classList.remove('go'); void fl.offsetWidth; fl.classList.add('go'); }
+    });
+    // 捕获阶段：Esc 只退出拍照模式，不顺手关掉底下的东西；模式里屏蔽世界快捷键 P/T
+    document.addEventListener('keydown', function(e){
+        if(!photoOn) return;
+        if(e.key==='Escape'){ exitPhotoMode(); e.stopPropagation(); e.preventDefault(); }
+        else if(e.key==='p'||e.key==='P'||e.key==='t'||e.key==='T'){ e.stopPropagation(); e.preventDefault(); }
+    }, true);
 }
 
 /* ==================== 访客投票（Issue #9） ====================
@@ -10357,6 +10475,7 @@ function init(){
     setupStandeeForm(); buildStandees(); bindStandeeTap();   // 立牌须赶在 createInterior 抓室外清单之前建好，进屋时自动隐藏
     setupHelp();
     setupSnapshot();
+    setupPhotoMode();
     setupVote();
     setupDragonControls();
     setupModules();
