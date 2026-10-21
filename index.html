@@ -6137,6 +6137,408 @@ function updateHunt(dt,t){
     }
 }
 
+/* ==================== 节日彩蛋（Issue #22） ====================
+   按真实日期触发的限定装扮：节日当天，世界换上应景的小装饰、小龙多一件
+   节日配饰、进世界时亮一句专属问候；节日过去自动消失，不留残留物件。
+   纯日期判定：不新增存储键、不落盘、唯一 fetch 不动。
+
+   日期口径（声明式表 FESTIVALS，自上而下先命中先算）：
+   - 阳历节日按月/日：国庆 10/1–10/3、圣诞 12/24–12/26、元旦 1/1；
+   - 农历节日查 FEST_LUNAR 表（2025–2030 阳历日期，正月初一/五月初五/
+     八月十五）＋清明查表——可维护的近似：表外年份走各条目里的兜底月日；
+   - 春节窗口为除夕到初二（农历初一前 1 天到后 2 天），元宵＝初一后第 14 天，
+     中秋窗口为十五前后各 1 天；
+   - 世界自己的纪念日：小龙诞生日 10 月 21 日（v4.0 上线日，2026-10-21）。
+   日期取自真实日历（new Date()，与寻宝 huntToday/种田同一口径）；
+   重查时机挂游戏时钟 GClock 的 onNewDay 出口——长开页面跨过零点也会换装。
+
+   验收后门：URL 参数 ?festival=<id>（id 见 FESTIVALS，如 ?festival=spring）
+   强制显示某个节日，?festival=none 强制平日；只影响本次打开的本地显示。
+
+   装配口径：每类装扮的零件全走 ModelKit.paint/mergePainted 合成 1 个 mesh，
+   节日当天 draw calls 增幅 ≤ +5（中秋），平日判定不命中就完全不生成（零增长）。
+   小龙配饰是本模块的独立小件，运行时挂到龙的既有分组（parts.body/parts.head）
+   上，不改龙的建模与动画代码，与 #41 的配饰系统互不相干、合并时互不影响。 */
+const FEST_LUNAR={
+    cny:      {2025:129,  2026:217,  2027:206,  2028:126,  2029:213,  2030:203},
+    duanwu:   {2025:531,  2026:619,  2027:609,  2028:528,  2029:616,  2030:605},
+    midautumn:{2025:1006, 2026:925,  2027:915,  2028:1003, 2029:922,  2030:912},
+    qingming: {2025:404,  2026:405,  2027:405,  2028:404,  2029:404,  2030:405}
+};
+function festLunarDate(year, kind, fallbackMd){
+    const md=(FEST_LUNAR[kind]&&FEST_LUNAR[kind][year])||fallbackMd;
+    return new Date(year, Math.floor(md/100)-1, md%100);
+}
+function festDiffDays(a, b){
+    const da=new Date(a.getFullYear(),a.getMonth(),a.getDate());
+    const db=new Date(b.getFullYear(),b.getMonth(),b.getDate());
+    return Math.round((da-db)/86400000);
+}
+const FESTIVALS=[
+    { id:'spring', name:'春节', line:'🧧 春节快乐！小屋挂起了红灯笼，小龙系上了红围巾。',
+      when(n){ const d=festDiffDays(n, festLunarDate(n.getFullYear(),'cny',210)); return d>=-1&&d<=2; } },
+    { id:'lantern', name:'元宵节', line:'🏮 元宵快乐！屋檐下串起了花灯，今晚的灯会开场啦。',
+      when(n){ return festDiffDays(n, festLunarDate(n.getFullYear(),'cny',210))===14; } },
+    { id:'qingming', name:'清明', line:'🌼 清明时节，门口多了一束小白花，静静地纪念。',
+      when(n){ return festDiffDays(n, festLunarDate(n.getFullYear(),'qingming',404))===0; } },
+    { id:'duanwu', name:'端午节', line:'🐲 端午安康！门口挂上了艾草，台阶上摆着刚包好的粽子。',
+      when(n){ return festDiffDays(n, festLunarDate(n.getFullYear(),'duanwu',605))===0; } },
+    { id:'midautumn', name:'中秋节', line:'🌕 中秋快乐！湖里漂满了河灯，岸边的桂花树也开好了。',
+      when(n){ const d=festDiffDays(n, festLunarDate(n.getFullYear(),'midautumn',924)); return d>=-1&&d<=1; } },
+    { id:'national', name:'国庆节', line:'🎉 国庆快乐！屋前的花带换上了红黄新装。',
+      when(n){ return n.getMonth()===9&&n.getDate()>=1&&n.getDate()<=3; } },
+    { id:'christmas', name:'圣诞节', line:'🎄 圣诞快乐！屋顶落了雪，门口立起了圣诞树。',
+      when(n){ return n.getMonth()===11&&n.getDate()>=24&&n.getDate()<=26; } },
+    { id:'newyear', name:'元旦', line:'🎆 新年快乐！新的一年，这个世界也会继续长大。',
+      when(n){ return n.getMonth()===0&&n.getDate()===1; } },
+    { id:'dragon', name:'小龙诞生日', line:'🎂 今天是小龙的诞生日！2026 年的今天，它第一次睁开眼睛看这个世界。',
+      when(n){ return n.getMonth()===9&&n.getDate()===21; } }
+];
+function currentFestival(){
+    try{
+        const q=new URLSearchParams(location.search).get('festival');
+        if(q==='none') return null;
+        if(q){ const f=FESTIVALS.find(f=>f.id===q); if(f) return f; }
+    }catch(e){ /* 后门解析失败就按真实日期走 */ }
+    const now=new Date();
+    for(const f of FESTIVALS) if(f.when(now)) return f;
+    return null;
+}
+
+/* ---------- 节日零件小帮手（与 dgPart 同口径，本模块自带一份不依赖龙节） ---------- */
+function festPart(geo, hex, x, y, z, o){
+    o=o||{};
+    if(o.s) geo.scale(o.s[0],o.s[1],o.s[2]);
+    if(o.rx) geo.rotateX(o.rx);
+    if(o.ry) geo.rotateY(o.ry);
+    if(o.rz) geo.rotateZ(o.rz);
+    geo.translate(x,y,z);
+    return ModelKit.paint(geo, hex);
+}
+function festMesh(parts){
+    const m=new THREE.Mesh(ModelKit.mergePainted(parts),
+        new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.9}));
+    m.castShadow=false; m.receiveShadow=false;
+    return m;
+}
+/* 一盏圆红灯笼的零件（中心在 x,y,z，s 为尺寸系数） */
+function festLanternParts(x, y, z, s){
+    const r=0.17*s;
+    return [
+        festPart(new THREE.SphereGeometry(r,10,8), 0xd63a2f, x, y, z, {s:[1,0.82,1]}),
+        festPart(new THREE.CylinderGeometry(r*0.45,r*0.45,0.05*s,8), 0xf2c230, x, y+r*0.88, z),
+        festPart(new THREE.CylinderGeometry(r*0.45,r*0.45,0.05*s,8), 0xf2c230, x, y-r*0.88, z),
+        festPart(new THREE.ConeGeometry(0.05*s,0.15*s,6), 0xb02a20, x, y-r*0.88-0.09*s, z, {rx:Math.PI})
+    ];
+}
+function festStringPart(x, yTop, yBot, z){
+    const len=Math.max(0.02, yTop-yBot);
+    return festPart(new THREE.CylinderGeometry(0.012,0.012,len,4), 0x6e4a26, x, (yTop+yBot)/2, z);
+}
+
+/* ---------- 节点登记：换季/跨天时整批摘下，不留残留 ---------- */
+let festivalNodes=[];        // {parent, node}
+let festivalActiveId=null, festivalStamp='';
+function festSceneNode(node){ scene.add(node); festivalNodes.push({parent:scene, node}); return node; }
+function festHouseNode(node){
+    const house=window.__house; if(!house) return null;
+    house.add(node); festivalNodes.push({parent:house, node}); return node;
+}
+function festDoorNode(node){
+    const house=window.__house; if(!house) return;
+    const door=house.getObjectByName('houseDoor'); if(!door) return;
+    door.add(node); festivalNodes.push({parent:door, node});
+}
+function festWearNode(partName, node){
+    if(!dragonAgent||!dragonAgent.parts||!dragonAgent.parts[partName]) return;
+    dragonAgent.parts[partName].add(node);
+    festivalNodes.push({parent:dragonAgent.parts[partName], node});
+}
+function clearFestival(){
+    for(const it of festivalNodes) if(it.node.parent) it.node.parent.remove(it.node);
+    festivalNodes=[];
+    festivalActiveId=null;
+}
+
+/* ---------- 各节日装扮 ---------- */
+function festBuildSpring(){
+    // 屋檐下四盏红灯笼（小屋本地系，挂在正墙檐口 z≈3.0 一线）
+    const parts=[];
+    [-2.7,-0.9,0.9,2.7].forEach(x=>{
+        parts.push(festStringPart(x, 3.95, 3.70, 3.02));
+        parts.push.apply(parts, festLanternParts(x, 3.52, 3.02, 1));
+    });
+    festHouseNode(festMesh(parts));
+    // 门上福字牌：挂在门板本身上，开门跟着门走
+    const c=makeCanvas(128,128), g=c.getContext('2d');
+    g.fillStyle='#c22f24'; g.fillRect(0,0,128,128);
+    g.strokeStyle='#f2c230'; g.lineWidth=6; g.strokeRect(8,8,112,112);
+    g.fillStyle='#ffd94d'; g.font='bold 84px "Microsoft YaHei",sans-serif';
+    g.textAlign='center'; g.textBaseline='middle';
+    g.fillText('福',64,70);
+    const tex=new THREE.CanvasTexture(c);
+    if(THREE.sRGBEncoding!==undefined) tex.encoding=THREE.sRGBEncoding;
+    const plaque=new THREE.Mesh(new THREE.PlaneGeometry(0.66,0.66),
+        new THREE.MeshStandardMaterial({map:tex, roughness:0.85}));
+    plaque.position.set(0,0.08,0.095);
+    festDoorNode(plaque);
+    // 小龙红围巾：围脖一圈 + 胸前一截飘带（挂 body 组，随呼吸一起动）
+    festWearNode('body', festMesh([
+        festPart(new THREE.TorusGeometry(0.20,0.055,8,18), 0xd63a2f, 0, 0.60, 0.03, {rx:Math.PI/2+0.12}),
+        festPart(new THREE.BoxGeometry(0.16,0.24,0.045), 0xd63a2f, 0.10, 0.42, 0.235, {rz:0.15}),
+        festPart(new THREE.BoxGeometry(0.16,0.035,0.05), 0xf2c230, 0.115, 0.315, 0.242, {rz:0.15})
+    ]));
+}
+function festBuildLantern(){
+    // 屋檐前一串花灯：两端高、中间垂成弧线
+    const parts=[];
+    for(let i=0;i<7;i++){
+        const t=i/6, x=-3.4+t*6.8;
+        const lineY=3.78-Math.sin(t*Math.PI)*0.5;
+        parts.push(festStringPart(x, lineY, lineY-0.16, 3.02));
+        parts.push.apply(parts, festLanternParts(x, lineY-0.36, 3.02, 0.82));
+    }
+    festHouseNode(festMesh(parts));
+    // 小龙胸前一盏小灯笼坠
+    const wear=[festStringPart(0, 0.44, 0.40, 0.26)];
+    wear.push.apply(wear, festLanternParts(0, 0.30, 0.27, 0.45));
+    festWearNode('body', festMesh(wear));
+}
+function festBuildQingming(){
+    // 门口台阶旁一束小白花（黄蕊）
+    const parts=[];
+    const bx=1.05, bz=3.18;
+    for(let i=0;i<5;i++){
+        const a=i/5*Math.PI*2, tilt=0.35;
+        const tx=bx+Math.cos(a)*0.10, tz=bz+Math.sin(a)*0.10;
+        parts.push(festPart(new THREE.CylinderGeometry(0.014,0.02,0.42,5), PALETTE.stem,
+            bx+Math.cos(a)*0.05, 0.21, bz+Math.sin(a)*0.05, {rx:Math.sin(a)*tilt, rz:-Math.cos(a)*tilt}));
+        parts.push(festPart(new THREE.IcosahedronGeometry(0.062,0), 0xf5f2e8, tx, 0.44, tz));
+        parts.push(festPart(new THREE.IcosahedronGeometry(0.028,0), 0xf2c230, tx, 0.47, tz));
+    }
+    festHouseNode(festMesh(parts));
+    festWearNode('head', festFlowerHeadParts(0xf5f2e8, 0xf2c230));
+}
+/* 头侧一朵小花（花瓣 5 瓣 + 花蕊），挂 head 组右侧 */
+function festFlowerHeadParts(petalHex, centerHex){
+    const parts=[festPart(new THREE.SphereGeometry(0.040,8,6), centerHex, 0.288, 0.14, 0.06)];
+    for(let k=0;k<5;k++){
+        const a=k/5*Math.PI*2;
+        parts.push(festPart(new THREE.SphereGeometry(0.046,8,6), petalHex,
+            0.278, 0.14+Math.cos(a)*0.058, 0.06+Math.sin(a)*0.058, {s:[0.55,1,1]}));
+    }
+    const m=festMesh(parts);
+    return m;
+}
+function festBuildDuanwu(){
+    const parts=[];
+    // 门框旁一束艾草：绿叶锥束朝下，红绳扎口
+    for(let i=0;i<5;i++){
+        const a=(i-2)*0.16;
+        parts.push(festPart(new THREE.ConeGeometry(0.05,0.52,6), i%2?0x4f7a2e:0x5c8a38,
+            0.98+a*0.4, 1.92, 2.70, {rx:Math.PI+a}));
+    }
+    parts.push(festPart(new THREE.BoxGeometry(0.16,0.07,0.10), 0xd63a2f, 0.98, 2.20, 2.70));
+    // 台阶上一盘粽子（四棱锥，青箬叶色）
+    parts.push(festPart(new THREE.CylinderGeometry(0.30,0.24,0.05,12), 0xf3e6cf, -0.95, 0.16, 3.08));
+    [[-1.08,3.02,0.4],[-0.84,3.06,-0.5],[-0.96,3.14,1.2]].forEach(p=>{
+        parts.push(festPart(new THREE.ConeGeometry(0.115,0.17,4), 0x3f7a3a, p[0], 0.26, p[1], {ry:p[2]}));
+    });
+    festHouseNode(festMesh(parts));
+    // 小龙胸前粽子坠
+    festWearNode('body', festMesh([
+        festStringPart(0, 0.44, 0.36, 0.255),
+        festPart(new THREE.ConeGeometry(0.075,0.13,4), 0x3f7a3a, 0, 0.28, 0.27, {rx:0.35, ry:0.6}),
+        festPart(new THREE.TorusGeometry(0.052,0.012,6,12), 0xf3e6cf, 0, 0.285, 0.283, {rx:0.35})
+    ]));
+}
+function festBuildMidautumn(){
+    // 满湖河灯：莲座 + 暖芯两批合批（芯用自发光材质，夜里自己亮）
+    const rnd=mulberry32(20260915);
+    const bases=[], cores=[];
+    for(let i=0;i<14;i++){
+        const a=rnd()*Math.PI*2, k=0.22+rnd()*0.62;
+        const x=LAKE_C.x+Math.cos(a)*LAKE_RX*k, z=LAKE_C.z+Math.sin(a)*LAKE_RZ*k, y=0.13;
+        bases.push(festPart(new THREE.BoxGeometry(0.36,0.05,0.36), 0xf7e3bb, x, y, z, {ry:a}));
+        bases.push(festPart(new THREE.BoxGeometry(0.40,0.03,0.40), 0xe8b04a, x, y+0.04, z, {ry:a}));
+        cores.push(new THREE.BoxGeometry(0.16,0.12,0.16).translate(x, y+0.09, z));
+    }
+    festSceneNode(festMesh(bases));
+    const coreMesh=new THREE.Mesh(ModelKit.merge(cores),
+        new THREE.MeshBasicMaterial({color:0xffc26e}));
+    festSceneNode(coreMesh);
+    // 湖面月亮倒影：一片柔光圆斑
+    const c=makeCanvas(128,128), g=c.getContext('2d');
+    const gr=g.createRadialGradient(64,64,4,64,64,62);
+    gr.addColorStop(0,'rgba(255,246,214,0.95)');
+    gr.addColorStop(0.4,'rgba(240,230,190,0.45)');
+    gr.addColorStop(1,'rgba(240,230,190,0)');
+    g.fillStyle=gr; g.fillRect(0,0,128,128);
+    const moon=new THREE.Mesh(new THREE.CircleGeometry(2.7,28),
+        new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c), transparent:true,
+            depthWrite:false, opacity:0.6}));
+    moon.rotation.x=-Math.PI/2;
+    moon.position.set(LAKE_C.x-1.2, 0.10, LAKE_C.z+0.6);
+    moon.renderOrder=2;
+    festSceneNode(moon);
+    // 湖西岸一棵桂花树：绿冠托金花
+    const tx=12.2, tz=-4.6, ty=terrainH(tx,tz);
+    festSceneNode(festMesh([
+        festPart(new THREE.CylinderGeometry(0.09,0.14,1.15,7), 0x6e4a26, tx, ty+0.55, tz),
+        festPart(new THREE.SphereGeometry(0.78,10,8), 0x4f7a2e, tx, ty+1.45, tz),
+        festPart(new THREE.SphereGeometry(0.55,9,7), 0xe8a81a, tx-0.25, ty+1.62, tz+0.18),
+        festPart(new THREE.SphereGeometry(0.48,9,7), 0xe8a81a, tx+0.32, ty+1.55, tz-0.15),
+        festPart(new THREE.SphereGeometry(0.40,9,7), 0xf2c230, tx+0.02, ty+1.85, tz+0.05)
+    ]));
+    // 小龙桂花冠
+    const crown=[festPart(new THREE.TorusGeometry(0.165,0.028,8,18), 0xe8a81a, 0, 0.27, -0.12, {rx:Math.PI/2})];
+    for(let k=0;k<6;k++){
+        const a=k/6*Math.PI*2;
+        crown.push(festPart(new THREE.SphereGeometry(0.032,7,6), 0xf2c230,
+            Math.cos(a)*0.165, 0.295, -0.12+Math.sin(a)*0.165));
+    }
+    festWearNode('head', festMesh(crown));
+}
+function festBuildNational(){
+    // 屋前花带覆一层红黄：沿 #14 花带同样的两排位置再撒一层应景花
+    const rnd=mulberry32(20261001);
+    const parts=[];
+    const rows=[3.62, 4.28];
+    rows.forEach(lz=>{
+        for(let lx=-4.7; lx<=4.7; lx+=0.52){
+            const w=houseLocal(lx+(rnd()-0.5)*0.16, lz+(rnd()-0.5)*0.14);
+            const y=terrainH(w[0],w[1]);
+            parts.push(festPart(new THREE.CylinderGeometry(0.022,0.035,0.5,5), PALETTE.stem, w[0], y+0.25, w[1]));
+            parts.push(festPart(new THREE.IcosahedronGeometry(0.105,0),
+                (Math.round(lx*2)%2===0)?0xd63a2f:0xf2c230, w[0], y+0.52, w[1]));
+        }
+    });
+    festSceneNode(festMesh(parts));
+    // 门口两侧两面小红旗
+    const flags=[];
+    [-1.65,1.65].forEach(lx=>{
+        flags.push(festPart(new THREE.CylinderGeometry(0.025,0.03,1.7,6), 0x8a6a3a, lx, 0.85, 2.95));
+        flags.push(festPart(new THREE.BoxGeometry(0.52,0.34,0.03), 0xd63a2f, lx+(lx<0?-0.27:0.27), 1.52, 2.95));
+    });
+    festHouseNode(festMesh(flags));
+    festWearNode('head', festFlowerHeadParts(0xd63a2f, 0xf2c230));
+}
+function festBuildChristmas(){
+    // 屋顶积雪：两坡雪面 + 屋脊 + 烟囱帽（小屋本地系，坡度角与屋顶一致 0.678）
+    const slope=0.678;
+    festHouseNode(festMesh([
+        festPart(new THREE.BoxGeometry(7.9,0.12,3.55), 0xf4f8fb, 0, 5.30, 1.59, {rx:slope}),
+        festPart(new THREE.BoxGeometry(7.9,0.12,3.55), 0xf4f8fb, 0, 5.30, -1.59, {rx:-slope}),
+        festPart(new THREE.BoxGeometry(7.9,0.14,0.55), 0xf4f8fb, 0, 6.56, 0),
+        festPart(new THREE.BoxGeometry(1.24,0.10,1.24), 0xf4f8fb, 2, 7.42, -1.4)
+    ]));
+    // 门前一棵小圣诞树：三层松冠 + 彩球 + 树顶金星
+    const w=houseLocal(-5.6, 4.8), ty=terrainH(w[0],w[1]);
+    const parts=[
+        festPart(new THREE.CylinderGeometry(0.09,0.13,0.5,7), 0x6e4a26, w[0], ty+0.25, w[1]),
+        festPart(new THREE.ConeGeometry(1.00,1.15,10), 0x2e6b34, w[0], ty+1.05, w[1]),
+        festPart(new THREE.ConeGeometry(0.76,1.00,10), 0x2e6b34, w[0], ty+1.75, w[1]),
+        festPart(new THREE.ConeGeometry(0.50,0.85,10), 0x35793c, w[0], ty+2.40, w[1]),
+        festPart(new THREE.ConeGeometry(0.13,0.30,4), 0xf2c230, w[0], ty+3.05, w[1])
+    ];
+    const ornCols=[0xd63a2f,0xf2c230,0x66a8e8,0xe86a8a];
+    const rnd=mulberry32(20261225);
+    for(let i=0;i<14;i++){
+        const lvl=i%3, rr=[0.82,0.60,0.36][lvl], yy=[1.00,1.72,2.38][lvl];
+        const a=rnd()*Math.PI*2;
+        parts.push(festPart(new THREE.SphereGeometry(0.055,7,6), ornCols[i%4],
+            w[0]+Math.cos(a)*rr, ty+yy+(rnd()-0.5)*0.15, w[1]+Math.sin(a)*rr));
+    }
+    festSceneNode(festMesh(parts));
+    // 门上圣诞花环：挂门板上，跟着门走
+    const wreath=[festPart(new THREE.TorusGeometry(0.26,0.07,8,18), 0x2e6b34, 0, 0.15, 0.10)];
+    for(let k=0;k<6;k++){
+        const a=k/6*Math.PI*2+0.3;
+        wreath.push(festPart(new THREE.SphereGeometry(0.038,7,6), 0xd63a2f,
+            Math.cos(a)*0.26, 0.15+Math.sin(a)*0.26, 0.16));
+    }
+    wreath.push(festPart(new THREE.BoxGeometry(0.10,0.08,0.04), 0xf2c230, 0, -0.14, 0.13));
+    festDoorNode(festMesh(wreath));
+    // 小龙圣诞帽
+    festWearNode('head', festMesh([
+        festPart(new THREE.TorusGeometry(0.165,0.05,8,18), 0xf5f2e8, 0, 0.295, -0.13, {rx:Math.PI/2}),
+        festPart(new THREE.ConeGeometry(0.17,0.36,10), 0xd63a2f, 0.03, 0.46, -0.15, {rz:0.28, rx:-0.15}),
+        festPart(new THREE.SphereGeometry(0.06,8,6), 0xf5f2e8, 0.125, 0.615, -0.20)
+    ]));
+}
+function festBuildNewyear(){
+    // 屋檐前一串金饰：金球与金星交替垂挂
+    const parts=[];
+    for(let i=0;i<9;i++){
+        const t=i/8, x=-3.4+t*6.8;
+        const lineY=3.78-Math.sin(t*Math.PI)*0.45;
+        parts.push(festStringPart(x, lineY, lineY-0.13, 3.02));
+        if(i%2===0) parts.push(festPart(new THREE.SphereGeometry(0.065,8,6), 0xf2c230, x, lineY-0.22, 3.02));
+        else parts.push(festPart(new THREE.ConeGeometry(0.075,0.16,4), 0xffd94d, x, lineY-0.22, 3.02, {rx:Math.PI}));
+    }
+    festHouseNode(festMesh(parts));
+    // 小龙金色派对帽
+    festWearNode('head', festMesh([
+        festPart(new THREE.ConeGeometry(0.145,0.32,10), 0xf2c230, 0, 0.45, -0.13, {rx:-0.12}),
+        festPart(new THREE.SphereGeometry(0.052,8,6), 0xe86a8a, 0, 0.625, -0.15)
+    ]));
+}
+function festBuildDragonDay(){
+    // 门前草地上一只礼物盒，系着三只气球
+    const w=houseLocal(4.6, 3.6), ty=terrainH(w[0],w[1]);
+    const parts=[
+        festPart(new THREE.BoxGeometry(0.36,0.28,0.36), 0xef8f4d, w[0], ty+0.14, w[1]),
+        festPart(new THREE.BoxGeometry(0.38,0.07,0.10), 0xfff3d4, w[0], ty+0.29, w[1]),
+        festPart(new THREE.BoxGeometry(0.10,0.07,0.38), 0xfff3d4, w[0], ty+0.29, w[1])
+    ];
+    const cols=[0xe86a8a, 0x66a8e8, 0xf2c230];
+    [[-0.28,2.45,0.05],[0.05,2.72,-0.12],[0.33,2.40,0.10]].forEach((b,i)=>{
+        const bx=w[0]+b[0], bz=w[1]+b[2], by=ty+b[1];
+        parts.push(festPart(new THREE.CylinderGeometry(0.008,0.008,by-(ty+0.30),4), 0x8a6a3a,
+            (bx+w[0])/2, (by+ty+0.30)/2, (bz+w[1])/2));
+        parts.push(festPart(new THREE.SphereGeometry(0.26,10,8), cols[i], bx, by, bz, {s:[1,1.15,1]}));
+        parts.push(festPart(new THREE.ConeGeometry(0.05,0.09,6), cols[i], bx, by-0.33, bz, {rx:Math.PI}));
+    });
+    festSceneNode(festMesh(parts));
+    // 小龙生日帽：珊瑚橙锥帽 + 奶油帽檐 + 粉绒球
+    festWearNode('head', festMesh([
+        festPart(new THREE.TorusGeometry(0.155,0.035,8,18), 0xfff3d4, 0, 0.30, -0.13, {rx:Math.PI/2}),
+        festPart(new THREE.ConeGeometry(0.15,0.34,10), 0xef8f4d, 0, 0.47, -0.13, {rx:-0.10}),
+        festPart(new THREE.SphereGeometry(0.055,8,6), 0xe86a8a, 0, 0.655, -0.145)
+    ]));
+}
+const FEST_BUILD={
+    spring: festBuildSpring, lantern: festBuildLantern, qingming: festBuildQingming,
+    duanwu: festBuildDuanwu, midautumn: festBuildMidautumn, national: festBuildNational,
+    christmas: festBuildChristmas, newyear: festBuildNewyear, dragon: festBuildDragonDay
+};
+
+/* ---------- 节日装配入口：init 末尾调用一次，之后挂 GClock 的新一天出口重查 ---------- */
+let festivalHooked=false;
+function festDayStamp(){
+    const d=new Date();
+    return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());
+}
+function createFestival(){
+    const f=currentFestival();
+    const id=f?f.id:null, stamp=festDayStamp();
+    if(id===festivalActiveId&&stamp===festivalStamp) return;
+    clearFestival();
+    festivalActiveId=id; festivalStamp=stamp;
+    if(!f) return;
+    const build=FEST_BUILD[f.id];
+    if(build) build();
+    // 专属问候：稍等开页弹窗退场再亮，不叠层（与建议回音专属信同一口径）
+    setTimeout(()=>{ if(festivalActiveId===id) showHuntToast(f.line); }, 4000);
+}
+function setupFestival(){
+    createFestival();
+    if(!festivalHooked){
+        festivalHooked=true;
+        GClock.onNewDay(()=>{ createFestival(); });
+    }
+}
+
 /* ---------- 放河灯：湖面许愿 ----------
    纯本地：灯从湖岸漂向湖心（椭圆湖面，Issue #3 扩容后按湖半径折算），愿望以浮字气泡跟着灯走一会儿，随后灯淡出。 */
 const POND_C={x:23,z:-9.5};   // 与 LAKE_C 同心（河灯按湖椭圆折算漂流范围）
@@ -6524,6 +6926,7 @@ function init(){
     setupDragonControls();
     setupModules();
     createInterior();
+    setupFestival();
     window.addEventListener('resize',onResize);
     window.addEventListener('keydown',onKeyDown);
 
