@@ -1587,50 +1587,63 @@ function canvasTex(c, rx, ry){
 }
 // sRGB 十六进制 → 线性空间颜色（r128 无颜色管理，材质色需手动转换）
 function C(hex){ return new THREE.Color(hex).convertSRGBToLinear(); }
-// 草地噪波贴图
+// 草地贴图（#73 重写）：1024 程序草地——底色大块晕染打底，中层草叶笔触
+// （短竖线成簇、深浅交错）给近景草叶感，细碎亮点模拟碎光；大尺度的浓淡
+// 起伏另由地面材质的世界噪声层负责（见 GrassSys.patchGround），贴图本身
+// 只管到「一丛草」的尺度，平铺不露馅
 function grassTexture(){
-    const c=makeCanvas(512,512), g=c.getContext('2d');
-    g.fillStyle='#4a6b3a'; g.fillRect(0,0,512,512);
-    for(let i=0;i<15000;i++){
-        const x=Math.random()*512, y=Math.random()*512;
-        const l=Math.random();
-        g.fillStyle = l<0.35?'#3f5c31':l<0.62?'#567a42':l<0.85?'#678f4e':'#77a157';
-        g.fillRect(x,y,2+(Math.random()*3|0),1);
+    const S=1024, c=makeCanvas(S,S), g=c.getContext('2d');
+    g.fillStyle='#4c7038'; g.fillRect(0,0,S,S);
+    // 底噪：细小色块铺满，破除平涂
+    for(let i=0;i<26000;i++){
+        const x=Math.random()*S, y=Math.random()*S, l=Math.random();
+        g.fillStyle = l<0.35?'#40602f':l<0.62?'#597e40':l<0.85?'#6a914c':'#7ca558';
+        g.fillRect(x,y,2+(Math.random()*3|0),1+(Math.random()*2|0));
     }
-    // 细碎亮斑：像碎光落在草叶上，拉开平涂感
-    g.fillStyle='rgba(190,220,140,0.11)';
-    for(let i=0;i<2600;i++){
-        g.fillRect(Math.random()*512,Math.random()*512,1.6,1.6);
-    }
-    // 大幅柔和晕染（#36）：低对比、大半径、边缘羽化，破除贴图平铺的「波点感」，
-    // 远看是草色浓淡而不是一颗颗圆斑
-    for(let i=0;i<26;i++){
-        const hx=Math.random()*512, hy=Math.random()*512, hr=50+Math.random()*95;
+    // 大幅柔和晕染（#36 口径保留）：低对比、大半径、边缘羽化
+    for(let i=0;i<30;i++){
+        const hx=Math.random()*S, hy=Math.random()*S, hr=90+Math.random()*190;
         const dark=Math.random()<0.55;
         const hg=g.createRadialGradient(hx,hy,hr*0.15,hx,hy,hr);
-        hg.addColorStop(0, dark?'rgba(46,70,36,0.13)':'rgba(140,168,96,0.11)');
+        hg.addColorStop(0, dark?'rgba(43,66,33,0.12)':'rgba(146,174,100,0.10)');
         hg.addColorStop(1,'rgba(0,0,0,0)');
         g.fillStyle=hg;
         g.beginPath(); g.arc(hx,hy,hr,0,7); g.fill();
     }
-    // 少量深色斑块：改成几团小圆叠出的不规则形状，对比也降下来
-    for(let i=0;i<40;i++){
-        const bx=Math.random()*512, by=Math.random()*512;
-        g.fillStyle='rgba(40,60,30,0.10)';
+    // 草叶笔触：成簇的短线，根部深、叶尖亮，微微倾斜——近看是草，远看是绒
+    const bladeCols=['#3a5c2c','#4a7038','#5d8747','#6f9c50','#83b45c','#9cc46e'];
+    g.lineCap='round';
+    for(let cl=0;cl<5200;cl++){
+        const cx=Math.random()*S, cy=Math.random()*S;
+        const n=3+(Math.random()*4|0), lean=(Math.random()-0.5)*2.4;
+        for(let k=0;k<n;k++){
+            const bx=cx+(Math.random()-0.5)*7, by=cy+(Math.random()-0.5)*7;
+            const len=4+Math.random()*6;
+            g.strokeStyle=bladeCols[(Math.random()*bladeCols.length)|0];
+            g.lineWidth=1.1+Math.random()*0.9;
+            g.beginPath(); g.moveTo(bx,by);
+            g.lineTo(bx+lean+ (Math.random()-0.5)*1.2, by-len); g.stroke();
+        }
+    }
+    // 碎光亮点：像阳光碎在叶尖
+    g.fillStyle='rgba(196,226,146,0.12)';
+    for(let i=0;i<4200;i++) g.fillRect(Math.random()*S,Math.random()*S,1.7,1.7);
+    // 偏黄的枯草小簇，远看有野地气息（低对比、小面积）
+    for(let i=0;i<20;i++){
+        const bx=Math.random()*S, by=Math.random()*S;
+        g.fillStyle='rgba(156,146,74,0.08)';
         for(let j=0;j<4;j++){
             g.beginPath();
-            g.arc(bx+(Math.random()-0.5)*22,by+(Math.random()-0.5)*16,5+Math.random()*11,0,7);
+            g.arc(bx+(Math.random()-0.5)*30,by+(Math.random()-0.5)*22,6+Math.random()*13,0,7);
             g.fill();
         }
     }
-    // 几团偏黄的枯草色块，远看有季节感
-    for(let i=0;i<14;i++){
-        g.fillStyle='rgba(150,140,70,0.09)';
-        g.beginPath();
-        g.arc(Math.random()*512,Math.random()*512,9+Math.random()*22,0,7);
-        g.fill();
-    }
-    return canvasTex(c, 14, 14);
+    // 极少量裸土细点，压在草根尺度，不抢眼
+    g.fillStyle='rgba(96,78,50,0.10)';
+    for(let i=0;i<500;i++) g.fillRect(Math.random()*S,Math.random()*S,2,1.4);
+    const t=canvasTex(c, 14, 14);
+    t.anisotropy=8;
+    return t;
 }
 // 原木墙贴图
 function logWallTexture(){
@@ -2012,6 +2025,7 @@ function createTerrain(){
     const ground=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({
         map:grassTexture(), roughness:1, metalness:0}));
     ground.receiveShadow=true;
+    GrassSys.patchGround(ground.material);   // #73：世界噪声大斑块＋云影缓漂（外圈地/河道带共用此材质，一并生效）
     scene.add(ground);
     window.__terrain=ground;   // #40 进屋时地面要保留可见（窗外景色），给室内一节按引用认领
 
@@ -4041,6 +4055,7 @@ function createOutskirts(){
             new THREE.MeshBasicMaterial({map:softDiscTexture(),transparent:true,opacity:0.36,
                 vertexColors:true,depthWrite:false}));
         patches.renderOrder=1;
+        GrassSys.patchCloud(patches.material);   // #73：云影漂移时同步压暗，免得斑块在云影里发亮
         scene.add(patches);
         window.__grassPatches=patches;   // 季节层挂钩（#21）：冬季雪原下淡出草色斑块
     }
@@ -4117,22 +4132,8 @@ function createOutskirts(){
     }
 }
 function createGrass(){
-    // 草簇：4 片叶子合并成一次实例
-    const blades=[];
-    for(let k=0;k<4;k++){
-        const b=new THREE.ConeGeometry(0.05,0.6,4);
-        b.translate((k%2?0.1:-0.1),0.3,(k<2?0.08:-0.08));
-        b.rotateZ((k-1.5)*0.28);
-        blades.push(b);
-    }
-    const tuftGeo=concatGeos(blades.map(g=>g.toNonIndexed()));
-    const N=IS_MOBILE?140:260;
-    grassIM=new THREE.InstancedMesh(tuftGeo,
-        new THREE.MeshStandardMaterial({color:PALETTE.leaf,roughness:1}),N);
-    grassIM.castShadow=false; grassIM.receiveShadow=true;
-    scene.add(grassIM);
-
-    // 低矮阔叶杂草
+    // 旧锥形草簇已由 #73 的实例化草叶系统接管（见 GrassSys / createMeadowGrass，
+    // grassIM 由那边赋值，季节染色挂钩不变）；这里只保留低矮阔叶杂草作点缀
     const wd=[];
     for(let k=0;k<3;k++){
         const l=new THREE.SphereGeometry(0.22,6,4);
@@ -4147,19 +4148,6 @@ function createGrass(){
     scene.add(weedIM);
 
     const rnd=mulberry32(4242);
-    const gdata=[];
-    for(let i=0;i<N;i++){
-        const a=rnd()*Math.PI*2,d=3+rnd()*15;
-        const x=8+Math.cos(a)*d*(0.7+rnd()*0.6), z=6+Math.sin(a)*d*(0.7+rnd()*0.6);
-        const y=terrainH(x,z);
-        const rx=(rnd()-0.5)*0.3, ry=rnd()*6.28, rz=(rnd()-0.5)*0.3, sc=0.6+rnd()*0.9;
-        gdata.push({x:x,y:y,z:z,rx:rx,ry:ry,rz:rz,s:sc,phase:rnd()*6.28});
-        dummy.position.set(x,y,z);
-        dummy.rotation.set(rx,ry,rz);
-        dummy.scale.setScalar(sc);
-        dummy.updateMatrix();
-        grassIM.setMatrixAt(i,dummy.matrix);
-    }
     for(let i=0;i<90;i++){
         const a=rnd()*Math.PI*2,d=4+rnd()*14;
         const x=8+Math.cos(a)*d, z=6+Math.sin(a)*d;
@@ -4169,9 +4157,424 @@ function createGrass(){
         dummy.updateMatrix();
         weedIM.setMatrixAt(i,dummy.matrix);
     }
-    grassIM.instanceMatrix.needsUpdate=true;
     weedIM.instanceMatrix.needsUpdate=true;
-    swayGroups.push({kind:'grass',inst:grassIM,count:N,data:gdata});
+}
+
+/* ==================== 草地系统重写（Issue #73 · v5.0） ====================
+   对标负责人给的高山草甸参考帧：密草质感＋云影大块明暗斑缓漂＋野花蒲公英。
+   四层结构（draw calls 只 +3）：
+   ① 地面贴图升级（grassTexture 草叶笔触）＋地面材质世界噪声层——大尺度
+      浓淡起伏不靠平铺贴图，核心地/外圈地/河道带共用材质、一处生效；
+   ② 实例化草簇 grassIM（每簇 5 片真草叶、根深尖亮、法线朝上与地面同光照），
+      按核心密→外围疏分布，避让全走 grassClear（问 WalkMap/分区数据）；
+   ③ 云影：写进共享大气着色块（atmoPatch），地面/草/花/草色斑块同步压暗，
+      大块柔边、随风缓漂（#74 天空云落地时参数从 GRASS_CFG.cloud 调）；
+   ④ 野花/蒲公英点缀层各 1 个 InstancedMesh，随季节增减（ tick 里按
+      Season 状态调 count：春茂夏盛秋疏冬无，草簇冬季只留一成残雪草）。
+   风摆做成全场统一入口 window.__windSway（见下）：着色器里的相位公式与
+   Env.sway 逐字同源（同风向 0.83/0.55、同空间频率 0.12、同风力 Env.windK），
+   #81 氛围件给树叶材质 apply 同一块即可同风摆动，不许各做一套。
+   双档：拉满/保底两档参数全在 GRASS_CFG.tiers，实例按「核心→外围」顺序
+   写入，切档只改 count（保底约 1/3，远景靠贴图与噪声层兜底不秃）。
+   全部可调参数集中在 GRASS_CFG（#75 集中化时收编），代码里不散落硬编码。 */
+const GRASS_CFG = {
+    bladesPerTuft: 5,                    // 每簇草叶数（每叶 2 三角面）
+    bladeH: [0.52, 0.88],                // 簇内草叶高度范围（米）
+    zones: [9400, 3700, 1700],           // 三环目标簇数：核心 r≤68 / 中环 ≤130 / 外环 ≤216
+    ringKeep: [1.0, 0.16, 0.045],        // 中/外环采样保留率（密度渐变）
+    tiers: {                             // 双档实例数（full=拉满 / lite=保底）
+        full: { tufts: 14800, flowers: 900, dandelions: 650 },
+        lite: { tufts: 4200,  flowers: 300, dandelions: 200 }
+    },
+    cloud: { scale: 0.016, drift: 0.020, thresh: 0.40, soft: 0.24, strength: 0.55 },
+    tint:  { scale: 0.045, amt: 0.16 },   // 地面世界噪声大斑块（振幅 ±）
+    sway:  { grassAmp: 0.13, flowerAmp: 0.07 },
+    season: {
+        grassWinterKeep: 0.13,           // 冬季草簇保留比例（残雪草）
+        flowerK:    { spring: 1.0, summer: 0.85, autumn: 0.40, winter: 0 },
+        dandelionK: { spring: 0.7, summer: 1.0,  autumn: 0.25, winter: 0 }
+    }
+};
+/* 共享大气 uniforms：时间与风力每帧由 GrassSys.tick 写入（与 Env 同源），
+   云影/地面斑块参数指向 GRASS_CFG，#75 收编时改这里即可全场生效 */
+const ATMO_U = {
+    uTime:          { value: 0 },
+    uWindK:         { value: 1 },
+    uCloudScale:    { value: GRASS_CFG.cloud.scale },
+    uCloudDrift:    { value: GRASS_CFG.cloud.drift },
+    uCloudDir:      { value: new THREE.Vector2(0.83, 0.55).normalize() },
+    uCloudThresh:   { value: GRASS_CFG.cloud.thresh },
+    uCloudSoft:     { value: GRASS_CFG.cloud.soft },
+    uCloudStrength: { value: GRASS_CFG.cloud.strength },
+    uTintScale:     { value: GRASS_CFG.tint.scale }
+};
+const ATMO_GLSL_VERT = [
+    'varying vec3 vAtmoWp;',
+    'uniform float uAtmoTime; uniform float uWindK;',
+    'uniform float uSwayAmp; uniform float uBendH;',
+    ''
+].join('\n');
+const ATMO_BEGIN = [
+    '#include <begin_vertex>',
+    '#ifdef USE_INSTANCING',
+    '  vec2 aip = vec2(instanceMatrix[3][0], instanceMatrix[3][2]);',
+    '#else',
+    '  vec2 aip = vec2(0.0, 0.0);',
+    '#endif',
+    'if(uSwayAmp > 0.0001){',
+    '  float abw = pow(clamp(position.y / uBendH, 0.0, 1.0), 2.0);',
+    '  float aph = (aip.x * 0.83 + aip.y * 0.55) * 0.12 + position.x * 0.5 + position.z * 0.3;',
+    '  float asw = sin(uAtmoTime * 2.1 + aph) * uWindK;',
+    '  float asw2 = cos(uAtmoTime * 1.63 + aph * 1.31) * uWindK;',
+    '  transformed.x += (asw * 0.83 + asw2 * 0.18) * abw * uSwayAmp;',
+    '  transformed.z += (asw * 0.55 - asw2 * 0.18) * abw * uSwayAmp;',
+    '}',
+    'vec4 awp4 = vec4(transformed, 1.0);',
+    '#ifdef USE_INSTANCING',
+    '  awp4 = instanceMatrix * awp4;',
+    '#endif',
+    'vAtmoWp = (modelMatrix * awp4).xyz;'
+].join('\n');
+const ATMO_GLSL_FRAG = [
+    'varying vec3 vAtmoWp;',
+    'uniform float uAtmoTime;',
+    'uniform float uCloudScale; uniform float uCloudDrift; uniform vec2 uCloudDir;',
+    'uniform float uCloudThresh; uniform float uCloudSoft; uniform float uCloudStrength;',
+    'uniform float uTintScale; uniform float uTintAmt;',
+    'float atmoHash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }',
+    'float atmoNoise(vec2 p){',
+    '  vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);',
+    '  return mix(mix(atmoHash(i), atmoHash(i + vec2(1.0, 0.0)), f.x),',
+    '             mix(atmoHash(i + vec2(0.0, 1.0)), atmoHash(i + vec2(1.0, 1.0)), f.x), f.y); }',
+    'float atmoFbm(vec2 p){ return atmoNoise(p) * 0.62 + atmoNoise(p * 2.17 + 13.7) * 0.38; }',
+    ''
+].join('\n');
+const ATMO_FRAG_MAIN = [
+    '{',
+    '  vec2 awp = vAtmoWp.xz;',
+    '  if(uTintAmt > 0.001){',
+    '    float tn = atmoFbm(awp * uTintScale);',
+    '    diffuseColor.rgb *= mix(1.0 - uTintAmt, 1.0 + uTintAmt * 0.8, tn);',
+    '  }',
+    '  float cn = atmoFbm(awp * uCloudScale + uCloudDir * (uAtmoTime * uCloudDrift));',
+    '  float csh = smoothstep(uCloudThresh, uCloudThresh + uCloudSoft, cn);',
+    '  diffuseColor.rgb *= 1.0 - csh * uCloudStrength;',
+    '}'
+].join('\n');
+/* 大气着色块注入器：给材质加上「世界噪声大斑块（可选）＋云影缓漂＋统一风摆
+   （可选）」。所有被注入的材质共享 ATMO_U，参数一处调、全场动。 */
+function atmoPatch(mat, opts){
+    opts = opts || {};
+    const swayAmp = opts.swayAmp || 0, bendH = opts.bendH || 1, tintAmt = opts.tintAmt || 0;
+    mat.onBeforeCompile = function(shader){
+        shader.uniforms.uAtmoTime = ATMO_U.uTime;
+        shader.uniforms.uWindK = ATMO_U.uWindK;
+        shader.uniforms.uCloudScale = ATMO_U.uCloudScale;
+        shader.uniforms.uCloudDrift = ATMO_U.uCloudDrift;
+        shader.uniforms.uCloudDir = ATMO_U.uCloudDir;
+        shader.uniforms.uCloudThresh = ATMO_U.uCloudThresh;
+        shader.uniforms.uCloudSoft = ATMO_U.uCloudSoft;
+        shader.uniforms.uCloudStrength = ATMO_U.uCloudStrength;
+        shader.uniforms.uTintScale = ATMO_U.uTintScale;
+        shader.uniforms.uSwayAmp = { value: swayAmp };
+        shader.uniforms.uBendH = { value: bendH };
+        shader.uniforms.uTintAmt = { value: tintAmt };
+        shader.vertexShader = ATMO_GLSL_VERT + shader.vertexShader.replace(
+            '#include <begin_vertex>', ATMO_BEGIN);
+        shader.fragmentShader = ATMO_GLSL_FRAG + shader.fragmentShader.replace(
+            '#include <map_fragment>', '#include <map_fragment>\n' + ATMO_FRAG_MAIN);
+    };
+    mat.customProgramCacheKey = function(){ return 'atmo73'; };
+    return mat;
+}
+/* 全场统一风摆入口（#81 氛围件接树叶/树冠时用这个，不许另起一套）：
+   __windSway.apply(材质, {amp: 摆幅（米，叶尖处）, bendH: 弯曲归一高度})
+   相位与 Env.sway 同源，草/花/树会迎着同一阵风一起摆。 */
+window.__windSway = {
+    uniforms: ATMO_U,
+    apply(mat, opts){ return atmoPatch(mat, { swayAmp: (opts && opts.amp) || 0.1,
+        bendH: (opts && opts.bendH) || 1 }); },
+    setCloud(patch){   // #74/#75 调云影：{strength, scale, drift, thresh, soft}
+        if(!patch) return;
+        if(patch.strength !== undefined) ATMO_U.uCloudStrength.value = patch.strength;
+        if(patch.scale !== undefined) ATMO_U.uCloudScale.value = patch.scale;
+        if(patch.drift !== undefined) ATMO_U.uCloudDrift.value = patch.drift;
+        if(patch.thresh !== undefined) ATMO_U.uCloudThresh.value = patch.thresh;
+        if(patch.soft !== undefined) ATMO_U.uCloudSoft.value = patch.soft;
+    }
+};
+function grassTierAuto(){
+    return (IS_MOBILE || (typeof lowQuality !== 'undefined' && lowQuality)) ? 'lite' : 'full';
+}
+const GrassSys = {
+    tier: null, _tierLock: null,
+    placed: { tufts: 0, flowers: 0, dandelions: 0 },
+    _flowerIM: null, _dandeIM: null, _flowerCur: 1, _dandeCur: 1,
+    patchGround(mat){ return atmoPatch(mat, { tintAmt: GRASS_CFG.tint.amt }); },
+    patchCloud(mat){ return atmoPatch(mat, {}); },
+    setTier(t){ this._tierLock = t || null; },   // 验收/中枢页手动切档（null=回自动）
+    _applyCount(im, n){ if(im && im.count !== n) im.count = Math.max(0, n); },
+    applyCounts(gk, fk, dk){
+        const base = GRASS_CFG.tiers[this.tier || 'full'];
+        this._applyCount((typeof grassIM !== 'undefined') ? grassIM : null,
+            Math.min(this.placed.tufts, Math.floor(base.tufts * gk)));
+        this._applyCount(this._flowerIM,
+            Math.min(this.placed.flowers, Math.floor(base.flowers * fk)));
+        this._applyCount(this._dandeIM,
+            Math.min(this.placed.dandelions, Math.floor(base.dandelions * dk)));
+    },
+    tick(dt, t){
+        ATMO_U.uTime.value = t;
+        ATMO_U.uWindK.value = (typeof Env !== 'undefined') ? Env.windK : 1;
+        this.tier = this._tierLock || grassTierAuto();
+        let snowK = 0, sname = 'summer';
+        if(typeof Season !== 'undefined'){
+            sname = Season.name;
+            snowK = (Season._fade && typeof Season._fade.snow === 'number')
+                ? Season._fade.snow : (Season.frozen ? 1 : 0);
+        }
+        const gk = 1 - (1 - GRASS_CFG.season.grassWinterKeep) * snowK;
+        const fkT = (GRASS_CFG.season.flowerK[sname] !== undefined)
+            ? GRASS_CFG.season.flowerK[sname] : 1;
+        const dkT = (GRASS_CFG.season.dandelionK[sname] !== undefined)
+            ? GRASS_CFG.season.dandelionK[sname] : 1;
+        const ease = Math.min(1, dt * 0.8 + 0.001);
+        this._flowerCur += (fkT - this._flowerCur) * ease;
+        this._dandeCur += (dkT - this._dandeCur) * ease;
+        this.applyCounts(gk, this._flowerCur * (1 - snowK), this._dandeCur * (1 - snowK));
+    }
+};
+window.__grass = GrassSys;
+/* 草/花的落点高：与可见地面同口径——核心方地（terrainH）之上、外圈环带按
+   outerGroundY 的下沉曲线衔接，免得草根在接缝环带浮空或陷地 */
+function meadowY(x, z){
+    const m = Math.max(Math.abs(x), Math.abs(z));
+    const sink = 0.055 * (1 - smooth01((m - 78) / 10)) * smooth01((m - 79) / 3);
+    return terrainH(x, z) - sink - 0.02;
+}
+/* 分布避让：湖面/河道/农田/石板路/屋脚/篝火/寻宝点走 WalkMap.clearOf，
+   再补 #78 的土路、石桥桥面、麦田矩形与村舍群 footprint——草只长在草地上 */
+const GRASS_COTTAGES = [[-63, 129, 4.0], [-43, 147, 4.4], [-59, 153, 3.7], [-52, 132, 1.7]];
+function grassClear(x, z){
+    if(Math.hypot(x, z) > 216) return false;
+    if(!WalkMap.clearOf(x, z)) return false;
+    if(distToRoads(x, z) < 2.0) return false;
+    if(WalkMap.bridgeY(x, z) !== null) return false;
+    const dx = x - 102, dz = z - 48;   // 麦田（#78 同口径：中心 102,48、rot -0.3）
+    const lx = dx * 0.9553 - dz * 0.2955, lz = dx * 0.2955 + dz * 0.9553;
+    if(Math.abs(lx) < 27.5 && Math.abs(lz) < 19.5) return false;
+    for(const ct of GRASS_COTTAGES)
+        if(Math.hypot(x - ct[0], z - ct[1]) < ct[2]) return false;
+    return true;
+}
+function scatterMeadow(rnd, rMin, rMax, keep, quota, out){
+    let tries = 0, added = 0;
+    const maxTries = Math.max(2000, quota * 40);
+    while(added < quota && tries++ < maxTries){
+        const a = rnd() * Math.PI * 2;
+        const d = Math.sqrt(rMin * rMin + rnd() * (rMax * rMax - rMin * rMin));
+        const x = Math.cos(a) * d, z = Math.sin(a) * d;
+        if(rnd() > keep) continue;
+        if(!grassClear(x, z)) continue;
+        out.push([x, z]);
+        added++;
+    }
+}
+/* 草簇几何：5 片收分草叶（根宽尖细、带预弯），根深尖亮的顶点色渐变，
+   法线统一朝上——与地面同光照，成片看是绒毯、近看是草叶 */
+function meadowTuftGeo(){
+    const rnd = mulberry32(73011);
+    const pos = [], nor = [], col = [], idx = [];
+    const rootC = C(0x38602c);
+    const tipCols = [C(0x80bc50), C(0x92c95f), C(0xa8cf6e), C(0x77b34c)];
+    let vc = 0;
+    for(let b = 0; b < GRASS_CFG.bladesPerTuft; b++){
+        const ang = (b / GRASS_CFG.bladesPerTuft) * Math.PI * 2 + rnd() * 0.9;
+        const dx = Math.cos(ang), dz = Math.sin(ang);
+        const ox = dx * 0.09 * rnd(), oz = dz * 0.09 * rnd();
+        const h = GRASS_CFG.bladeH[0] + rnd() * (GRASS_CFG.bladeH[1] - GRASS_CFG.bladeH[0]);
+        const w0 = 0.052 + rnd() * 0.02, bend = 0.05 + rnd() * 0.09;
+        const tip = tipCols[(rnd() * tipCols.length) | 0];
+        const px = -dz, pz = dx;
+        pos.push(ox - px * w0, 0, oz - pz * w0,  ox + px * w0, 0, oz + pz * w0,
+            ox + dx * bend - px * 0.006, h, oz + dz * bend - pz * 0.006,
+            ox + dx * bend + px * 0.006, h, oz + dz * bend + pz * 0.006);
+        for(let k = 0; k < 4; k++) nor.push(0, 1, 0);
+        col.push(rootC.r, rootC.g, rootC.b, rootC.r, rootC.g, rootC.b,
+            tip.r, tip.g, tip.b, tip.r, tip.g, tip.b);
+        idx.push(vc, vc + 1, vc + 2, vc + 2, vc + 1, vc + 3);
+        vc += 4;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    g.setIndex(idx);
+    return g;
+}
+function createMeadowGrass(){
+    const mat = new THREE.MeshStandardMaterial({ vertexColors: true,
+        roughness: 1, side: THREE.DoubleSide });
+    atmoPatch(mat, { swayAmp: GRASS_CFG.sway.grassAmp, bendH: 0.92 });
+    grassIM = new THREE.InstancedMesh(meadowTuftGeo(), mat, GRASS_CFG.tiers.full.tufts);
+    grassIM.castShadow = false;
+    grassIM.receiveShadow = true;
+    grassIM.frustumCulled = false;
+    const rnd = mulberry32(73013);
+    const pts = [];
+    scatterMeadow(rnd, 0, 68, GRASS_CFG.ringKeep[0], GRASS_CFG.zones[0], pts);
+    scatterMeadow(rnd, 68, 130, GRASS_CFG.ringKeep[1], GRASS_CFG.zones[1], pts);
+    scatterMeadow(rnd, 130, 216, GRASS_CFG.ringKeep[2], GRASS_CFG.zones[2], pts);
+    pts.forEach((p, i)=>{
+        dummy.position.set(p[0], meadowY(p[0], p[1]), p[1]);
+        dummy.rotation.set((rnd() - 0.5) * 0.14, rnd() * Math.PI * 2, (rnd() - 0.5) * 0.14);
+        dummy.scale.set(0.85 + rnd() * 0.5, 0.8 + rnd() * 0.55, 0.85 + rnd() * 0.5);
+        dummy.updateMatrix();
+        grassIM.setMatrixAt(i, dummy.matrix);
+    });
+    grassIM.count = pts.length;
+    GrassSys.placed.tufts = pts.length;
+    grassIM.instanceMatrix.needsUpdate = true;
+    scene.add(grassIM);
+}
+/* 野花小簇几何：一簇 3 朵小花（白/黄/紫各一，星形花瓣扇＋花心），
+   茎叶同簇，顶点色区分——一个实例就是一小片花丛 */
+function meadowFlowerGeo(){
+    const pos = [], nor = [], col = [], idx = [];
+    const stemC = C(0x3f6b2f), centerC = C(0xffb52e);
+    const petalCols = [C(0xffffff), C(0xffd94d), C(0xb48ce8)];
+    const spots = [[0, 0, 0.36], [0.14, 0.08, 0.28], [-0.12, 0.11, 0.31]];
+    let vc = 0;
+    spots.forEach((sp, fi)=>{
+        const ox = sp[0], oz = sp[1], H = sp[2];
+        // 茎：一片竖 quad
+        pos.push(ox - 0.011, 0, oz, ox + 0.011, 0, oz, ox - 0.006, H, oz, ox + 0.006, H, oz);
+        for(let k = 0; k < 4; k++) nor.push(0, 1, 0);
+        for(let k = 0; k < 4; k++) col.push(stemC.r, stemC.g, stemC.b);
+        idx.push(vc, vc + 1, vc + 2, vc + 2, vc + 1, vc + 3);
+        vc += 4;
+        // 花头：6 瓣星形扇（微仰），中心一顶点是花心色
+        const yaw = fi * 2.1 + 0.4;
+        const rx = Math.cos(yaw), rz = Math.sin(yaw);
+        const fx = -Math.sin(yaw) * 0.62, fz = Math.cos(yaw) * 0.62;
+        const pc = petalCols[fi % petalCols.length];
+        const ci = vc;
+        pos.push(ox, H + 0.015, oz); nor.push(0, 1, 0); col.push(centerC.r, centerC.g, centerC.b);
+        vc++;
+        for(let k = 0; k < 6; k++){
+            const a = k / 6 * Math.PI * 2;
+            const ca = Math.cos(a) * 0.058, sa = Math.sin(a) * 0.058;
+            pos.push(ox + rx * ca + fx * sa, H + 0.015 + Math.abs(sa) * 0.35, oz + rz * ca + fz * sa);
+            nor.push(0, 1, 0); col.push(pc.r, pc.g, pc.b);
+            vc++;
+        }
+        for(let k = 0; k < 6; k++) idx.push(ci, ci + 1 + k, ci + 1 + ((k + 1) % 6));
+    });
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    g.setIndex(idx);
+    return g;
+}
+/* 蒲公英：细茎三角＋十字绒球（程序绒毛贴图、alphaTest 镂空），5 三角面/株 */
+function dandelionPuffTexture(){
+    const c = makeCanvas(128, 128), g = c.getContext('2d');
+    g.clearRect(0, 0, 128, 128);
+    const grd = g.createRadialGradient(64, 64, 4, 64, 64, 58);
+    grd.addColorStop(0, 'rgba(255,255,255,0.95)');
+    grd.addColorStop(0.55, 'rgba(250,250,246,0.42)');
+    grd.addColorStop(1, 'rgba(250,250,246,0)');
+    g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
+    g.strokeStyle = 'rgba(255,255,255,0.75)'; g.lineCap = 'round';
+    for(let i = 0; i < 110; i++){
+        const a = Math.random() * Math.PI * 2, l = 26 + Math.random() * 30;
+        g.lineWidth = 1 + Math.random();
+        g.beginPath(); g.moveTo(64, 64);
+        g.lineTo(64 + Math.cos(a) * l, 64 + Math.sin(a) * l); g.stroke();
+    }
+    const t = canvasTex(c);
+    return t;
+}
+function meadowDandelionGeo(){
+    const pos = [], nor = [], col = [], uvA = [], idx = [];
+    const stemC = C(0x9db98a), white = C(0xffffff);
+    // 茎：单三角，uv 钉在绒球贴图中心（不透明处），靠顶点色染绿
+    pos.push(-0.009, 0, 0, 0.009, 0, 0, 0, 0.37, 0);
+    for(let k = 0; k < 3; k++){ nor.push(0, 1, 0); col.push(stemC.r, stemC.g, stemC.b); uvA.push(0.5, 0.5); }
+    idx.push(0, 1, 2);
+    // 绒球：十字两 quad，中心约 0.46 高
+    let vc = 3;
+    [[1, 0], [0, 1]].forEach(ax=>{
+        const hx = ax[0] * 0.078, hz = ax[1] * 0.078;
+        pos.push(-hx, 0.382, -hz, hx, 0.382, hz, -hx, 0.538, -hz, hx, 0.538, hz);
+        for(let k = 0; k < 4; k++){ nor.push(0, 1, 0); col.push(white.r, white.g, white.b); }
+        uvA.push(0, 0, 1, 0, 0, 1, 1, 1);
+        idx.push(vc, vc + 1, vc + 2, vc + 2, vc + 1, vc + 3);
+        vc += 4;
+    });
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uvA, 2));
+    g.setIndex(idx);
+    return g;
+}
+function createMeadowFlowers(){
+    const rnd = mulberry32(73014);
+    // 野花：六成成簇（顺草甸的团块感）、四成零散
+    const fmat = new THREE.MeshStandardMaterial({ vertexColors: true,
+        roughness: 0.9, side: THREE.DoubleSide });
+    atmoPatch(fmat, { swayAmp: GRASS_CFG.sway.flowerAmp, bendH: 0.42 });
+    const fim = new THREE.InstancedMesh(meadowFlowerGeo(), fmat, GRASS_CFG.tiers.full.flowers);
+    fim.castShadow = false; fim.receiveShadow = true; fim.frustumCulled = false;
+    const fpts = [];
+    const centers = [];
+    scatterMeadow(rnd, 0, 120, 1.0, 130, centers);
+    for(const cn of centers){
+        const n = 2 + (rnd() * 4 | 0);
+        for(let k = 0; k < n && fpts.length < GRASS_CFG.tiers.full.flowers * 0.62; k++){
+            const x = cn[0] + (rnd() + rnd() - 1) * 1.6, z = cn[1] + (rnd() + rnd() - 1) * 1.6;
+            if(grassClear(x, z)) fpts.push([x, z]);
+        }
+    }
+    scatterMeadow(rnd, 0, 130, 1.0,
+        Math.max(0, GRASS_CFG.tiers.full.flowers - fpts.length), fpts);
+    fpts.forEach((p, i)=>{
+        dummy.position.set(p[0], meadowY(p[0], p[1]), p[1]);
+        dummy.rotation.set(0, rnd() * Math.PI * 2, 0);
+        dummy.scale.setScalar(0.8 + rnd() * 0.6);
+        dummy.updateMatrix();
+        fim.setMatrixAt(i, dummy.matrix);
+    });
+    fim.count = fpts.length;
+    GrassSys.placed.flowers = fpts.length;
+    fim.instanceMatrix.needsUpdate = true;
+    scene.add(fim);
+    GrassSys._flowerIM = fim;
+    // 蒲公英：零散点缀，近中景为主
+    const dmat = new THREE.MeshStandardMaterial({ map: dandelionPuffTexture(),
+        alphaTest: 0.30, vertexColors: true, roughness: 1, side: THREE.DoubleSide });
+    atmoPatch(dmat, { swayAmp: GRASS_CFG.sway.flowerAmp, bendH: 0.55 });
+    const dim = new THREE.InstancedMesh(meadowDandelionGeo(), dmat, GRASS_CFG.tiers.full.dandelions);
+    dim.castShadow = false; dim.receiveShadow = true; dim.frustumCulled = false;
+    const dpts = [];
+    scatterMeadow(rnd, 0, 110, 1.0, GRASS_CFG.tiers.full.dandelions, dpts);
+    dpts.forEach((p, i)=>{
+        dummy.position.set(p[0], meadowY(p[0], p[1]), p[1]);
+        dummy.rotation.set(0, rnd() * Math.PI * 2, 0);
+        dummy.scale.setScalar(0.85 + rnd() * 0.5);
+        dummy.updateMatrix();
+        dim.setMatrixAt(i, dummy.matrix);
+    });
+    dim.count = dpts.length;
+    GrassSys.placed.dandelions = dpts.length;
+    dim.instanceMatrix.needsUpdate = true;
+    scene.add(dim);
+    GrassSys._dandeIM = dim;
+    GrassSys.tier = grassTierAuto();
+    GrassSys.applyCounts(1, 1, 1);
 }
 
 /* ==================== 行为框架（Issue #32 · 地基） ====================
@@ -6927,6 +7330,16 @@ function snowTexture(){
         hg.addColorStop(1,'rgba(0,0,0,0)');
         g.fillStyle=hg; g.beginPath(); g.arc(hx,hy,hr,0,7); g.fill();
     }
+    // #73：雪面细雪纹（短斜划，像被风扫过的雪壳）＋零星冰晶亮点，
+    // 与草叶在雪原边缘的衔接靠 GrassSys 的残雪草簇（冬季保留少量压弯草）
+    g.strokeStyle='rgba(205,218,232,0.16)'; g.lineCap='round';
+    for(let i=0;i<2600;i++){
+        const x=Math.random()*512, y=Math.random()*512, l=3+Math.random()*5;
+        g.lineWidth=1;
+        g.beginPath(); g.moveTo(x,y); g.lineTo(x+l*0.8,y+l*0.35); g.stroke();
+    }
+    g.fillStyle='rgba(255,255,255,0.5)';
+    for(let i=0;i<300;i++) g.fillRect(Math.random()*512,Math.random()*512,1.2,1.2);
     return canvasTex(c, 14, 14);
 }
 
@@ -7354,6 +7767,7 @@ function animate(){
     Interior.update(dt, t);
     FishSys.update(dt, t);
     updateExpansion(dt, t);   // #78：水车/风车缓转
+    GrassSys.tick(dt, t);     // #73：大气 uniforms（时间/风力）＋草花季节量与双档 count
     updateStandees(t);
     renderer.render(scene,camera);
     fpsTick(dt);
@@ -11325,6 +11739,8 @@ function init(){
     createFlowerBands();
     createOutskirts();
     buildExpansion();   // #78 世界扩容：外圈地面+乡村分区+延长河道（在 createInterior 抓清单前）
+    createMeadowGrass();    // #73 草地重写：实例化草簇（要在 EXP_ROADS/桥/麦田就位后采样避让）
+    createMeadowFlowers();  // #73 野花/蒲公英点缀层
     createInsects();
     createDragon();
 
