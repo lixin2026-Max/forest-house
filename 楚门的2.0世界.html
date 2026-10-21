@@ -685,6 +685,10 @@
         <button type="button" id="dmSpin">🔄 转圈</button>
     </div>
     <div class="dmRow">
+        <button type="button" id="dmHighfive">🤝 击掌</button>
+        <button type="button" id="dmBow">🙇 作揖</button>
+    </div>
+    <div class="dmRow">
         <button type="button" id="dmFeedP">🎃 喂南瓜</button>
         <button type="button" id="dmFeedC">🌽 喂玉米</button>
         <button type="button" id="dmClose">✖ 收起</button>
@@ -860,6 +864,8 @@
             <button type="button" id="dgX" aria-label="关闭">✕</button>
         </div>
         <p class="sub">这条龙是你的：性别、名字、体色、配饰、性格都归你管。改任何一项都立刻生效，并自动存到本机。</p>
+        <div class="dgSec">成长（陪伴天数到了自己长，只看不能改）</div>
+        <div class="dgHint" id="dgGrowth">🌱 …</div>
         <div class="dgSec">名字</div>
         <div class="dgRow">
             <input type="text" id="dgName" maxlength="16" placeholder="给小龙起个名字">
@@ -3787,6 +3793,51 @@ const DRG_ENUMS = {
     pattern:['none','spots','stripes'], horn:['sharp','bud','none'],
     spike:['sharp','round'], tailTip:['leaf','ball','spike']
 };
+/* ---------- 小龙成长（Issue #52 · v4.1）：随陪伴天数慢慢长大 ----------
+   阶段 3 档：幼龙 → 少年龙 → 青年龙。推进口径：不同自然日打开世界计 1 天
+   （累计到访天数），第 1 天幼龙、累计第 4 天少年、第 9 天青年（阈值常量
+   DRG_GROW_STAGE_DAYS，可调）。成长记录 {days,last,stage,seen,events} 复用
+   ct2_dragon 的 grow 字段存本机——不新增存储键。首次打开（或老存档没有
+   grow 字段）从当天起算第 1 天。
+   尺寸走建模参数等比放大（DRG_GROWTH.s）：零件几何与位置同经 dgPart 的
+   成长系数 drgGrowK，所有关节重叠按同比例放大，接缝/防穿模结论不因长大
+   失效；在此之上，角/背刺/尾长再按各自系数额外生长（horn/spike/tail）。
+   阶段解锁互动：少年档「击掌」highfive、青年档「作揖」bow（走 #16 的
+   gesture 叠加层量程）。成长只动尺寸与部件长度，不覆盖配色/配饰/名字/
+   性格；定制面板的「恢复默认」同样不清成长（陪伴记录不是外观设置）。 */
+const DRG_GROW_STAGE_DAYS = [1, 4, 9];
+const DRG_GROWTH = [
+    {label:'幼龙',   s:1.00, horn:1.00, spike:1.00, tail:1.00},
+    {label:'少年龙', s:1.12, horn:1.15, spike:1.12, tail:1.10},
+    {label:'青年龙', s:1.25, horn:1.32, spike:1.25, tail:1.20}
+];
+function drgTodayStr(){
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function drgStageForDays(days){
+    return days >= DRG_GROW_STAGE_DAYS[2] ? 2 : days >= DRG_GROW_STAGE_DAYS[1] ? 1 : 0;
+}
+let drgGrowDirty = false;   // 加载时 grow 有推进/变更 → dragonCfg 建好后落盘一次
+function drgGrowNormalize(raw){
+    const today = drgTodayStr();
+    const g = (raw && typeof raw === 'object') ? raw : null;
+    if(!g || typeof g.days !== 'number' || !g.last){
+        drgGrowDirty = true;
+        return {days:1, last:today, stage:0, seen:0, events:[]};
+    }
+    g.days = Math.max(1, Math.floor(g.days));
+    if(!Array.isArray(g.events)) g.events = [];
+    if(typeof g.seen !== 'number') g.seen = 0;
+    if(g.last !== today){ g.days += 1; g.last = today; drgGrowDirty = true; }
+    const st = drgStageForDays(g.days);
+    if(st !== g.stage){
+        if(typeof g.stage === 'number' && st > g.stage) g.events.push({d:today, s:st});   // 升档记一笔（大事记用）
+        g.stage = st; drgGrowDirty = true;
+    }
+    if(g.seen > g.stage) g.seen = g.stage;
+    return g;
+}
 function drgIsHex(n){ return typeof n === 'number' && n >= 0 && n <= 0xffffff && Math.floor(n) === n; }
 /* 名字过滤：≤8 字（按字数不按字节）、剥掉符号滥用与空白、敏感词打码 */
 const DRG_NAME_BAD = ['傻逼','煞笔','操逼','你妈逼','妈的','贱人','去死吧','fuck','shit','bitch'];
@@ -3803,7 +3854,7 @@ function sanitizeDragonName(s){
 function drgLoadCfg(){
     const c = JSON.parse(JSON.stringify(DRG_DEFAULT_CFG));
     const raw = store.dragon.json(null);
-    if(!raw) return c;
+    if(!raw){ c.grow = drgGrowNormalize(null); c.stage = 0; return c; }
     for(const k of Object.keys(DRG_ENUMS)) if(DRG_ENUMS[k].indexOf(raw[k]) >= 0) c[k] = raw[k];
     if(raw.wingSize === 1.35 || raw.wingSize === 1) c.wingSize = raw.wingSize;
     if(raw.colors && drgIsHex(raw.colors.body) && drgIsHex(raw.colors.belly) && drgIsHex(raw.colors.accent))
@@ -3812,10 +3863,13 @@ function drgLoadCfg(){
     if(c.palette !== 'custom') c.colors = null;          // 预设与自由色二选一，预设优先
     if(raw.acc) for(const k of Object.keys(c.acc)) c.acc[k] = !!raw.acc[k];
     c.name = sanitizeDragonName(raw.name);
+    c.grow = drgGrowNormalize(raw.grow);   // #52：成长记录（跨天推进/升档登记都在这里发生）
+    c.stage = c.grow.stage;
     return c;
 }
 let dragonCfg = drgLoadCfg();
 function dragonSaveCfg(){ store.dragon.save(dragonCfg); }
+if(drgGrowDirty) dragonSaveCfg();          // #52：加载时天数/阶段有推进，立刻落盘
 function drgPers(){ return DRG_PERSONALITY[dragonCfg.personality] || DRG_PERSONALITY.curious; }
 /* 由配置算出本次建模用的全套颜色：预设整表取色；自由选色时翅膜由标志件
    色向白色混 45% 自动派生（保证与身子协调）；腮红随性别变深浅（轻造型差异） */
@@ -3854,19 +3908,28 @@ function dragonCall(){
     setTimeout(()=>{ if(actx && !audioMuted) audioNote(base*1.335, 0.24, 0.05, 'triangle', 0.02, aAmb); }, 115);
 }
 
+/* 成长系数（#52）：buildDragonModel 开工时把本档的等比系数写进来，dgPart
+   等零件出口统一读——几何尺寸与位置同乘，所有关节重叠按同比例放大，
+   「接成一体」的相对关系不因长大改变（等比变换的性质）。 */
+let drgGrowK = 1;
 /* 零件小帮手：缩放→旋转→平移→刷色，返回可进 mergePainted 的几何体 */
 function dgPart(geo, hex, x, y, z, o){
     o = o || {};
+    const K = drgGrowK;
+    if(K !== 1) geo.scale(K, K, K);
     if(o.s) geo.scale(o.s[0], o.s[1], o.s[2]);
     if(o.rx) geo.rotateX(o.rx);
     if(o.ry) geo.rotateY(o.ry);
     if(o.rz) geo.rotateZ(o.rz);
-    geo.translate(x, y, z);
+    geo.translate(x*K, y*K, z*K);
     return ModelKit.paint(geo, hex);
 }
 
 function buildDragonModel(cfg){
 cfg = cfg || DRG_DEFAULT_CFG;
+const GR = DRG_GROWTH[Math.max(0, Math.min(2, cfg.stage || 0))];   // #52 本档成长系数
+const G = GR.s;
+drgGrowK = G;
 const col = drgColorsOf(cfg);
 const BODY = col.body, BELLY = col.belly, CORAL = col.accent, WING = col.wing;
 const BLUSH = col.blush, BLUSHS = col.blushScale;
@@ -3876,24 +3939,26 @@ const root = new THREE.Group(); root.name = 'dragon';
 const lie = new THREE.Group(); root.add(lie);
 /* body：髋部枢轴（y=0.55）。躯干/头/双臂/双翅/尾都挂在它上面，
 呼吸缩放、走路起伏与侧摆作用在这一层；双腿直接挂 lie，与髋同高。 */
-const body = new THREE.Group(); body.position.y = 0.55; lie.add(body);
+const body = new THREE.Group(); body.position.y = 0.55*G; lie.add(body);
 
-/* 背刺造型：sharp = 定型版尖锥；round = 圆润短丘（同位置同底盘，根包覆丘不变） */
+/* 背刺造型：sharp = 定型版尖锥；round = 圆润短丘（同位置同底盘，根包覆丘不变）。
+   #52：刺高在等比放大之外再乘 GR.spike 额外生长（沿锥轴拉长，根部埋得更深、
+   底盘与根包覆丘的位置关系不变，接缝不破） */
 const spikeGeo = (r, h, x, y, z, rx) => cfg.spike === 'round'
-? dgPart(new THREE.SphereGeometry(r*1.18, 10, 8), CORAL, x, y, z, {rx:rx, s:[1, 0.85, 0.55]})
-: dgPart(new THREE.ConeGeometry(r, h, 6), CORAL, x, y, z, {rx:rx, s:[1, 1, 0.45]});
+? dgPart(new THREE.SphereGeometry(r*1.18, 10, 8), CORAL, x, y, z, {rx:rx, s:[1, 0.85*GR.spike, 0.55]})
+: dgPart(new THREE.ConeGeometry(r, h, 6), CORAL, x, y, z, {rx:rx, s:[1, GR.spike, 0.45]});
 /* 横置圆环（条纹/围巾/项圈/帽带共用）：绕 Y 轴的环，可选椭圆缩放与前后倾 */
 function dgRing(r, tube, sx, sz, hex, x, y, z, tiltX){
-const g = new THREE.TorusGeometry(r, tube, 8, 26);
+const g = new THREE.TorusGeometry(r*G, tube*G, 8, 26);
 g.rotateX(Math.PI/2 + (tiltX || 0));
 g.scale(sx, 1, sz);
-g.translate(x, y, z);
+g.translate(x*G, y*G, z*G);
 return ModelKit.paint(g, hex);
 }
 /* 正对前方的圆环（眼镜框） */
 function dgRingZ(r, tube, hex, x, y, z){
-const g = new THREE.TorusGeometry(r, tube, 8, 22);
-g.translate(x, y, z);
+const g = new THREE.TorusGeometry(r*G, tube*G, 8, 22);
+g.translate(x*G, y*G, z*G);
 return ModelKit.paint(g, hex);
 }
 
@@ -3943,7 +4008,7 @@ body.add(torsoMesh);
 圆滚滚的胸口腹甲怼满画面；锚到面部下方（配合躯干前后向收薄），低头能看到
 胸口腹甲，行走时交替前摆的脚尖也会从肚皮下探出来。子级几何按原点位移
 反向平移，静止外观逐点一致。 */
-const head = new THREE.Group(); head.position.set(0, 0.79, 0.15); body.add(head);
+const head = new THREE.Group(); head.position.set(0, 0.79*G, 0.15*G); body.add(head);
 const skullParts = [
 dgPart(new THREE.SphereGeometry(0.325, 18, 14), BODY, 0, -0.01, -0.13, {s:[1, 0.95, 0.94]}),
 /* 颈球：挂在头组下缘、随头一起转，底部始终沉在躯干与脖颈基座里——
@@ -3971,13 +4036,15 @@ head.add(skullMesh);
 none = 不长角。后脑刺与根包覆丘恒有（跟背刺同风格切换） */
 const hornParts = [];
 if(cfg.horn === 'sharp'){
-hornParts.push(dgPart(new THREE.ConeGeometry(0.09, 0.42, 9), BELLY, -0.155, 0.305, -0.16, {rx:-0.30, rz:0.17}));
-hornParts.push(dgPart(new THREE.ConeGeometry(0.09, 0.42, 9), BELLY, 0.155, 0.305, -0.16, {rx:-0.30, rz:-0.17}));
+/* #52：角在等比放大之外再沿锥轴拉长 GR.horn（o.s 在旋转前按局部轴缩放，
+   正是锥的轴向；根部随之埋得更深，角根 flare 与颅面的关系不变） */
+hornParts.push(dgPart(new THREE.ConeGeometry(0.09, 0.42, 9), BELLY, -0.155, 0.305, -0.16, {rx:-0.30, rz:0.17, s:[1, GR.horn, 1]}));
+hornParts.push(dgPart(new THREE.ConeGeometry(0.09, 0.42, 9), BELLY, 0.155, 0.305, -0.16, {rx:-0.30, rz:-0.17, s:[1, GR.horn, 1]}));
 } else if(cfg.horn === 'bud'){
-hornParts.push(dgPart(new THREE.ConeGeometry(0.105, 0.26, 9), BELLY, -0.15, 0.235, -0.155, {rx:-0.30, rz:0.17}));
-hornParts.push(dgPart(new THREE.ConeGeometry(0.105, 0.26, 9), BELLY, 0.15, 0.235, -0.155, {rx:-0.30, rz:-0.17}));
-hornParts.push(dgPart(new THREE.SphereGeometry(0.052, 10, 8), BELLY, -0.178, 0.35, -0.198));
-hornParts.push(dgPart(new THREE.SphereGeometry(0.052, 10, 8), BELLY, 0.178, 0.35, -0.198));
+hornParts.push(dgPart(new THREE.ConeGeometry(0.105, 0.26, 9), BELLY, -0.15, 0.235, -0.155, {rx:-0.30, rz:0.17, s:[1, GR.horn, 1]}));
+hornParts.push(dgPart(new THREE.ConeGeometry(0.105, 0.26, 9), BELLY, 0.15, 0.235, -0.155, {rx:-0.30, rz:-0.17, s:[1, GR.horn, 1]}));
+hornParts.push(dgPart(new THREE.SphereGeometry(0.052, 10, 8), BELLY, -0.178, 0.35 + 0.13*(GR.horn - 1), -0.198));
+hornParts.push(dgPart(new THREE.SphereGeometry(0.052, 10, 8), BELLY, 0.178, 0.35 + 0.13*(GR.horn - 1), -0.198));
 }
 hornParts.push(spikeGeo(0.07, 0.18, 0, 0.113, -0.385, 0.55));
 /* 后脑刺根包覆丘：同背刺，吞掉底盘探出颅面的那段边沿 */
@@ -3990,13 +4057,13 @@ return new THREE.Mesh(ModelKit.mergePainted([
 dgPart(new THREE.ConeGeometry(0.13, 0.29, 7), CORAL, 0, 0, 0, {rz:-sign*1.15, s:[1, 1, 0.35]})
 ]), paintMat);
 }
-const finL = new THREE.Group(); finL.position.set(-0.28, 0.13, -0.16); finL.add(finMesh(-1)); head.add(finL);
-const finR = new THREE.Group(); finR.position.set(0.28, 0.13, -0.16); finR.add(finMesh(1)); head.add(finR);
+const finL = new THREE.Group(); finL.position.set(-0.28*G, 0.13*G, -0.16*G); finL.add(finMesh(-1)); head.add(finL);
+const finR = new THREE.Group(); finR.position.set(0.28*G, 0.13*G, -0.16*G); finR.add(finMesh(1)); head.add(finR);
 const eyeMesh = new THREE.Mesh(ModelKit.merge([
-new THREE.SphereGeometry(0.072, 12, 10).translate(-0.135, 0, 0.285),
-new THREE.SphereGeometry(0.072, 12, 10).translate( 0.135, 0, 0.285)
+new THREE.SphereGeometry(0.072*G, 12, 10).translate(-0.135*G, 0, 0.285*G),
+new THREE.SphereGeometry(0.072*G, 12, 10).translate( 0.135*G, 0, 0.285*G)
 ]), new THREE.MeshStandardMaterial({color:0x33241a, roughness:0.25}));
-eyeMesh.position.set(0, 0.03, -0.13);
+eyeMesh.position.set(0, 0.03*G, -0.13*G);
 head.add(eyeMesh);
 /* 睫毛（女性轻造型差异）：每只眼上外侧三根小睫，根部埋进眼球上缘 */
 let lashMesh = null;
@@ -4024,9 +4091,9 @@ dgPart(new THREE.SphereGeometry(0.068, 10, 8), BODY, 0, -0.345, 0.005, {s:[1, 1.
 dgPart(new THREE.SphereGeometry(0.028, 8, 6), BODY, -sign*0.055, -0.335, 0.032)
 ]), paintMat);
 }
-const armL = new THREE.Group(); armL.position.set(-0.345, 0.44, 0.03);
+const armL = new THREE.Group(); armL.position.set(-0.345*G, 0.44*G, 0.03*G);
 armL.add(armMesh(-1)); armL.rotation.z = -0.14; armL.userData.baseZ = -0.14; body.add(armL);
-const armR = new THREE.Group(); armR.position.set(0.345, 0.44, 0.03);
+const armR = new THREE.Group(); armR.position.set(0.345*G, 0.44*G, 0.03*G);
 armR.add(armMesh(1)); armR.rotation.z = 0.14; armR.userData.baseZ = 0.14; body.add(armR);
 
 /* 双腿：枢轴在髋部（与 body 同高、挂 lie 层），腿筒 + 踝关节球 + 圆头脚 + 三个奶油脚趾。
@@ -4044,23 +4111,23 @@ dgPart(new THREE.SphereGeometry(0.034, 8, 6), BELLY, 0, -0.472, 0.21),
 dgPart(new THREE.SphereGeometry(0.032, 8, 6), BELLY, 0.055, -0.478, 0.20)
 ]), paintMat);
 }
-const legL = new THREE.Group(); legL.position.set(-0.14, 0.55, 0); legL.add(legMesh()); lie.add(legL);
-const legR = new THREE.Group(); legR.position.set(0.14, 0.55, 0); legR.add(legMesh()); lie.add(legR);
+const legL = new THREE.Group(); legL.position.set(-0.14*G, 0.55*G, 0); legL.add(legMesh()); lie.add(legL);
+const legR = new THREE.Group(); legR.position.set(0.14*G, 0.55*G, 0); legR.add(legMesh()); lie.add(legR);
 
 /* 背上小翅膀：叶形膜 + 奶油翅骨，一侧一件（构造沿用 build 1 的合批法，尺寸按人形收小）；
 大小变体只缩放整个翅组（枢轴在翅根，长大是往外上方展开，不碰背） */
 function wingMesh(sign){
-const mem = new THREE.SphereGeometry(0.42, 12, 9);
-mem.scale(1.05, 0.10, 0.55); mem.translate(sign*0.26, 0, -0.08);
-const spar = new THREE.CylinderGeometry(0.024, 0.04, 0.62, 6);
-spar.rotateZ(sign*1.15); spar.rotateY(sign*0.35); spar.translate(sign*0.22, 0.03, 0.10);
+const mem = new THREE.SphereGeometry(0.42*G, 12, 9);
+mem.scale(1.05, 0.10, 0.55); mem.translate(sign*0.26*G, 0, -0.08*G);
+const spar = new THREE.CylinderGeometry(0.024*G, 0.04*G, 0.62*G, 6);
+spar.rotateZ(sign*1.15); spar.rotateY(sign*0.35); spar.translate(sign*0.22*G, 0.03*G, 0.10*G);
 return new THREE.Mesh(ModelKit.mergePainted([
 ModelKit.paint(mem, WING), ModelKit.paint(spar, BELLY)
 ]), paintMat);
 }
-const wingL = new THREE.Group(); wingL.position.set(-0.15, 0.42, -0.20);
+const wingL = new THREE.Group(); wingL.position.set(-0.15*G, 0.42*G, -0.20*G);
 wingL.add(wingMesh(-1)); wingL.rotation.z = -0.22; wingL.userData.base = -0.22; body.add(wingL);
-const wingR = new THREE.Group(); wingR.position.set(0.15, 0.42, -0.20);
+const wingR = new THREE.Group(); wingR.position.set(0.15*G, 0.42*G, -0.20*G);
 wingR.add(wingMesh(1)); wingR.rotation.z = 0.22; wingR.userData.base = 0.22; body.add(wingR);
 wingL.scale.setScalar(cfg.wingSize); wingR.scale.setScalar(cfg.wingSize);
 
@@ -4078,19 +4145,21 @@ return new THREE.Mesh(ModelKit.mergePainted(parts), paintMat);
 }
 /* 尾根：原位（z=-0.21）底盘与躯干后表面只是相切——整组内嵌 0.055 扎进髋部，
 再加尾根丘包覆，根部成一体（总尾长随之短 0.055，垂地余量复核见探针） */
-const tail1 = new THREE.Group(); tail1.position.set(0, -0.04, -0.155);
-tail1.add(tailSeg(0.082, 0.105, 0.32, 0.055, 0.13, 0.084, true)); tail1.userData.droop = -0.22; body.add(tail1);
-const tail2 = new THREE.Group(); tail2.position.set(0, 0, -0.32);
-tail2.add(tailSeg(0.06, 0.082, 0.28, 0.045, 0.11, 0.062, false)); tail2.userData.droop = -0.14; tail1.add(tail2);
-const tail3 = new THREE.Group(); tail3.position.set(0, 0, -0.28);
+/* #52：每节节长在等比放大之外再乘 GR.tail 额外生长（节长参数与下一节的
+   枢轴位置同乘，关节包覆球仍套住下一节根部，节间衔接关系不变） */
+const tail1 = new THREE.Group(); tail1.position.set(0, -0.04*G, -0.155*G);
+tail1.add(tailSeg(0.082, 0.105, 0.32*GR.tail, 0.055, 0.13, 0.084, true)); tail1.userData.droop = -0.22; body.add(tail1);
+const tail2 = new THREE.Group(); tail2.position.set(0, 0, -0.32*G*GR.tail);
+tail2.add(tailSeg(0.06, 0.082, 0.28*GR.tail, 0.045, 0.11, 0.062, false)); tail2.userData.droop = -0.14; tail1.add(tail2);
+const tail3 = new THREE.Group(); tail3.position.set(0, 0, -0.28*G*GR.tail);
 /* 尾巴尖变体：leaf = 定型版竖扁叶尖；ball = 圆球尾尖；spike = 细长尖刺 */
-const tipParts = [ dgPart(new THREE.CylinderGeometry(0.038, 0.06, 0.24, 10), BODY, 0, 0, -0.12, {rx:-Math.PI/2})];
+const tipParts = [ dgPart(new THREE.CylinderGeometry(0.038, 0.06, 0.24*GR.tail, 10), BODY, 0, 0, -0.12*GR.tail, {rx:-Math.PI/2})];
 if(cfg.tailTip === 'ball')
-tipParts.push(dgPart(new THREE.SphereGeometry(0.105, 12, 9), CORAL, 0, 0.01, -0.27));
+tipParts.push(dgPart(new THREE.SphereGeometry(0.105, 12, 9), CORAL, 0, 0.01, -0.27*GR.tail));
 else if(cfg.tailTip === 'spike')
-tipParts.push(dgPart(new THREE.ConeGeometry(0.075, 0.44, 7), CORAL, 0, 0.01, -0.42, {rx:-Math.PI/2, s:[0.4, 1, 1]}));
+tipParts.push(dgPart(new THREE.ConeGeometry(0.075, 0.44, 7), CORAL, 0, 0.01, -0.42*GR.tail, {rx:-Math.PI/2, s:[0.4, 1, 1]}));
 else
-tipParts.push(dgPart(new THREE.ConeGeometry(0.115, 0.30, 7), CORAL, 0, 0.02, -0.335, {rx:-Math.PI/2, s:[0.35, 1, 1]}));
+tipParts.push(dgPart(new THREE.ConeGeometry(0.115, 0.30, 7), CORAL, 0, 0.02, -0.335*GR.tail, {rx:-Math.PI/2, s:[0.35, 1, 1]}));
 tail3.add(new THREE.Mesh(ModelKit.mergePainted(tipParts), paintMat));
 tail3.userData.droop = -0.06; tail2.add(tail3);
 
@@ -4100,8 +4169,8 @@ tail3.userData.droop = -0.06; tail2.add(tail3);
 帽子/蝴蝶结/眼镜挂 head 组（一人称藏头时随头一起藏，合乎实情）。 */
 const accParts = {};
 if(cfg.acc.scarf){
-const flap = new THREE.SphereGeometry(0.09, 10, 8);
-flap.scale(0.48, 0.9, 0.17); flap.translate(0.085, 0.29, 0.26);
+const flap = new THREE.SphereGeometry(0.09*G, 10, 8);
+flap.scale(0.48, 0.9, 0.17); flap.translate(0.085*G, 0.29*G, 0.26*G);
 accParts.scarf = new THREE.Mesh(ModelKit.mergePainted([
 /* 环抱脖颈基座一圈：内缘整圈咬进颈球/基座里 */
 dgRing(0.185, 0.034, 1, 1, 0xd84a35, 0, 0.505, 0.005, -0.20),
@@ -4152,8 +4221,12 @@ dgPart(new THREE.CylinderGeometry(0.011, 0.011, 0.27, 6), 0x2b2320, 0.238, 0.045
 head.add(accParts.glasses);
 }
 
+drgGrowK = 1;   // 本只建完复位，别污染之后任何 dgPart 调用
 return { group: root, parts: {
-body: body, bodyBaseY: 0.55, lie: lie, head: head, eyes: eyeMesh, finL: finL, finR: finR,
+body: body, bodyBaseY: 0.55*G, lie: lie, head: head, eyes: eyeMesh, finL: finL, finR: finR,
+/* #52：动画层的几何量接入点——步态起伏、睡姿支点与手臂枢轴基准都按本档
+   系数取（dragonAnimate 读），角度量（摆角/滚转角）与尺寸无关不缩放 */
+grow: G, armBase: {x:0.345*G, y:0.44*G, z:0.03*G, inX:0.055*G, inZ:0.10*G},
 armL: armL, armR: armR, legL: legL, legR: legR,
 wingL: wingL, wingR: wingR,
 tail: [tail1, tail2, tail3],
@@ -4231,7 +4304,7 @@ function dragonAnimate(a, dt, t){
     // 双足步态：双腿交替前后摆 + 双臂与同侧腿反向摆 + 身体起伏/侧倾/微微前倾
     a.walkPhase += dt * 4.8 * a.moveAmt;
     const wp = a.walkPhase;
-    P.body.position.y = P.bodyBaseY + Math.abs(Math.sin(wp))*0.05*moving + Math.sin(t*0.9)*0.006*(1 - pose);
+    P.body.position.y = P.bodyBaseY + Math.abs(Math.sin(wp))*0.05*P.grow*moving + Math.sin(t*0.9)*0.006*(1 - pose);
     P.body.rotation.z = Math.sin(wp)*0.05*moving;
     P.body.rotation.x = 0.07*moving;
     const legSw = 0.62*moving, armSw = 0.50*moving;
@@ -4243,8 +4316,9 @@ function dragonAnimate(a, dt, t){
     P.armR.rotation.x = Math.sin(wp)*armSw - pose*0.55;
     P.armL.rotation.z = P.armL.userData.baseZ + pose*0.8;   // 睡姿双手再向内收：倒下侧的手落在胸前地面上
     P.armR.rotation.z = P.armR.userData.baseZ - pose*0.8;
-    P.armL.position.set(-0.345 + pose*0.055, 0.44, 0.03 + pose*0.10);  // 睡姿手臂枢轴内收+前移（胳膊收到胸前，
-    P.armR.position.set(0.345 - pose*0.055, 0.44, 0.03 + pose*0.10);   // 肩头不再是侧躺时唯一支地凸点）
+    const AB = P.armBase;   // #52：枢轴基准随成长档等比（数值与建模时 arm 组 position 同源）
+    P.armL.position.set(-AB.x + pose*AB.inX, AB.y, AB.z + pose*AB.inZ);  // 睡姿手臂枢轴内收+前移（胳膊收到胸前，
+    P.armR.position.set(AB.x - pose*AB.inX, AB.y, AB.z + pose*AB.inZ);   // 肩头不再是侧躺时唯一支地凸点）
     // 头：睡着垂头并向倒下侧歪头枕地；醒着只留呼吸浮动（张望在下方单独处理）
     P.head.rotation.x = pose*0.30 + Math.sin(t*0.7)*0.03*(1 - pose);
     P.head.rotation.z = pose*0.18;
@@ -4287,13 +4361,14 @@ function dragonAnimate(a, dt, t){
     P.lie.rotation.z = th;
     P.lie.rotation.x = pose * 0.10;
     const cx = Math.cos(th), sx = Math.sin(th);
+    const pvx = DRG_LIE_PIVOT.x*P.grow, pvy = DRG_LIE_PIVOT.y*P.grow;   // #52：支点随尺寸等比
     P.lie.position.set(
-        DRG_LIE_PIVOT.x - (DRG_LIE_PIVOT.x*cx - DRG_LIE_PIVOT.y*sx),
-        DRG_LIE_PIVOT.y - (DRG_LIE_PIVOT.x*sx + DRG_LIE_PIVOT.y*cx) - pose*DRG_LIE_SINK,
+        pvx - (pvx*cx - pvy*sx),
+        pvy - (pvx*sx + pvy*cx) - pose*DRG_LIE_SINK,
         0);
     /* 互动叠加（#16/#17）：在既有动画全部算完之后加算，只用已被关节验收过的
        量程（垂头 ≤ 睡姿的 0.30、摆臂/转身走独立枢轴），不新增任何关节位移。
-       手势由 a.gesture 驱动（pat/wave/spin），啃食由 state==='eat' 驱动。 */
+       手势由 a.gesture 驱动（pat/wave/spin＋#52 的 highfive/bow），啃食由 state==='eat' 驱动。 */
     if(a.gesture){
         const g = a.gesture;
         g.t += dt;
@@ -4306,7 +4381,23 @@ function dragonAnimate(a, dt, t){
         } else if(g.kind === 'wave'){
             P.armR.rotation.z = P.armR.userData.baseZ + 2.05*genv;  // 右臂抬到头侧（肩关节球原地转，不脱窝）
             P.armR.rotation.x += Math.sin(t*17)*0.28*genv;          // 小幅摆手
-            P.lie.position.y += 0.12*Math.sin(gp*Math.PI);          // 顺带蹦一下（整组升降，脚不穿地）
+            P.lie.position.y += 0.12*P.grow*Math.sin(gp*Math.PI);   // 顺带蹦一下（整组升降，脚不穿地）
+        } else if(g.kind === 'highfive'){
+            // 击掌（#52 少年档解锁）：右臂抬到身前上方伸出去等击掌——z 向 1.55
+            // 小于 wave 的 2.05、x 向前伸 0.85 都在肩关节球原地转的已验量程内
+            P.armR.rotation.z = P.armR.userData.baseZ + 1.55*genv;
+            P.armR.rotation.x += -0.85*genv;
+            P.lie.position.y += 0.05*P.grow*Math.sin(gp*Math.PI);   // 垫脚够一下
+            if(gp > 0.45 && !g._h2){ g._h2 = 1; spawnHearts(5); }
+        } else if(g.kind === 'bow'){
+            // 作揖（#52 青年档解锁）：低头 0.28（睡姿垂头 0.30 量程内）＋上身
+            // 前倾＋双臂向前向内抱合成拳——双臂 z 向收拢 0.32 远小于睡姿 0.8
+            P.head.rotation.x += 0.28*genv;
+            P.body.rotation.x += 0.20*genv;
+            P.armL.rotation.x += -0.80*genv;
+            P.armR.rotation.x += -0.80*genv;
+            P.armL.rotation.z = P.armL.userData.baseZ + 0.32*genv;
+            P.armR.rotation.z = P.armR.userData.baseZ - 0.32*genv;
         } else if(g.kind === 'spin'){
             const ge = gp < .5 ? 2*gp*gp : 1 - Math.pow(-2*gp + 2, 2)/2;
             P.lie.rotation.y = -Math.PI*2*ge;                       // 整组绕自身竖轴转一圈，不动 group 朝向状态
@@ -4331,7 +4422,7 @@ function dragonAnimate(a, dt, t){
         P.head.scale.set(1, 1, 1);
     }
     if(happyK && moving < 0.3 && pose < 0.5)
-        P.body.position.y += Math.abs(Math.sin(t*5.2))*0.02;   // 开心时原地小蹦跶（只抬 body 层，同呼吸浮动一处）
+        P.body.position.y += Math.abs(Math.sin(t*5.2))*0.02*P.grow;   // 开心时原地小蹦跶（只抬 body 层，同呼吸浮动一处）
     // 待机转头张望（玩家操控时由相机接管头部，见操控节）；间隔随性格（#41）
     if(a.mode !== 'player'){
         a.lookYawT -= dt;
@@ -4959,8 +5050,18 @@ function dragonBusy(){
     const s=dragonAgent.state;
     return s==='play' || s==='eatGo' || s==='eat';
 }
+/* 手势时长表（#52 补 highfive/bow 两档成长解锁动作） */
+function drgGestureDur(kind){
+    return kind==='spin' ? 1.1 : kind==='pat' ? 1.8 :
+           kind==='bow' ? 1.9 : kind==='highfive' ? 1.4 : 1.6;
+}
 function dragonGesture(kind){
     const a=dragonAgent; if(!a) return;
+    // #52：成长解锁校验——击掌要少年档、作揖要青年档（菜单里未解锁时按钮
+    // 本就禁用，这里是第二道闸：庆祝自动触发只会用已解锁的新动作）
+    const gw = dragonCfg.grow || {days:1, stage:0};
+    if(kind==='highfive' && gw.stage < 1){ showHuntToast('🔒 击掌是少年龙的本事——再陪它 ' + (DRG_GROW_STAGE_DAYS[1] - gw.days) + ' 天吧'); return; }
+    if(kind==='bow' && gw.stage < 2){ showHuntToast('🔒 作揖是青年龙的礼数——再陪它 ' + (DRG_GROW_STAGE_DAYS[2] - gw.days) + ' 天吧'); return; }
     if(a.mode==='player'){
         // 接管中：移动输入优先——正在动（按键/摇杆/步态未停）就不起手势
         const moving = a.moveAmt>0.25 || DragonCtl.keys.size>0 ||
@@ -4968,7 +5069,7 @@ function dragonGesture(kind){
         if(moving){ showHuntToast('🏃 移动中呢，先停下来再和它玩'); return; }
         if(a.gesture) return;
         a.gesture={kind:kind, t:0};
-        a.gestureDur = kind==='spin' ? 1.1 : (kind==='pat' ? 1.8 : 1.6);
+        a.gestureDur = drgGestureDur(kind);
         if(kind==='pat') spawnHearts(9);
         hideDragonMenu();
         return;
@@ -4977,7 +5078,7 @@ function dragonGesture(kind){
     if(dragonBusy()) return;
     a.returnState = (a.state==='follow') ? 'follow' : 'idle';
     a.gesture={kind:kind, t:0};
-    a.gestureDur = kind==='spin' ? 1.1 : (kind==='pat' ? 1.8 : 1.6);
+    a.gestureDur = drgGestureDur(kind);
     if(kind==='pat') spawnHearts(9);
     hideDragonMenu();
     AgentKit.setState(a, 'play');
@@ -5006,8 +5107,17 @@ function refreshDragonMenu(){
     const fp=document.getElementById('dmFeedP'), fc=document.getElementById('dmFeedC');
     if(fp){ fp.textContent='🎃 喂南瓜 ×'+b.pumpkin; fp.disabled=b.pumpkin<=0; }
     if(fc){ fc.textContent='🌽 喂玉米 ×'+b.corn; fc.disabled=b.corn<=0; }
+    // #52：成长解锁的两个动作——没长到就上锁并写明还差几天
+    const gw=dragonCfg.grow || {days:1, stage:0};
+    const hf=document.getElementById('dmHighfive'), bw=document.getElementById('dmBow');
+    if(hf){ hf.disabled=gw.stage<1; hf.textContent=gw.stage<1 ? '🔒 击掌' : '🤝 击掌'; }
+    if(bw){ bw.disabled=gw.stage<2; bw.textContent=gw.stage<2 ? '🔒 作揖' : '🙇 作揖'; }
     const hint=document.getElementById('dmHint');
-    if(hint) hint.textContent='已喂 '+b.fed+' 次 · 喂饱后它会跟着你玩一阵';
+    if(hint){
+        let h='已喂 '+b.fed+' 次 · 喂饱后它会跟着你玩一阵';
+        if(gw.stage<2) h+=' · 🌱 还差 '+(DRG_GROW_STAGE_DAYS[gw.stage+1]-gw.days)+' 天长成'+DRG_GROWTH[gw.stage+1].label;
+        hint.textContent=h;
+    }
 }
 function hideDragonMenu(){
     const m=document.getElementById('dragonMenu');
@@ -5050,6 +5160,8 @@ function setupDragonInteract(){
     document.getElementById('dmPat').addEventListener('click', ()=>dragonGesture('pat'));
     document.getElementById('dmWave').addEventListener('click', ()=>dragonGesture('wave'));
     document.getElementById('dmSpin').addEventListener('click', ()=>dragonGesture('spin'));
+    document.getElementById('dmHighfive').addEventListener('click', ()=>dragonGesture('highfive'));
+    document.getElementById('dmBow').addEventListener('click', ()=>dragonGesture('bow'));
     document.getElementById('dmFeedP').addEventListener('click', ()=>dragonFeed('pumpkin'));
     document.getElementById('dmFeedC').addEventListener('click', ()=>dragonFeed('corn'));
     document.getElementById('dmClose').addEventListener('click', hideDragonMenu);
@@ -5090,6 +5202,14 @@ function dgOptRow(id, opts, get, set){
 }
 function refreshDragonPanel(){
     const c = dragonCfg;
+    // #52：成长进度（只读）——当前阶段、已陪伴天数、距下一档还差几天
+    const grEl = document.getElementById('dgGrowth');
+    if(grEl){
+        const gw = c.grow || {days:1, stage:0};
+        grEl.textContent = '🌱 现在是' + DRG_GROWTH[gw.stage].label + ' · 已陪伴 ' + gw.days + ' 天' +
+            (gw.stage < 2 ? ' · 再陪 ' + (DRG_GROW_STAGE_DAYS[gw.stage + 1] - gw.days) + ' 天长成' + DRG_GROWTH[gw.stage + 1].label
+                          : ' · 已经长大啦，会一直陪着你');
+    }
     const nameEl = document.getElementById('dgName');
     if(nameEl && document.activeElement !== nameEl) nameEl.value = c.name;
     dgOptRow('dgGender', [{v:'male', label:'♂ 他'}, {v:'female', label:'♀ 她'}],
@@ -5184,10 +5304,46 @@ function setupDragonCustom(){
     });
     document.getElementById('dgCall').addEventListener('click', () => { audioEnsure(); dragonCall(); });
     document.getElementById('dgReset').addEventListener('click', () => {
+        const keepGrow = dragonCfg.grow;   // #52：恢复默认只清外观/性格，成长是陪伴记录，不清
         dragonCfg = JSON.parse(JSON.stringify(DRG_DEFAULT_CFG));
+        if(keepGrow){ dragonCfg.grow = keepGrow; dragonCfg.stage = keepGrow.stage; }
         applyDragonCfg(true); refreshDragonPanel();
     });
     dragonRefreshLabels();
+}
+
+/* ---------- 成长仪式与大事记（Issue #52） ----------
+   升档当天第一次进世界：弹一句提示＋龙用刚学会的新动作庆祝一次，并把
+   seen 记上（同一档只庆祝一次）。成长条目进世界大事记：升档事件存在
+   ct2_dragon 的 grow.events 里，进屋大事记板渲染时与静态条目合并——
+   静态条目的灌入口径：#24 的 CHRONICLE 数据进 window.__chronicleBase，
+   本函数统一灌入（基线条目在前、成长条目在后），两边互不覆盖；#24 未灌入
+   时大事记板就只有成长条目（没有成长事件时为空数组，与空态一致）。 */
+function dragonGrowthChronicleItems(){
+    const g = dragonCfg.grow;
+    if(!g || !Array.isArray(g.events)) return [];
+    return g.events.map(e => ({date:e.d, text:'🐉 ' + dragonCfg.name + '长成了' + DRG_GROWTH[e.s].label}));
+}
+function applyGrowthChronicle(){
+    if(typeof Interior === 'undefined' || !Interior.setChronicle) return;
+    const base = window.__chronicleBase || [];
+    Interior.setChronicle(base.concat(dragonGrowthChronicleItems()));
+}
+function setupDragonGrowth(){
+    applyGrowthChronicle();
+    const g = dragonCfg.grow;
+    if(!g || g.stage <= g.seen) return;
+    setTimeout(() => {
+        const st = g.stage;
+        showHuntToast('🎉 ' + dragonCfg.name + '长大啦——现在是' + DRG_GROWTH[st].label + '！' +
+            (st === 1 ? '新本事：🤝 击掌（互动菜单里）' : '新礼数：🙇 作揖（互动菜单里）'));
+        g.seen = st; dragonSaveCfg();
+        applyGrowthChronicle();
+        // 用新学会的动作庆祝；睡着或被接管时不硬打断，只留提示与记录
+        if(dragonAgent && dragonAgent.mode !== 'player' &&
+           dragonAgent.state !== 'sleep' && dragonAgent.state !== 'sleepGo')
+            dragonGesture(st === 2 ? 'bow' : 'highfive');
+    }, 2600);
 }
 
 /* ==================== 天气系统 ==================== */
@@ -7772,6 +7928,9 @@ function setupGlobal(){
 
     /* 小龙定制（Issue #41）：入口是底部小龙按钮条里的「🎨 定制小龙」 */
     setupDragonCustom();
+
+    /* 小龙成长（Issue #52）：升档庆祝 + 成长条目并入室内大事记板 */
+    setupDragonGrowth();
 
     /* 资源加载失败降级：脚本/样式/图片 404 时给一句人话，而不是白屏 */
     window.addEventListener('error', function(ev){
