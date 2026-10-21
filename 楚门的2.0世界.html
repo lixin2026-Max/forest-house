@@ -664,12 +664,43 @@ function distToRiver(x,z){
     }
     return best;
 }
-// 统一的水面避让：湖按椭圆、河按中心线，pad 是要再让出的余量；true=干地可放东西
-function waterClear(x,z,pad){
-    const ex=(x-LAKE_C.x)/(LAKE_RX+pad), ez=(z-LAKE_C.z)/(LAKE_RZ+pad);
-    if(ex*ex+ez*ez<1) return false;
-    return distToRiver(x,z)>=pad;
-}
+/* ==================== 可行走地图（Issue #31 · 地基） ====================
+   全场唯一的障碍/禁区查询层：水域、山丘、房屋、农田、路面、篝火、寻宝点
+   全部登记在这里。散布选点、树木选点、（将来的）角色移动都只问这一处，
+   不再各写一套避让。本层只做纯查询：不掷骰子、不改任何状态——
+   所有随机流的消费顺序与次数与收编前逐一一致，世界布局零位移
+   （已用改前/改后坐标指纹对照验证：树/野花/碎石/寻宝点逐一相同）。 */
+const WalkMap = {
+    /* 水域：湖按椭圆、河按中心线采样，pad 是要再让出的余量；true=离水至少 pad 的干地 */
+    waterDry(x, z, pad){
+        const ex=(x-LAKE_C.x)/(LAKE_RX+pad), ez=(z-LAKE_C.z)/(LAKE_RZ+pad);
+        if(ex*ex+ez*ez<1) return false;
+        return distToRiver(x,z)>=pad;
+    },
+    /* 山丘：true=不在任何一座山丘的半径+pad 内（pad 可为负，表示允许贴裙边） */
+    hillDry(x, z, pad){
+        for(const hd of BACK_HILLS) if(Math.hypot(x-hd.x,z-hd.z)<hd.r+pad) return false;
+        return true;
+    },
+    /* 复合禁区（旧 scatterClear 的全部规则，一条未删）：
+       房子与花带 / 农田 / 池塘与河 / 石板路 / 篝火 / 山丘 / 寻宝点 */
+    clearOf(x, z){
+        if(Math.hypot(x-HOUSE_POS.x,z-HOUSE_POS.z)<8.5) return false;
+        const rx=x-HOUSE_POS.x, rz=z-HOUSE_POS.z;
+        const lx=rx*HOUSE_R.x+rz*HOUSE_R.z, lz=rx*HOUSE_F.x+rz*HOUSE_F.z;
+        if(lx>FARM_RECT.lx0-1.2 && lx<-8.6 && lz>FARM_RECT.lz0-1.2 && lz<9.4) return false;
+        if(!this.waterDry(x,z,1.1)) return false;
+        if(x>-3.4 && x<9.6 && z>1.4 && z<4.0) return false;
+        if(Math.hypot(x+8.5,z-8.5)<2.2) return false;
+        if(!this.hillDry(x,z,-2)) return false;
+        for(const sp of HUNT_SPOTS) if(Math.hypot(x-sp[0],z-sp[1])<1.3) return false;
+        return true;
+    },
+    /* 角色行走口径：脚下是干地、且不在复合禁区里（供 #27 小龙等地面角色移动查询） */
+    isWalkable(x, z){
+        return this.waterDry(x, z, 0) && this.clearOf(x, z);
+    }
+};
 let bfBodyIM=null, bfWingLIM=null, bfWingRIM=null;
 let beeBodyIM=null, beeStripeIM=null, beeWingLIM=null, beeWingRIM=null;
 let birds = [], butterflies = [], bees = [], squirrels = [], smokePuffs = [];
@@ -678,6 +709,41 @@ const weatherModes  = ['sunny','mist','night','rain','golden'];
 const weatherLabels = ['晴天','雾天','夜间','雨天','金色时刻'];
 // 当前生效的天气目标值（滑杆在此基础上微调）
 const wx = { elev:45, fogMul:0, orbit:false };
+
+/* ==================== 配置区（可移植性接缝 · 集中可调参数） ====================
+   全场可调参数尽量收在这里，不散落魔法数字。将来移植到小程序/App 时，
+   平台差异只碰「适配层」（存储 store、唯一上报通道、输入绑定），
+   核心系统（时钟/行为/地图/环境）只读这里的数值与声明式数据，不碰浏览器接口。 */
+const CONFIG = {
+    autoRotateSec: 600,                          // 自动轮转间隔（秒）：#26 定 10 分钟
+    daySeq: ['sunny','golden','night','mist'],   // 昼夜轮转序列（阶段名与 weatherModes 对齐）
+    skyTransSec: 2.6,                            // 天气切换过渡时长（秒）
+    windByMode: { rain:1.6, mist:0.3 },          // 风力倍率（未列的天气=1）：雨天最大、雾天最弱
+    smokeByMode: { rain:2.2 }                    // 炊烟横移倍率（未列的天气=1）
+};
+
+/* ---------- 薄存储适配层 ----------
+   核心系统不直接碰本地存储：一律经 store.<槽> 读写。槽位与 5 个白名单键
+   一一对应，键名仍以字面量出现在下面这唯一实现处（安全审计照常钉死）。
+   移植时只换 mkSlot 底下的读写实现（小程序 storage / App 本地库），上层不动。 */
+function mkSlot(read, write){
+    const slot = { failed:false, _read:read, _write:write,
+        get(){ try{ return slot._read(); }catch(e){ slot.failed = true; return null; } },
+        set(v){ try{ slot._write(v); }catch(e){ slot.failed = true; } },
+        json(fallback){ const raw = slot.get(); if(raw === null) return fallback;
+            try{ const v = JSON.parse(raw); return (v && typeof v === 'object') ? v : fallback; }
+            catch(e){ return fallback; } },
+        save(obj){ slot.set(JSON.stringify(obj)); }
+    };
+    return slot;
+}
+const store = {
+    visits: mkSlot(()=>localStorage.getItem('ct2_visits'), v=>localStorage.setItem('ct2_visits', v)),
+    hunt:   mkSlot(()=>localStorage.getItem(HUNT_KEY),     v=>localStorage.setItem(HUNT_KEY, v)),
+    help:   mkSlot(()=>localStorage.getItem(HELP_KEY),     v=>localStorage.setItem(HELP_KEY, v)),
+    farm:   mkSlot(()=>localStorage.getItem(FARM_KEY),     v=>localStorage.setItem(FARM_KEY, v)),
+    vote:   mkSlot(()=>localStorage.getItem(VOTE_KEY),     v=>localStorage.setItem(VOTE_KEY, v))
+};
 
 /* ==================== 程序化贴图工厂 ==================== */
 function makeCanvas(w,h){ const c=document.createElement('canvas'); c.width=w; c.height=h; return c; }
@@ -1132,7 +1198,7 @@ function createTerrain(){
     const rockGeos=[];
     const rockRnd=mulberry32(20260303);
     function pushRock(x,z,s){
-        const rg=new THREE.DodecahedronGeometry(s,0);
+        const rg=ModelKit.rock(s);
         rg.rotateX(rockRnd()*3); rg.rotateY(rockRnd()*3); rg.rotateZ(rockRnd()*3);
         rg.translate(x,terrainH(x,z)+s*0.45,z);
         rockGeos.push(rg);
@@ -1193,7 +1259,11 @@ function paintGeo(geo,hex){
     geo.setAttribute('color',new THREE.BufferAttribute(arr,3));
     return geo;
 }
-// 合并已刷色的几何体：与 concatGeos 同法，但多搬一份 color（原 concatGeos 不带顶点色）
+// 合并已刷色的几何体：与 concatGeos 同法，但多搬一份 color。
+// 【顶点色的坑】普通 concatGeos 只搬 position/normal/uv，不搬 color：
+// 哪个零件漏了 paintGeo 刷色，它的 color 段就是全 0，渲染出来整片发黑——
+// 农田上线时就踩过一次。所以带色零件一律走这条 mergePaintedGeos，
+// 且每个零件入列前必须先 paintGeo，没有例外。
 function mergePaintedGeos(geos){
     const nonIndexed=geos.map(g=>g.index?g.toNonIndexed():g);
     let vc=0; nonIndexed.forEach(g=>vc+=g.attributes.position.count);
@@ -1214,6 +1284,35 @@ function mergePaintedGeos(geos){
     out.setAttribute('color',new THREE.BufferAttribute(col,3));
     return out;
 }
+
+/* ==================== 建模工具箱（Issue #33 · 地基） ====================
+   全场建模的正式入口：参数化构件生成器 + 几何合并 + 统一色板。
+   新模型（#27 小龙、#36 场景大优化、室内家具…）按 MODELING.md 的步骤
+   从这里取件，不要在场景代码里散写几何拼装。工具箱只产几何与材质，
+   不碰场景图与浏览器接口——同一套件换到任何渲染宿主都能用。 */
+const ModelKit = {
+    /* 几何合并：mergeGeos（普通件）/ paint + mergePainted（顶点色件，见上方坑注） */
+    merge: mergeGeos,
+    paint: paintGeo,
+    mergePainted: mergePaintedGeos,
+    /* 参数化构件：树（seed 决定造型，同 seed 必同形） */
+    pine: buildPineGeo,
+    birch: buildBirchGeo,
+    /* 石头：正十二面体低多边形，r 为半径 */
+    rock(r){ return new THREE.DodecahedronGeometry(r, 0); },
+    /* 农田作物：一格一份几何（sunflower/corn 不用 rnd 参数，pumpkin 用它撒籽点位） */
+    crops: { sunflower: farmSunflowerGeos, corn: farmCornGeos, pumpkin: farmPumpkinGeos, sprout: sproutGeos }
+};
+/* 统一色板：全场反复用的颜色只在这里定义一份，改色改一处、全场一致。
+   数值与收编前逐一相同（完整色板表见 MODELING.md）。 */
+const PALETTE = {
+    stem:   0x4f7a2e,   // 花茎/藤蔓绿
+    leaf:   0x5c8a38,   // 叶片/草簇绿
+    stalk:  0x55802f,   // 作物茎绿（玉米/嫩芽）
+    leafLt: 0x63963a,   // 亮叶绿
+    disk:   0x5a3a15,   // 花盘/花芯褐
+    petal:  0xe8a81a    // 向日葵瓣金黄
+};
 const TREE_BARK = new THREE.MeshStandardMaterial({color:0x6e4a26,roughness:1});
 const TREE_BIRCH= new THREE.MeshStandardMaterial({color:0xe6e1cf,roughness:1});
 const NEEDLE_A  = new THREE.MeshStandardMaterial({color:0x2e7d32,roughness:1});
@@ -1263,12 +1362,12 @@ function plantTree(x,z,isPine,seed){
 // 替代原来每棵树 2 个 mesh 的 68 次绘制；树冠仍逐棵随风摆动（每帧重算实例矩阵）
 function buildTreeInstances(trees){
     const groups={
-        pineBark:{geo:mergeGeos(buildPineGeo(1000).bark), mat:TREE_BARK, list:[]},
-        birchBark:{geo:mergeGeos(buildBirchGeo(2000).bark), mat:TREE_BIRCH, list:[]},
-        pineLeaf0:{geo:mergeGeos(buildPineGeo(1000).leaves), mat:NEEDLE_B, list:[]},
-        pineLeaf1:{geo:mergeGeos(buildPineGeo(1001).leaves), mat:NEEDLE_A, list:[]},
-        birchLeaf0:{geo:mergeGeos(buildBirchGeo(2000).leaves), mat:LEAF_B, list:[]},
-        birchLeaf1:{geo:mergeGeos(buildBirchGeo(2001).leaves), mat:LEAF_A, list:[]}
+        pineBark:{geo:mergeGeos(ModelKit.pine(1000).bark), mat:TREE_BARK, list:[]},
+        birchBark:{geo:mergeGeos(ModelKit.birch(2000).bark), mat:TREE_BIRCH, list:[]},
+        pineLeaf0:{geo:mergeGeos(ModelKit.pine(1000).leaves), mat:NEEDLE_B, list:[]},
+        pineLeaf1:{geo:mergeGeos(ModelKit.pine(1001).leaves), mat:NEEDLE_A, list:[]},
+        birchLeaf0:{geo:mergeGeos(ModelKit.birch(2000).leaves), mat:LEAF_B, list:[]},
+        birchLeaf1:{geo:mergeGeos(ModelKit.birch(2001).leaves), mat:LEAF_A, list:[]}
     };
     trees.forEach(rec=>{
         groups[rec.isPine?'pineBark':'birchBark'].list.push({rec:rec,sway:false});
@@ -1309,10 +1408,7 @@ const BACK_HILLS=[
     return {x:c[0], z:c[1], r:hd.r, h:hd.h, r2:hd.r2, h2:hd.h2, o2:hd.o2, color:hd.color};
 });
 function fenceZAt(x){ return -15.5-Math.sin((x+19)/38*Math.PI)*2.2; }  // 与 createFence 的线形一致
-function hillClear(x,z,pad){
-    for(const hd of BACK_HILLS) if(Math.hypot(x-hd.x,z-hd.z)<hd.r+pad) return false;
-    return true;
-}
+/* 山丘禁区查询已收进可行走地图（WalkMap.hillDry），见湖河一节 */
 // 屋后树林选点：栅栏之外、避开山丘裙边与寻宝藏点，并避让已有的环带树，近密远疏两带
 function planBackyardGrove(ringPts){
     const rnd=mulberry32(20261021);
@@ -1320,7 +1416,7 @@ function planBackyardGrove(ringPts){
     function accept(x,z,gap){
         if(Math.hypot(x+7,z+4)<11.5) return false;                     // 不贴小屋
         if(x>-20&&x<20&&z>fenceZAt(x)-2.5) return false;               // 种在栅栏外侧
-        if(!hillClear(x,z,0.5)) return false;                         // 不上山丘（可贴裙边）
+        if(!WalkMap.hillDry(x,z,0.5)) return false;                   // 不上山丘（可贴裙边）
         for(const sp of HUNT_SPOTS) if(Math.hypot(x-sp[0],z-sp[1])<3.2) return false;  // 不挡寻宝
         if(ringPts) for(const p of ringPts) if(Math.hypot(p[0]-x,p[1]-z)<4.5) return false;
         for(const p of pts) if(Math.hypot(p[0]-x,p[1]-z)<gap) return false;
@@ -1379,7 +1475,7 @@ function createTrees(){
     function ok(x,z,minGap){
         if(Math.hypot(x+7,z+4)<9)return false;          // 避开小屋
         if(Math.hypot(x-8,z-6)<13)return false;         // 避开空地
-        if(!waterClear(x,z,1.2))return false;          // 避开小湖与小河
+        if(!WalkMap.waterDry(x,z,1.2))return false;    // 避开小湖与小河
         for(const p of placed) if(Math.hypot(p[0]-x,p[1]-z)<minGap) return false;
         return true;
     }
@@ -1397,7 +1493,7 @@ function createTrees(){
         else if(rnd()<0.6)animal='bd';
         jobs.push({rec:rec, animal:animal});
     }
-    const kept=jobs.filter(function(j){ return hillClear(j.rec.x,j.rec.z,2); });
+    const kept=jobs.filter(function(j){ return WalkMap.hillDry(j.rec.x,j.rec.z,2); });
     kept.forEach(function(j){
         trees.push(j.rec);
         if(j.animal==='sq')attachSquirrel(j.rec);
@@ -1498,7 +1594,7 @@ function createHouse(){
     step.position.set(0,0.07,3.05); step.receiveShadow=step.castShadow=true;
     house.add(step);
     const potMat=new THREE.MeshStandardMaterial({color:0xa8502e,roughness:0.95});
-    const bushMat=new THREE.MeshStandardMaterial({color:0x4f7a2e,roughness:1});
+    const bushMat=new THREE.MeshStandardMaterial({color:PALETTE.stem,roughness:1});
     const bloomMat=new THREE.MeshStandardMaterial({color:0xe86a8a,roughness:0.8});
     [-1.18,1.18].forEach(px=>{
         const pot=new THREE.Mesh(new THREE.CylinderGeometry(0.17,0.13,0.26,8),potMat);
@@ -1627,7 +1723,7 @@ function createSunflowers(){
     // 花杆实例
     const stemGeo=new THREE.CylinderGeometry(0.06,0.09,1,5).translate(0,0.5,0);
     flowerStemIM=new THREE.InstancedMesh(stemGeo,
-        new THREE.MeshStandardMaterial({color:0x4f7a2e,roughness:1}),N);
+        new THREE.MeshStandardMaterial({color:PALETTE.stem,roughness:1}),N);
     flowerStemIM.castShadow=true;
     // 花头实例（盘+花瓣预合并）
     // 花盘与花瓣统一朝 +Z 组装：花瓣在 XY 平面内放射，实例化时再整体转向
@@ -1650,7 +1746,7 @@ function createSunflowers(){
     const coreGeo=new THREE.CylinderGeometry(0.17,0.17,0.05,18);
     coreGeo.rotateX(Math.PI/2); coreGeo.translate(0,0,0.08);
     const coreIM=new THREE.InstancedMesh(coreGeo,
-        new THREE.MeshStandardMaterial({color:0x5a3a15,roughness:1}),N);
+        new THREE.MeshStandardMaterial({color:PALETTE.disk,roughness:1}),N);
     scene.add(flowerStemIM,flowerHeadIM,coreIM);
     flowerHeadIM.userData.cores=coreIM;
 
@@ -1720,20 +1816,20 @@ function farmCellCenter(r,c){
 function farmSunflowerGeos(){
     const parts=[];
     const stem=new THREE.CylinderGeometry(0.045,0.07,1.5,5); stem.translate(0,0.75,0);
-    parts.push(paintGeo(stem,0x4f7a2e));
+    parts.push(paintGeo(stem,PALETTE.stem));
     for(const s of [-1,1]){
         const leaf=new THREE.SphereGeometry(0.24,5,4); leaf.scale(1,0.22,0.5);
         leaf.rotateY(s*0.7); leaf.translate(s*0.2,0.72,0);
-        parts.push(paintGeo(leaf,0x5c8a38));
+        parts.push(paintGeo(leaf,PALETTE.leaf));
     }
     const head=[];
     const disk=new THREE.CylinderGeometry(0.26,0.26,0.09,10);
     disk.rotateX(Math.PI/2); disk.translate(0,0,0.02);
-    head.push(paintGeo(disk,0x5a3a15));
+    head.push(paintGeo(disk,PALETTE.disk));
     for(let j=0;j<10;j++){
         const p=new THREE.ConeGeometry(0.11,0.36,4);
         p.scale(1,1,0.3); p.translate(0,0.42,0); p.rotateZ(j/10*Math.PI*2);
-        head.push(paintGeo(p,0xe8a81a));
+        head.push(paintGeo(p,PALETTE.petal));
     }
     const hm=new THREE.Matrix4().makeRotationX(-0.42); hm.setPosition(0,1.52,0.05);
     head.forEach(g=>g.applyMatrix4(hm));
@@ -1742,11 +1838,11 @@ function farmSunflowerGeos(){
 function farmCornGeos(){
     const parts=[];
     const stalk=new THREE.CylinderGeometry(0.05,0.085,2.0,5); stalk.translate(0,1.0,0);
-    parts.push(paintGeo(stalk,0x55802f));
+    parts.push(paintGeo(stalk,PALETTE.stalk));
     const leafAt=(y,ry,tilt)=>{
         const l=new THREE.ConeGeometry(0.15,0.95,4); l.scale(1,1,0.22);
         l.translate(0,0.42,0); l.rotateX(tilt); l.rotateY(ry); l.translate(0,y,0);
-        parts.push(paintGeo(l,0x63963a));
+        parts.push(paintGeo(l,PALETTE.leafLt));
     };
     leafAt(0.65,0.4,0.85); leafAt(0.95,2.4,0.95); leafAt(1.3,4.2,0.8); leafAt(1.55,1.4,1.0);
     const cob=new THREE.CylinderGeometry(0.085,0.11,0.52,6);
@@ -1761,12 +1857,12 @@ function farmPumpkinGeos(rnd){
     const parts=[];
     const vine=new THREE.TorusGeometry(0.34,0.045,5,12,Math.PI*1.5);
     vine.rotateX(Math.PI/2); vine.rotateY(rnd()*3); vine.translate(0,0.05,0);
-    parts.push(paintGeo(vine,0x4f7a2e));
+    parts.push(paintGeo(vine,PALETTE.stem));
     for(let i=0;i<3;i++){
         const lf=new THREE.SphereGeometry(0.27,6,4); lf.scale(1,0.2,1);
         const a=rnd()*6.28, d=0.25+rnd()*0.25;
         lf.translate(Math.cos(a)*d,0.10,Math.sin(a)*d);
-        parts.push(paintGeo(lf,0x5c8a38));
+        parts.push(paintGeo(lf,PALETTE.leaf));
     }
     const fruits=[[0.28,0.05,0.32],[-0.30,-0.14,0.25]];
     for(const f of fruits){
@@ -1775,7 +1871,7 @@ function farmPumpkinGeos(rnd){
         parts.push(paintGeo(p,0xe07b24));
         const st=new THREE.CylinderGeometry(0.035,0.05,0.12,5);
         st.translate(f[0],f[2]*1.5+0.05,f[1]);
-        parts.push(paintGeo(st,0x4f7a2e));
+        parts.push(paintGeo(st,PALETTE.stem));
     }
     return parts;
 }
@@ -1807,8 +1903,7 @@ function createFarm(){
         farmGrid.push({row:r,col:c,lx:cell[0],lz:cell[1],x:w[0],z:w[1],crop:crop,
             playable:!!PLAYABLE_CELLS[r+','+c]});
         if(!crop) continue;
-        const parts= crop==='sunflower' ? farmSunflowerGeos()
-                   : crop==='corn' ? farmCornGeos() : farmPumpkinGeos(rnd);
+        const parts= ModelKit.crops[crop](rnd);
         const sc=0.92+rnd()*0.2;
         const m=new THREE.Matrix4().makeRotationY(rnd()*6.28);
         m.setPosition(cell[0]+(rnd()-0.5)*0.24, 0.21, cell[1]+(rnd()-0.5)*0.24);
@@ -1844,7 +1939,8 @@ let farmTapBound=false, farmTapState=null, farmRainToastShown=false;
 
 function loadFarm(){
     let saved=null;
-    try{ const raw=localStorage.getItem(FARM_KEY); if(raw) saved=JSON.parse(raw); }catch(e){ saved=null; }
+    const raw=store.farm.get();
+    if(raw){ try{ saved=JSON.parse(raw); }catch(e){ saved=null; } }
     if(!saved||typeof saved!=='object') saved={day:0,harvest:0,cells:{}};
     if(typeof saved.day!=='number') saved.day=0;
     if(typeof saved.harvest!=='number') saved.harvest=0;
@@ -1853,24 +1949,23 @@ function loadFarm(){
     return saved;
 }
 function saveFarm(){
-    try{ localStorage.setItem(FARM_KEY, JSON.stringify(farmState)); }catch(e){ /* 存不了就只记在内存里 */ }
+    store.farm.save(farmState);   // 存不了时适配层静默失败，只记在内存里（与旧版一致）
 }
 function sproutGeos(){
     const parts=[];
     const stem=new THREE.CylinderGeometry(0.03,0.045,0.34,5); stem.translate(0,0.17,0);
-    parts.push(paintGeo(stem,0x55802f));
+    parts.push(paintGeo(stem,PALETTE.stalk));
     for(const s of [-1,1]){
         const leaf=new THREE.SphereGeometry(0.13,5,4); leaf.scale(1,0.25,0.55);
         leaf.rotateZ(s*0.5); leaf.translate(s*0.11,0.34,0);
-        parts.push(paintGeo(leaf,0x63963a));
+        parts.push(paintGeo(leaf,PALETTE.leafLt));
     }
     return parts;
 }
 function cropGeosAt(crop,cell,stage){
     // stage: 0 刚发芽（通用嫩芽） 1 已浇水长成半大 2 成熟（全尺寸）
     if(stage===0) return sproutGeos();
-    const parts= crop==='sunflower' ? farmSunflowerGeos()
-               : crop==='corn' ? farmCornGeos() : farmPumpkinGeos(mulberry32(cell.row*10+cell.col+3));
+    const parts= ModelKit.crops[crop](mulberry32(cell.row*10+cell.col+3));
     const sc= stage===2 ? 1.0 : 0.55;
     const m=new THREE.Matrix4().makeRotationY((cell.row*7+cell.col*3)%6);
     m.setPosition(cell.lx,0.24,cell.lz);
@@ -1938,7 +2033,7 @@ function onFarmCellTap(cell){
     }
     showHuntToast('🌿 '+FARM_CROP_NAMES[st.crop]+'已经浇过水啦，就等它成熟');
 }
-// 昼夜轮转满一圈（自动时序回到 sunny）时由 updateAutoSeq 调用：浇过水的作物成熟
+// 游戏时钟发出「新的一天」时调用（buildFarmGame 里订阅）：浇过水的作物成熟
 function farmNewDay(){
     if(!farmState) return;
     farmState.day++;
@@ -1964,7 +2059,7 @@ function farmSettleByDate(){
     if(farmState.lastDate===today) return;
     if(!farmState.lastDate){ farmState.lastDate=today; saveFarm(); return; }
     farmState.lastDate=today;
-    farmNewDay();
+    GClock.newDay();   // 与轮转满圈共用同一个「新的一天」出口，靠 mature 标记防重复结算
 }
 // 雨天自动浇水：下雨时还没浇的苗一律算浇过（animate 里每帧调，未下雨时立即返回）
 function farmRainCheck(){
@@ -2014,6 +2109,7 @@ function bindFarmTap(){
 }
 function buildFarmGame(){
     farmState=loadFarm();
+    GClock.onNewDay(farmNewDay);   // 订阅游戏时钟的「新的一天」：轮转满圈/跨天进页都经它结算
     farmSettleByDate();
     renderPlayCrops();
     bindFarmTap();
@@ -2031,7 +2127,7 @@ const WILD_TINTS=[0xe86a8a,0xf2c230,0x9a7ec8,0xf5e6a8,0xe86a3a,0xf2f2f2];
 function placeWildflowers(pts,rnd){
     if(!pts.length) return;
     const stems=new THREE.InstancedMesh(wildStemGeo(),
-        new THREE.MeshStandardMaterial({color:0x4f7a2e,roughness:1}),pts.length);
+        new THREE.MeshStandardMaterial({color:PALETTE.stem,roughness:1}),pts.length);
     const heads=new THREE.InstancedMesh(wildHeadGeo(),
         new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.85}),pts.length);
     pts.forEach((p,i)=>{
@@ -2066,24 +2162,13 @@ function createFlowerBands(){
     }
     placeWildflowers(pts,rnd);
 }
-// 散布避让：房子与花带、农田、池塘、石板路、篝火、寻宝点、屋后山丘都不压
-function scatterClear(x,z){
-    if(Math.hypot(x-HOUSE_POS.x,z-HOUSE_POS.z)<8.5) return false;
-    const rx=x-HOUSE_POS.x, rz=z-HOUSE_POS.z;
-    const lx=rx*HOUSE_R.x+rz*HOUSE_R.z, lz=rx*HOUSE_F.x+rz*HOUSE_F.z;
-    if(lx>FARM_RECT.lx0-1.2 && lx<-8.6 && lz>FARM_RECT.lz0-1.2 && lz<9.4) return false;
-    if(!waterClear(x,z,1.1)) return false;
-    if(x>-3.4 && x<9.6 && z>1.4 && z<4.0) return false;
-    if(Math.hypot(x+8.5,z-8.5)<2.2) return false;
-    if(!hillClear(x,z,-2)) return false;
-    for(const sp of HUNT_SPOTS) if(Math.hypot(x-sp[0],z-sp[1])<1.3) return false;
-    return true;
-}
+// 散布避让已收进可行走地图（WalkMap.clearOf）：房子与花带、农田、池塘、
+// 石板路、篝火、寻宝点、屋后山丘都不压——规则在地图层一处维护
 function scatterPoint(rnd,cx,cz,rMin,rMax){
     for(let t=0;t<14;t++){
         const a=rnd()*Math.PI*2, d=rMin+rnd()*(rMax-rMin);
         const x=cx+Math.cos(a)*d, z=cz+Math.sin(a)*d;
-        if(scatterClear(x,z)) return [x,z];
+        if(WalkMap.clearOf(x,z)) return [x,z];
     }
     return null;
 }
@@ -2126,7 +2211,7 @@ function createOutskirts(){
     for(let i=0;i<26;i++){
         const a=rnd()*Math.PI*2, f=1.16+rnd()*0.30;
         const x=LAKE_C.x+Math.cos(a)*LAKE_RX*f, z=LAKE_C.z+Math.sin(a)*LAKE_RZ*f;
-        if(scatterClear(x,z)) wpts.push([x,z]);
+        if(WalkMap.clearOf(x,z)) wpts.push([x,z]);
     }
     // 河两岸也点缀一串，跟着水走
     if(!RIVER_PTS) buildRiverPts();
@@ -2134,11 +2219,11 @@ function createOutskirts(){
         const p=RIVER_PTS[1+((rnd()*RIVER_N)|0)];
         const side=rnd()<0.5?-1:1;
         const x=p.x+side*(p.half+0.9+rnd()*0.8), z=p.z+(rnd()-0.5)*1.6;
-        if(scatterClear(x,z)) wpts.push([x,z]);
+        if(WalkMap.clearOf(x,z)) wpts.push([x,z]);
     }
     for(let i=0;i<22;i++){
         const x=-19+rnd()*38, z=fenceZAt(x)-2.2-rnd()*4.5;
-        if(scatterClear(x,z)) wpts.push([x,z]);
+        if(WalkMap.clearOf(x,z)) wpts.push([x,z]);
     }
     placeWildflowers(wpts,rnd);
     // ③ 草丛加密：与现有草簇同几何，再铺一层到远处
@@ -2152,7 +2237,7 @@ function createOutskirts(){
     const tuftGeo=concatGeos(blades.map(g=>g.toNonIndexed()));
     const NT=IS_MOBILE?150:240;
     const tufts=new THREE.InstancedMesh(tuftGeo,
-        new THREE.MeshStandardMaterial({color:0x5c8a38,roughness:1}),NT);
+        new THREE.MeshStandardMaterial({color:PALETTE.leaf,roughness:1}),NT);
     tufts.receiveShadow=true;
     let placedT=0;
     for(let i=0;i<NT;i++){
@@ -2172,7 +2257,7 @@ function createOutskirts(){
     for(let i=0;i<80;i++){
         const p=scatterPoint(rnd,4,0,13,50);
         if(!p) continue;
-        const d=new THREE.DodecahedronGeometry(0.13+rnd()*0.17,0);
+        const d=ModelKit.rock(0.13+rnd()*0.17);
         d.rotateY(rnd()*3); d.scale(1,0.6,1);
         d.translate(p[0],terrainH(p[0],p[1])+0.05,p[1]);
         pebGeos.push(d);
@@ -2196,7 +2281,7 @@ function createGrass(){
     const tuftGeo=concatGeos(blades.map(g=>g.toNonIndexed()));
     const N=IS_MOBILE?140:260;
     grassIM=new THREE.InstancedMesh(tuftGeo,
-        new THREE.MeshStandardMaterial({color:0x5c8a38,roughness:1}),N);
+        new THREE.MeshStandardMaterial({color:PALETTE.leaf,roughness:1}),N);
     grassIM.castShadow=false; grassIM.receiveShadow=true;
     scene.add(grassIM);
 
@@ -2242,6 +2327,144 @@ function createGrass(){
     swayGroups.push({kind:'grass',inst:grassIM,count:N,data:gdata});
 }
 
+/* ==================== 行为框架（Issue #32 · 地基） ====================
+   小型 agent 框架：一个 agent = 一份行为定义（def）+ 一份实例数据。
+   def = { name, initial, states:{ 状态名: { enter / update 两个钩子 } },
+           schedule?, onPhase?, frameEnd? }
+   - 状态机：AgentKit.setState(a, 名) 切状态并走 enter 钩子；
+   - 作息表：def.schedule 是阶段名数组（与 GClock.phase() 对齐，如 ['sunny','golden']），
+     不在表内的阶段 agent 不更新；不填 = 全天活动。阶段来自游戏时钟，
+     框架每帧查一次，阶段变化的那一帧回调 def.onPhase(新阶段)；
+   - 移动：树栖/飞行 agent 的位移公式写在自己的状态 update 里（与旧版逐字一致）；
+     地面 agent 用 AgentKit.groundStep 朝目标走，落点先问 WalkMap 问路。
+   新增角色（#27 小龙）只需三步：写一份 def、建好模型、
+   种群列表.push(AgentKit.spawn(def, 数据))，不用碰 animate。
+   框架不碰浏览器接口，时间由 animate 喂入（dt/t），与时钟同源。 */
+const AgentKit = {
+    agents: [],
+    _byDef: new Map(),
+    _lastPhase: null,
+    spawn(def, data){
+        const a = Object.assign({ def:def, state:null }, data||{});
+        AgentKit.agents.push(a);
+        if(!AgentKit._byDef.has(def)) AgentKit._byDef.set(def, []);
+        AgentKit._byDef.get(def).push(a);
+        AgentKit.setState(a, def.initial || 'idle');
+        return a;
+    },
+    setState(a, name){
+        a.state = name;
+        const st = a.def.states && a.def.states[name];
+        if(st && st.enter) st.enter(a);
+    },
+    activeNow(def){
+        if(!def.schedule) return true;
+        return def.schedule.indexOf(GClock.phase()) >= 0;
+    },
+    update(dt, t){
+        const ph = GClock.phase();
+        if(ph !== AgentKit._lastPhase){
+            AgentKit._lastPhase = ph;
+            for(const def of AgentKit._byDef.keys()) if(def.onPhase) def.onPhase(ph);
+        }
+        for(const pair of AgentKit._byDef){
+            const def = pair[0], list = pair[1];
+            if(!AgentKit.activeNow(def)) continue;
+            for(const a of list){
+                const st = def.states && def.states[a.state];
+                if(st && st.update) st.update(a, dt, t);
+            }
+            if(def.frameEnd) def.frameEnd(dt, t);
+        }
+    },
+    /* 地面移动一步：朝 (tx,tz) 挪 step 长，落点先问可行走地图——不通就原地不动、返回 false */
+    groundStep(a, tx, tz, step){
+        const dx = tx - a.group.position.x, dz = tz - a.group.position.z;
+        const d = Math.hypot(dx, dz);
+        if(d < 1e-4) return true;
+        const s = Math.min(step, d) / d;
+        const nx = a.group.position.x + dx * s, nz = a.group.position.z + dz * s;
+        if(!WalkMap.isWalkable(nx, nz)) return false;
+        a.group.position.x = nx; a.group.position.z = nz;
+        a.group.position.y = terrainH(nx, nz);
+        a.group.rotation.y = Math.atan2(dx, dz);
+        return true;
+    }
+};
+
+/* ---------- 现有四类动物的行为定义（公式与框架化之前逐字一致） ---------- */
+const SQUIRREL_DEF = {
+    name: 'squirrel', initial: 'perch',
+    states: { perch: { update(a, dt){
+        a.phase += dt * 1.1;
+        a.group.position.y = a.baseY + Math.sin(a.phase) * 0.4;
+        a.group.position.x = a.baseX + Math.sin(a.phase * 0.5) * 0.3;
+        a.group.rotation.y = a.phase * 0.4;
+    } } }
+};
+const BIRD_DEF = {
+    name: 'bird', initial: 'perch',
+    states: { perch: { update(a, dt){
+        a.phase += dt * 6;
+        a.wingL.rotation.z = Math.sin(a.phase) * 0.9;
+        a.wingR.rotation.z = -Math.sin(a.phase) * 0.9;
+        a.group.rotation.y = Math.sin(a.phase * 0.15) * 0.5;
+        a.hopPhase += dt * 2;
+        a.group.position.y = a.baseY + Math.max(0, Math.sin(a.hopPhase)) * 0.06;
+    } } }
+};
+const BUTTERFLY_DEF = {
+    name: 'butterfly', initial: 'flutter',
+    states: { flutter: { update(a, dt, t){
+        a.phase += dt * a.speed;
+        dummy.position.set(
+            a.home.x + Math.cos(a.phase) * a.radius,
+            a.home.y + Math.sin(a.phase * 2) * 0.5,
+            a.home.z + Math.sin(a.phase * 0.8) * a.radius);
+        dummy.scale.set(1, 1, 1);
+        const flap = Math.sin(t * 20 + a.phase * 5) * 0.95;
+        dummy.rotation.set(0, -a.phase, 0); dummy.updateMatrix();
+        bfBodyIM.setMatrixAt(a.idx, dummy.matrix);
+        dummy.rotation.set(0, -a.phase + flap, 0); dummy.updateMatrix();
+        bfWingLIM.setMatrixAt(a.idx, dummy.matrix);
+        dummy.rotation.set(0, -a.phase - flap, 0); dummy.updateMatrix();
+        bfWingRIM.setMatrixAt(a.idx, dummy.matrix);
+    } } },
+    frameEnd(){
+        if(!bfBodyIM) return;
+        bfBodyIM.instanceMatrix.needsUpdate = true;
+        bfWingLIM.instanceMatrix.needsUpdate = true;
+        bfWingRIM.instanceMatrix.needsUpdate = true;
+    }
+};
+const BEE_DEF = {
+    name: 'bee', initial: 'buzz',
+    states: { buzz: { update(a, dt, t){
+        a.phase += dt * 1.4;
+        dummy.position.set(
+            a.home.x + Math.sin(a.phase) * 1.3,
+            a.home.y + Math.sin(a.phase * 3) * 0.25,
+            a.home.z + Math.cos(a.phase * 1.3) * 1.3);
+        dummy.scale.set(1, 1, 1);
+        const rot = -a.phase * 1.3;
+        const flap = Math.sin(t * 42 + a.phase) * 0.7;
+        dummy.rotation.set(0, rot, 0); dummy.updateMatrix();
+        beeBodyIM.setMatrixAt(a.idx, dummy.matrix);
+        beeStripeIM.setMatrixAt(a.idx, dummy.matrix);
+        dummy.rotation.set(0, rot, 0.3 + flap); dummy.updateMatrix();
+        beeWingLIM.setMatrixAt(a.idx, dummy.matrix);
+        dummy.rotation.set(0, rot, -0.3 - flap); dummy.updateMatrix();
+        beeWingRIM.setMatrixAt(a.idx, dummy.matrix);
+    } } },
+    frameEnd(){
+        if(!beeBodyIM) return;
+        beeBodyIM.instanceMatrix.needsUpdate = true;
+        beeStripeIM.instanceMatrix.needsUpdate = true;
+        beeWingLIM.instanceMatrix.needsUpdate = true;
+        beeWingRIM.instanceMatrix.needsUpdate = true;
+    }
+};
+
 /* ==================== 动物 ==================== */
 // 树木合批后不再有单棵树的 Group：把动物在树局部的落点换算成世界坐标直接挂到 scene
 function treeLocalToWorld(rec,lx,ly,lz){
@@ -2268,8 +2491,8 @@ function attachSquirrel(rec){
     const wp=treeLocalToWorld(rec,0.55,3.2*rec.s,0.3);
     sq.position.set(wp.x,wp.y,wp.z);
     scene.add(sq);
-    squirrels.push({group:sq,baseY:sq.position.y,baseX:sq.position.x,
-        phase:Math.random()*6.28,tree:rec});
+    squirrels.push(AgentKit.spawn(SQUIRREL_DEF, {group:sq, baseY:sq.position.y, baseX:sq.position.x,
+        phase:Math.random()*6.28, tree:rec}));
 }
 function attachBird(rec){
     const bird=new THREE.Group();
@@ -2292,8 +2515,8 @@ function attachBird(rec){
     const wp=treeLocalToWorld(rec,(Math.random()-0.5)*1.4,6.4,(Math.random()-0.5)*1.4);
     bird.position.set(wp.x,wp.y,wp.z);
     scene.add(bird);
-    birds.push({group:bird,wingL,wingR,phase:Math.random()*6.28,
-        hopPhase:Math.random()*6.28,baseY:bird.position.y});
+    birds.push(AgentKit.spawn(BIRD_DEF, {group:bird, wingL:wingL, wingR:wingR, phase:Math.random()*6.28,
+        hopPhase:Math.random()*6.28, baseY:bird.position.y}));
 }
 
 /* ==================== 昆虫 ==================== */
@@ -2315,8 +2538,8 @@ function createInsects(){
     for(let i=0;i<NBF;i++){
         const a=Math.random()*6.28,d=3+Math.random()*13;
         const home=new THREE.Vector3(8+Math.cos(a)*d,1.4+Math.random()*1.6,6+Math.sin(a)*d);
-        butterflies.push({idx:i,home:home,
-            phase:Math.random()*6.28,speed:0.5+Math.random()*0.8,radius:1.5+Math.random()*3.5});
+        butterflies.push(AgentKit.spawn(BUTTERFLY_DEF, {idx:i, home:home,
+            phase:Math.random()*6.28, speed:0.5+Math.random()*0.8, radius:1.5+Math.random()*3.5}));
         bfWingLIM.setColorAt(i,C(bColors[i%bColors.length]));
         bfWingRIM.setColorAt(i,C(bColors[i%bColors.length]));
     }
@@ -2343,7 +2566,7 @@ function createInsects(){
     for(let i=0;i<NBEE;i++){
         const a=Math.random()*6.28,d=3+Math.random()*12;
         const home=new THREE.Vector3(8+Math.cos(a)*d,1.1+Math.random(),6+Math.sin(a)*d);
-        bees.push({idx:i,home:home,phase:Math.random()*6.28});
+        bees.push(AgentKit.spawn(BEE_DEF, {idx:i, home:home, phase:Math.random()*6.28}));
     }
     // 萤火虫（仅夜间显示）
     const fg=new THREE.BufferGeometry();
@@ -2392,7 +2615,7 @@ function skySnapshot(){
 function beginSkyTrans(){
     let dAz=tgtSky.azim-curSky.azim;
     dAz=Math.atan2(Math.sin(dAz),Math.cos(dAz));
-    skyTrans={ t:0, dur:2.6, from:skySnapshot(), dAz:dAz, elevHold:false };
+    skyTrans={ t:0, dur:CONFIG.skyTransSec, from:skySnapshot(), dAz:dAz, elevHold:false };
 }
 function cloudDarkTarget(){
     const m=weatherModes[weatherIndex];
@@ -2568,6 +2791,36 @@ function addRain(){
     rainF=0;
 }
 
+/* ==================== 环境仿真（Issue #34 · 地基） ====================
+   全场环境量收成一处：风（方向+强度）、炊烟横移、雨/雪强度、水面参数。
+   风力与烟飘倍率只由「当前天气模式」决定（表在 CONFIG，比率与旧版一致、
+   直接映射不平滑——旧版就是每帧直算，手感不变）；草/花/树冠共用同一个
+   风场：基准正弦之外加一项沿风向的行波相位，同一阵风会扫过全场，
+   不再各自为政。Env 每帧刷新一次（animate 开头），各系统只读 Env。 */
+const Env = {
+    windDirX: 0.83, windDirZ: 0.55,   // 风向（近似单位向量，吹向东南）
+    windK: 1,                          // 风力倍率（由天气决定）
+    smokeK: 1,                         // 炊烟横移倍率（由天气决定）
+    rainK: 0,                          // 雨强 0~1：镜像平滑后的 rainF
+    snowK: 0,                          // 雪强 0~1：冬季预留，现版无雪粒子（恒 0）
+    waterFlow: 0.006,                  // 水纹流动速度（每秒 offset 增量）
+    bobFreq: 1.2, bobAmp: 0.015,       // 水面浮沉频率/幅度
+    rainSlant: 0.06,                   // 雨丝每帧横移量（斜落）
+    refresh(){
+        const mode = weatherModes[weatherIndex];
+        Env.windK = CONFIG.windByMode[mode] || 1;
+        Env.smokeK = CONFIG.smokeByMode[mode] || 1;
+        Env.rainK = rainF;
+    },
+    /* 风摆：正弦/余弦两式，(x,z) 处在 t 时刻的风摆量（已含风力倍率） */
+    sway(t, x, z, freq, phase){
+        return Math.sin(t * freq + phase + (x * Env.windDirX + z * Env.windDirZ) * 0.12) * Env.windK;
+    },
+    swayC(t, x, z, freq, phase){
+        return Math.cos(t * freq + phase + (x * Env.windDirX + z * Env.windDirZ) * 0.12) * Env.windK;
+    }
+};
+
 /* ==================== 动画 ==================== */
 function animate(){
     requestAnimationFrame(animate);
@@ -2575,19 +2828,19 @@ function animate(){
     const t=clock.elapsedTime;
 
     lerpWeather(dt);
+    Env.refresh();
     updateModules(dt, t);
     farmRainCheck();
 
-    // 风吹摆动（强度随天气）
-    const windK=weatherModes[weatherIndex]==='rain'?1.6:weatherModes[weatherIndex]==='mist'?0.3:1;
+    // 风吹摆动：统一走环境风场（树/花/草共用一阵风，见 Env）
     swayGroups.forEach(sg=>{
         if(sg.obj){
-            sg.obj.rotation[sg.pivot]=Math.sin(t*1.1+sg.phase)*sg.amp*windK;
+            sg.obj.rotation[sg.pivot]=Env.sway(t,HOUSE_POS.x,HOUSE_POS.z,1.1,sg.phase)*sg.amp;
         }else if(sg.kind==='trees'){
             const touched=new Set();
             sg.items.forEach(it=>{
                 dummy.position.set(it.rec.x,it.rec.y,it.rec.z);
-                dummy.rotation.set(0,it.rec.rot,Math.sin(t*1.1+it.phase)*it.amp*windK);
+                dummy.rotation.set(0,it.rec.rot,Env.sway(t,it.rec.x,it.rec.z,1.1,it.phase)*it.amp);
                 dummy.scale.setScalar(it.rec.s);
                 dummy.updateMatrix();
                 it.im.setMatrixAt(it.idx,dummy.matrix);
@@ -2598,8 +2851,8 @@ function animate(){
             const heads=sg.inst, cores=sg.extra, stems=sg.stem;
             for(let i=0;i<sg.count;i++){
                 const d=sg.data[i];
-                const sx=Math.sin(t*1.25+d.phase)*0.055*windK;
-                const sz=Math.cos(t*0.95+d.phase*1.3)*0.045*windK;
+                const sx=Env.sway(t,d.x,d.z,1.25,d.phase)*0.055;
+                const sz=Env.swayC(t,d.x,d.z,0.95,d.phase*1.3)*0.045;
                 // 花杆：以基部为轴弯折（杆几何体底部在原点，Y 缩放即株高）
                 dummy.position.set(d.x,d.y,d.z);
                 dummy.rotation.set(sx,d.rot,sz);
@@ -2623,7 +2876,7 @@ function animate(){
             const im=sg.inst;
             for(let i=0;i<sg.count;i++){
                 const d=sg.data[i];
-                const w=Math.sin(t*2.1+d.phase)*0.10*windK;
+                const w=Env.sway(t,d.x,d.z,2.1,d.phase)*0.10;
                 dummy.position.set(d.x,d.y,d.z);
                 dummy.rotation.set(d.rx+w*0.7,d.ry,d.rz+w);
                 dummy.scale.setScalar(d.s);
@@ -2634,67 +2887,8 @@ function animate(){
         }
     });
 
-    // 鸟
-    birds.forEach(b=>{
-        b.phase+=dt*6;
-        b.wingL.rotation.z=Math.sin(b.phase)*0.9;
-        b.wingR.rotation.z=-Math.sin(b.phase)*0.9;
-        b.group.rotation.y=Math.sin(b.phase*0.15)*0.5;
-        b.hopPhase+=dt*2;
-        b.group.position.y=b.baseY+Math.max(0,Math.sin(b.hopPhase))*0.06;
-    });
-    // 松鼠
-    squirrels.forEach(s=>{
-        s.phase+=dt*1.1;
-        s.group.position.y=s.baseY+Math.sin(s.phase)*0.4;
-        s.group.position.x=s.baseX+Math.sin(s.phase*0.5)*0.3;
-        s.group.rotation.y=s.phase*0.4;
-    });
-    // 蝴蝶（实例矩阵逐帧更新：位置/朝向与旧版 Group 写法等价）
-    if(bfBodyIM){
-        butterflies.forEach(b=>{
-            b.phase+=dt*b.speed;
-            dummy.position.set(
-                b.home.x+Math.cos(b.phase)*b.radius,
-                b.home.y+Math.sin(b.phase*2)*0.5,
-                b.home.z+Math.sin(b.phase*0.8)*b.radius);
-            dummy.scale.set(1,1,1);
-            const flap=Math.sin(t*20+b.phase*5)*0.95;
-            dummy.rotation.set(0,-b.phase,0); dummy.updateMatrix();
-            bfBodyIM.setMatrixAt(b.idx,dummy.matrix);
-            dummy.rotation.set(0,-b.phase+flap,0); dummy.updateMatrix();
-            bfWingLIM.setMatrixAt(b.idx,dummy.matrix);
-            dummy.rotation.set(0,-b.phase-flap,0); dummy.updateMatrix();
-            bfWingRIM.setMatrixAt(b.idx,dummy.matrix);
-        });
-        bfBodyIM.instanceMatrix.needsUpdate=true;
-        bfWingLIM.instanceMatrix.needsUpdate=true;
-        bfWingRIM.instanceMatrix.needsUpdate=true;
-    }
-    // 蜜蜂（同上）
-    if(beeBodyIM){
-        bees.forEach(b=>{
-            b.phase+=dt*1.4;
-            dummy.position.set(
-                b.home.x+Math.sin(b.phase)*1.3,
-                b.home.y+Math.sin(b.phase*3)*0.25,
-                b.home.z+Math.cos(b.phase*1.3)*1.3);
-            dummy.scale.set(1,1,1);
-            const rot=-b.phase*1.3;
-            const flap=Math.sin(t*42+b.phase)*0.7;
-            dummy.rotation.set(0,rot,0); dummy.updateMatrix();
-            beeBodyIM.setMatrixAt(b.idx,dummy.matrix);
-            beeStripeIM.setMatrixAt(b.idx,dummy.matrix);
-            dummy.rotation.set(0,rot,0.3+flap); dummy.updateMatrix();
-            beeWingLIM.setMatrixAt(b.idx,dummy.matrix);
-            dummy.rotation.set(0,rot,-0.3-flap); dummy.updateMatrix();
-            beeWingRIM.setMatrixAt(b.idx,dummy.matrix);
-        });
-        beeBodyIM.instanceMatrix.needsUpdate=true;
-        beeStripeIM.instanceMatrix.needsUpdate=true;
-        beeWingLIM.instanceMatrix.needsUpdate=true;
-        beeWingRIM.instanceMatrix.needsUpdate=true;
-    }
+    // 动物：行为框架统一驱动（松鼠/小鸟/蝴蝶/蜜蜂的公式在各自 def 里，与旧版逐字一致）
+    AgentKit.update(dt, t);
     // 萤火虫飘动
     const ff=fireflies[0];
     if(ff&&ff.points.material.opacity>0.01){
@@ -2706,14 +2900,13 @@ function animate(){
         }
         ff.points.geometry.attributes.position.needsUpdate=true;
     }
-    // 炊烟
-    const windy=weatherModes[weatherIndex]==='rain'?2.2:1;
+    // 炊烟（横移倍率由环境按天气给出）
     smokePuffs.forEach(p=>{
         p.t+=dt*0.22;
         if(p.t>1)p.t-=1;
         const k=p.t;
         p.sprite.position.set(
-            p.anchor.x+k*k*1.6*windy,
+            p.anchor.x+k*k*1.6*Env.smokeK,
             p.anchor.y+k*5,
             p.anchor.z+k*0.6);
         p.sprite.scale.setScalar(0.7+k*3.2);
@@ -2724,9 +2917,9 @@ function animate(){
         const pk=Math.max(0,Math.min(1,(curSky.sunI-0.3)/1.4));
         pondMesh.material.color.copy(POND_NIGHT).lerp(POND_DAY,pk);
         if(pondMesh.material.map){
-            pondMesh.material.map.offset.set((t*0.006)%1, Math.sin(t*0.11)*0.02);
+            pondMesh.material.map.offset.set((t*Env.waterFlow)%1, Math.sin(t*0.11)*0.02);
         }
-        pondMesh.position.y=0.06+Math.sin(t*1.2)*0.015;
+        pondMesh.position.y=0.06+Math.sin(t*Env.bobFreq)*Env.bobAmp;
     }
     // 雨
     if(rainPoints){
@@ -2734,7 +2927,7 @@ function animate(){
         const vel=rainPoints.userData.vel;
         for(let i=0;i<vel.length;i++){
             arr[i*3+1]-=vel[i]*60*dt;
-            arr[i*3]+=0.06;                     // 斜落
+            arr[i*3]+=Env.rainSlant;            // 斜落（环境参数）
             if(arr[i*3+1]<0){arr[i*3+1]=55;arr[i*3]=(Math.random()-0.5)*140;arr[i*3+2]=(Math.random()-0.5)*140;}
         }
         rainPoints.geometry.attributes.position.needsUpdate=true;
@@ -3040,10 +3233,11 @@ const HELP_KEY='ct2_help';
 let helpOpen=false;
 let helpTipTimer=0;
 function helpSeen(){
-    try{ return !!localStorage.getItem(HELP_KEY); }catch(e){ return true; }
+    const v=store.help.get();
+    return store.help.failed ? true : !!v;   // 存储读不了时按「已提示」处理，不反复打扰（与旧版一致）
 }
 function markHelpSeen(){
-    try{ localStorage.setItem(HELP_KEY,'1'); }catch(e){ /* 存不了就只当次生效 */ }
+    store.help.set('1');   // 存不了就只当次生效（与旧版一致）
 }
 function hideHelpTip(){
     const tip=fbEl('helpTip');
@@ -3143,10 +3337,10 @@ const VOTE_OPTIONS=[
 ];
 let voteOpen=false;
 function votedChoice(){
-    try{ return localStorage.getItem(VOTE_KEY)||''; }catch(e){ return ''; }
+    return store.vote.get()||'';
 }
 function markVoted(id){
-    try{ localStorage.setItem(VOTE_KEY,id); }catch(e){ /* 存不了就只在本次会话里拦住 */ }
+    store.vote.set(id);   // 存不了就只在本次会话里拦住（与旧版一致）
 }
 function voteOptionById(id){
     for(const o of VOTE_OPTIONS) if(o.id===id) return o;
@@ -3320,9 +3514,9 @@ const MODULE_HOOKS = {
         }
     },
     daynight: {
-        setup(){ autoSeqOn = true; autoSeqNext = -1; },
+        setup(){ autoSeqOn = true; GClock.nextAt = -1; },
         teardown(){ autoSeqOn = false; },
-        update(dt, t){ updateAutoSeq(t); }
+        update(dt, t){ GClock.update(t); }
     },
     roam: {
         teardown(){ roamT = 0; },
@@ -3374,7 +3568,7 @@ const TONES = [
     { n:'秋日', f:'sepia(0.28) saturate(1.35) hue-rotate(-14deg) contrast(1.04)' }
 ];
 
-const AUTO_SEQ = ['sunny','golden','night','mist'];
+const AUTO_SEQ = CONFIG.daySeq;   // 昼夜轮转序列已收进配置区（CONFIG.daySeq），此名仅作旧引用别名
 
 let actx=null, aMaster=null, aBgm=null, aAmb=null;
 let ambWind=null, ambRain=null, ambFire=null, audioTimer=null;
@@ -3386,13 +3580,45 @@ let campfire=null, campfireLight=null, fireOn=false;
 let doorMesh=null, doorOpen=false, tapState=null;
 let doorPivot=null, doorGlowMesh=null, doorGlowF=0, doorTarget=0;
 
-let autoSeqOn=false, autoSeqNext=0, autoSeqAt=0;
-/* 自动轮转（Issue #26）：顶栏独立开关，与相机「自动巡游」是两回事。
-   开关默认开，每 AUTO_ROTATE_INTERVAL 秒自动换一次天气；
-   玩家手动选天气/拖滑杆即「接管」，开关自动关、轮转停下，随时可再打开。
-   autoSeqNext=-1 是哨兵：下一次 update 时按当前时刻重新排满一个间隔。 */
-const AUTO_ROTATE_INTERVAL=600;
+let autoSeqOn=false;
 let autoRotate=true;
+/* ==================== 游戏时钟（Issue #30 · 地基） ====================
+   全场唯一的时间来源：游戏内累计秒、当前昼夜阶段，外加两类订阅——
+   onPhase（阶段变化时通知）与 onNewDay（「新的一天」时通知）。
+   昼夜轮转、种田成熟、动物作息都只认这一个时钟，不再各自数秒；
+   时钟不碰任何浏览器接口，时间由 animate 每帧喂进来（移植时换喂入源即可）。
+
+   自动轮转规则（Issue #26，规则一字未改，只是改由时钟驱动）：
+   顶栏独立开关、与相机「自动巡游」是两回事；开关默认开，
+   每 CONFIG.autoRotateSec 秒沿 CONFIG.daySeq 换一个阶段；
+   玩家手动选天气/拖滑杆即「接管」，开关自动关、轮转停下，随时可再打开。
+   nextAt=-1 是哨兵：下一次 update 时按当前时刻重新排满一个间隔。
+   「新的一天」只有这一个出口：轮转满一圈与跨天进页（种田按真实日期判断）
+   两条路都经 newDay() 触发，订阅方靠自身标记防重复结算，谁先到都只结一次。 */
+const GClock = {
+    now: 0,          // 游戏内累计秒（最近一次 update 喂入的 t）
+    seqAt: 0,        // 当前阶段在 CONFIG.daySeq 中的下标
+    nextAt: 0,       // 下一次自动轮转的时刻；-1 为哨兵（见上）
+    _phaseCbs: [],
+    _dayCbs: [],
+    phase(){ return CONFIG.daySeq[this.seqAt]; },
+    onPhase(cb){ this._phaseCbs.push(cb); },
+    onNewDay(cb){ this._dayCbs.push(cb); },
+    newDay(){ for(const cb of this._dayCbs) cb(); },
+    update(t){
+        this.now = t;
+        if(!FEAT.daynight.on || !autoSeqOn || !autoRotate) return;
+        if(this.nextAt < 0){ this.nextAt = t + CONFIG.autoRotateSec; return; }
+        if(t < this.nextAt) return;
+        this.seqAt = (this.seqAt + 1) % CONFIG.daySeq.length;
+        if(this.seqAt === 0) this.newDay();   // 轮转满一圈 = 新的一天
+        const idx = weatherModes.indexOf(CONFIG.daySeq[this.seqAt]);
+        if(idx >= 0) setWeather(idx);
+        this.nextAt = t + CONFIG.autoRotateSec;
+        for(const cb of this._phaseCbs) cb(this.phase());
+    }
+};
+const AUTO_ROTATE_INTERVAL = CONFIG.autoRotateSec;   // 旧名保留，数值以配置区为准
 let toneIndex=0, viewIndex=0;
 let roamAngle=0.22*Math.PI, roamT=0;
 let perfAcc=0, perfFrames=0, perfHold=0;
@@ -3687,16 +3913,14 @@ function huntDaySeed(){
 }
 function loadHunt(){
     let saved=null;
-    try{
-        const raw=localStorage.getItem(HUNT_KEY);
-        if(raw) saved=JSON.parse(raw);
-    }catch(e){ saved=null; }
+    const raw=store.hunt.get();
+    if(raw){ try{ saved=JSON.parse(raw); }catch(e){ saved=null; } }
     if(!saved||saved.day!==huntToday()||!Array.isArray(saved.found))
         saved={day:huntToday(),found:[]};
     return saved;
 }
 function saveHunt(){
-    try{ localStorage.setItem(HUNT_KEY, JSON.stringify(huntState)); }catch(e){ /* 存不了就只记在内存里 */ }
+    store.hunt.save(huntState);   // 存不了就只记在内存里（与旧版一致）
 }
 function buildHuntItem(def){
     const g=new THREE.Group();
@@ -3989,22 +4213,14 @@ function setAutoRotate(v){
     autoRotate = !!v;
     const c = document.getElementById('autoRotChk'); if(c) c.checked = autoRotate;
     const b = document.getElementById('autoRotV'); if(b) b.textContent = autoRotate ? '开' : '关';
-    if(autoRotate) autoSeqNext = -1;   // 重新打开：从此刻起重新计满 10 分钟，不立刻跳
+    if(autoRotate) GClock.nextAt = -1;   // 重新打开：从此刻起重新计满 10 分钟，不立刻跳
 }
 /* 玩家手动干预（点天气按钮 / T 键 / 拖太阳或雾气滑杆）＝接管：轮转自动让位 */
 function playerTakeover(){
     if(autoRotate) setAutoRotate(false);
 }
-function updateAutoSeq(t){
-    if(!FEAT.daynight.on || !autoSeqOn || !autoRotate) return;
-    if(autoSeqNext < 0){ autoSeqNext = t + AUTO_ROTATE_INTERVAL; return; }
-    if(t < autoSeqNext) return;
-    autoSeqAt = (autoSeqAt + 1) % AUTO_SEQ.length;
-    if(autoSeqAt===0) farmNewDay();   // 昼夜轮转满一圈：种田那边浇过水的作物成熟
-    const idx = weatherModes.indexOf(AUTO_SEQ[autoSeqAt]);
-    if(idx >= 0) setWeather(idx);
-    autoSeqNext = t + AUTO_ROTATE_INTERVAL;
-}
+/* 自动轮转的推进已收进游戏时钟（GClock.update）：daynight 模块每帧喂时间，
+   满一圈时时钟发「新的一天」事件，种田在 buildFarmGame 里订阅它结算成熟。 */
 
 /* ---------- 注册表 UI ---------- */
 function refreshModUI(){
@@ -4445,10 +4661,11 @@ function applyLowQuality(){
 function setupGlobal(){
     /* 访问统计：只在本机浏览器累加，不上传任何请求 */
     let visits=1;
-    try{
-        visits=(parseInt(localStorage.getItem('ct2_visits')||'0',10)||0)+1;
-        localStorage.setItem('ct2_visits', String(visits));
-    }catch(e){ /* 隐私模式禁用存储时静默跳过 */ }
+    const rawVisits=store.visits.get();
+    if(!store.visits.failed){   // 隐私模式禁用存储时静默跳过（与旧版一致）
+        visits=(parseInt(rawVisits||'0',10)||0)+1;
+        store.visits.set(String(visits));
+    }
     const st=document.getElementById('mpStat');
     if(st) st.textContent='你第 '+visits+' 次来到这里 · 这个数字只存在本机浏览器，不上传';
 
