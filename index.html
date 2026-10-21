@@ -441,6 +441,34 @@
     .echoBadge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:600;
         background:var(--sel-bg);color:var(--accent);border:1px solid var(--sel-line);margin:0 0 5px}
 
+    /* ===== 墙面内容（Issue #20 留言上墙 / Issue #24 世界大事记） ===== */
+    #gbMask,#chronMask{display:none;position:absolute;inset:0;z-index:136;
+        background:var(--mask);backdrop-filter:blur(2px);
+        align-items:center;justify-content:center;padding:16px}
+    #gbMask.on,#chronMask.on{display:flex}
+    #gbBox,#chronBox{width:440px;max-width:100%;max-height:100%;overflow:auto;
+        background:var(--dlg);color:var(--dlg-txt);border:1px solid var(--dlg-line);
+        border-radius:14px;padding:16px 18px;box-shadow:var(--dlg-shadow);font-size:13px}
+    #gbBox h4,#chronBox h4{margin:0 0 4px;font-size:15px;color:var(--dlg-h)}
+    #gbMeta{font-size:11.5px;color:var(--note);margin:0 0 8px;line-height:1.5}
+    #gbText{font-size:13.5px;line-height:1.75;color:var(--soft-txt);white-space:pre-wrap;word-break:break-word;
+        background:var(--creed-bg);border-left:3px solid var(--creed-line);border-radius:0 9px 9px 0;padding:10px 12px}
+    #gbRow,#chronRow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    #gbRow button,#chronRow button{font-family:inherit;font-size:12.5px;padding:8px 14px;border-radius:8px;cursor:pointer;
+        border:1px solid var(--dlg-line);background:var(--btn);color:var(--btn-txt);transition:background .15s}
+    #gbRow button:hover,#chronRow button:hover{background:var(--btn-hov)}
+    #gbRow button.primary,#chronRow button.primary{background:var(--pri);border-color:var(--pri-line);color:var(--pri-txt);font-weight:600}
+    #gbRow button.primary:hover,#chronRow button.primary:hover{background:var(--pri-hov)}
+    #gbRow button.ghost,#chronRow button.ghost{background:transparent}
+    #gbDel{color:var(--err)}
+    .gbHint{font-size:11px;color:var(--note);line-height:1.55;margin:10px 0 0}
+    #chronBox p.sub{margin:0 0 10px;font-size:11.5px;color:var(--dlg-sub);line-height:1.5}
+    #chronBody .chRow{display:flex;gap:10px;padding:7px 2px;border-bottom:1px dashed var(--line-dash);line-height:1.55}
+    #chronBody .chRow:last-child{border-bottom:none}
+    #chronBody .chDate{flex:none;font-size:12px;font-weight:600;color:var(--accent);white-space:nowrap}
+    #chronBody .chText{font-size:12.5px;color:var(--soft-txt)}
+    #chronBody .chNone{font-size:12.5px;color:var(--note);line-height:1.6}
+
     /* ===== 留言弹窗：固定共建文案 ===== */
     .fbCreed{display:grid;gap:3px;margin:2px 0 10px;padding:10px 12px;border-radius:9px;
         background:var(--creed-bg);border-left:3px solid var(--creed-line)}
@@ -766,6 +794,9 @@
     <button type="button" id="logOpenBtn" class="mpVerBtn">📋 查看完整更新日志</button>
     <div class="mpVer" id="mpVer"></div>
     <div class="mpSep"></div>
+    <div class="mpSub">世界大事记</div>
+    <button type="button" id="chronOpenBtn" class="mpVerBtn">📜 翻翻世界大事记</button>
+    <div class="mpSep"></div>
     <div class="mpSub">建议回音</div>
     <div class="mpEcho" id="mpEcho">
         <div id="echoMine"></div>
@@ -939,6 +970,31 @@
         </div>
     </div>
 </div>
+<div id="gbMask">
+    <div id="gbBox" role="dialog" aria-modal="true" aria-labelledby="gbTitle">
+        <h4 id="gbTitle">✎ 墙上的一张纸条</h4>
+        <div id="gbMeta"></div>
+        <div id="gbText"></div>
+        <div id="gbRow">
+            <button type="button" class="ghost" id="gbDel">🗑 撕下这张</button>
+            <button type="button" class="primary" id="gbClose">贴回去</button>
+        </div>
+        <p class="gbHint">留言墙上只贴两种纸条：你自己在这台设备上写过的留言，和负责人精选的公开留言。只有你写的能被你撕下来，撕掉后本机副本一并删除。</p>
+    </div>
+</div>
+<div id="chronMask">
+    <div id="chronBox" role="dialog" aria-modal="true" aria-labelledby="chronTitle">
+        <div class="logHead">
+            <h4 id="chronTitle">📜 世界大事记</h4>
+            <button type="button" id="chronX" aria-label="关闭">✕</button>
+        </div>
+        <p class="sub">这个世界一路长过来的大日子，都记在这里。屋里墙上也挂着一块大事记板，记的是最近的几件。</p>
+        <div id="chronBody"></div>
+        <div id="chronRow">
+            <button type="button" class="primary" id="chronOk">知道啦</button>
+        </div>
+    </div>
+</div>
 <div id="codexMask">
     <div id="codexBox" role="dialog" aria-modal="true" aria-labelledby="codexTitle">
         <div class="logHead">
@@ -1109,7 +1165,7 @@ const CONFIG = {
 };
 
 /* ---------- 薄存储适配层 ----------
-   核心系统不直接碰本地存储：一律经 store.<槽> 读写。槽位与 10 个白名单键
+   核心系统不直接碰本地存储：一律经 store.<槽> 读写。槽位与 11 个白名单键
    一一对应，键名仍以字面量出现在下面这唯一实现处（安全审计照常钉死）。
    移植时只换 mkSlot 底下的读写实现（小程序 storage / App 本地库），上层不动。 */
 
@@ -1127,6 +1183,10 @@ const DRAGON_KEY='ct2_dragon';
    玩家提交建议时领到的回执码、署名选择与「共建者」徽章只存本机 ct2_echo
    （ECHO_KEY 写死，照其余各键的治理先例）：匹配在本机完成，不绑任何身份。 */
 const ECHO_KEY='ct2_echo';
+/* ---------- 留言上墙（Issue #20） ----------
+   玩家自己提交过的留言在本机留一份副本只存 ct2_guest（GUEST_KEY 写死，照
+   其余各键的治理先例）：进屋后贴上室内留言墙，只给本人看，不上传、不绑身份。 */
+const GUEST_KEY='ct2_guest';
 /* ---------- 世界图鉴（Issue #23） ----------
    图鉴的解锁集合只存本机 ct2_codex（CODEX_KEY 写死，照其余各键的治理先例）：
    只记「见过哪些条目」的 id 清单，不绑任何身份。 */
@@ -1152,7 +1212,8 @@ const store = {
     dragon: mkSlot(()=>localStorage.getItem(DRAGON_KEY),   v=>localStorage.setItem(DRAGON_KEY, v)),
     bag:    mkSlot(()=>localStorage.getItem(BAG_KEY),      v=>localStorage.setItem(BAG_KEY, v)),
     echo:   mkSlot(()=>localStorage.getItem(ECHO_KEY),     v=>localStorage.setItem(ECHO_KEY, v)),
-    codex:  mkSlot(()=>localStorage.getItem(CODEX_KEY),    v=>localStorage.setItem(CODEX_KEY, v))
+    codex:  mkSlot(()=>localStorage.getItem(CODEX_KEY),    v=>localStorage.setItem(CODEX_KEY, v)),
+    guest:  mkSlot(()=>localStorage.getItem(GUEST_KEY),    v=>localStorage.setItem(GUEST_KEY, v))
 };
 
 /* 主题状态只从 applyUiTheme 这一处进出：换根元素类 + 存偏好 + 同步面板按钮 */
@@ -2257,7 +2318,7 @@ const ROOM_BLOCKS = [   // 家具占位（local 圆障，龙与参观落点都�
 const Interior = {
     active:false, dragonIn:false, group:null, outdoor:[], baseY:0,
     doorLeaf:null, flames:null, fireLight:null,
-    gbCanvas:null, gbTex:null, chronCanvas:null, chronTex:null, photoTexs:[],
+    gbCanvas:null, gbTex:null, gbMesh:null, chronCanvas:null, chronTex:null, photoTexs:[],
     savedTarget:new THREE.Vector3(), savedDragonPos:new THREE.Vector3(),
     savedDragonRot:0, savedDist:5.4,
     // 参观镜头（室内专用受限轨道：目标在屋内小范围挪，镜头位置每帧夹回屋内）
@@ -2329,27 +2390,70 @@ function rugTexture(){
     if(THREE.sRGBEncoding !== undefined) t.encoding = THREE.sRGBEncoding;
     return t;
 }
+/* 留言墙绘制（#20）：贴满小纸条的板面。每张纸条在画布上的矩形登记进
+   gbNoteRects，室内点墙时按 UV 反查是哪一张、点开看全文。
+   条目多于一板（12 张）时每页 11 张 + 最后一格翻页签，点签翻页。 */
+let gbNoteRects = [], gbPage = 0;
+const GB_NOTE_COLORS = ['#fff6da', '#ffeef1', '#e9f5e1', '#e8f1fb', '#fdf0dc', '#f2eafd'];
 function drawGuestbook(entries){
     const cv = Interior.gbCanvas; if(!cv) return;
     const x = cv.getContext('2d');
+    entries = entries || [];
     x.fillStyle = '#f5ead0'; x.fillRect(0, 0, 512, 320);
     x.strokeStyle = 'rgba(122,86,54,0.55)'; x.lineWidth = 4; x.strokeRect(14, 14, 484, 292);
-    x.fillStyle = '#6e4a26'; x.font = 'bold 44px "Microsoft YaHei",sans-serif';
+    x.fillStyle = '#6e4a26'; x.font = 'bold 40px "Microsoft YaHei",sans-serif';
     x.textAlign = 'center'; x.textBaseline = 'middle';
-    x.fillText('留 言 墙', 256, 58);
-    x.fillStyle = '#a8895c'; x.fillRect(120, 92, 272, 3);
-    if(!entries || !entries.length){
+    x.fillText('留 言 墙', 256, 50);
+    x.fillStyle = '#a8895c'; x.fillRect(120, 78, 272, 3);
+    gbNoteRects = [];
+    if(!entries.length){
         x.fillStyle = '#8a7350'; x.font = '30px "Microsoft YaHei",sans-serif';
         x.fillText('还没有留言', 256, 168);
         x.fillStyle = '#b09a72'; x.font = '25px "Microsoft YaHei",sans-serif';
         x.fillText('第一句，由你来写 ✎', 256, 216);
     } else {
-        x.fillStyle = '#5a4632'; x.font = '24px "Microsoft YaHei",sans-serif'; x.textAlign = 'left';
-        entries.slice(0, 6).forEach((e, i)=>{
-            const line = '· ' + (e.text || '') + (e.name ? ' —— ' + e.name : '');
-            x.fillText(line.slice(0, 24), 44, 128 + i*32);
+        const per = entries.length > 12 ? 11 : 12;
+        const pages = Math.max(1, Math.ceil(entries.length/per));
+        if(gbPage >= pages) gbPage = 0;
+        const start = gbPage*per;
+        const shown = entries.slice(start, start + per);
+        shown.forEach((e, k)=>{
+            const idx = start + k;
+            const nx = 18 + (k % 4)*122, ny = 90 + Math.floor(k/4)*73, nw = 112, nh = 66;
+            gbNoteRects.push({x: nx, y: ny, w: nw, h: nh, idx: idx});
+            const rnd = mulberry32(3100 + idx);
+            x.save();
+            x.translate(nx + nw/2, ny + nh/2); x.rotate((rnd() - 0.5)*0.06);
+            x.fillStyle = 'rgba(90,64,38,0.18)'; x.fillRect(-nw/2 + 2, -nh/2 + 3, nw, nh);
+            x.fillStyle = GB_NOTE_COLORS[idx % GB_NOTE_COLORS.length];
+            x.fillRect(-nw/2, -nh/2, nw, nh);
+            x.fillStyle = 'rgba(255,255,255,0.55)'; x.fillRect(-20, -nh/2 - 1, 40, 9);
+            x.fillStyle = '#5a4632'; x.font = '14px "Microsoft YaHei",sans-serif'; x.textAlign = 'left';
+            const txt = String(e.text || '');
+            for(let li = 0; li < 3; li++){
+                const seg = txt.slice(li*7, li*7 + 7);
+                if(!seg) break;
+                x.fillText(seg + (li === 2 && txt.length > 21 ? '…' : ''), -nw/2 + 8, -nh/2 + 16 + li*17);
+            }
+            if(e.name){
+                x.fillStyle = '#977950'; x.font = '10.5px "Microsoft YaHei",sans-serif'; x.textAlign = 'right';
+                x.fillText('— ' + String(e.name).slice(0, 8), nw/2 - 6, nh/2 - 9);
+            }
+            x.restore();
         });
-        x.textAlign = 'center';
+        if(entries.length > 12){
+            const k = shown.length;
+            const nx = 18 + (k % 4)*122, ny = 90 + Math.floor(k/4)*73, nw = 112, nh = 66;
+            gbNoteRects.push({x: nx, y: ny, w: nw, h: nh, idx: -1});
+            x.save();
+            x.translate(nx + nw/2, ny + nh/2);
+            x.fillStyle = '#e5d3a8'; x.fillRect(-nw/2, -nh/2, nw, nh);
+            x.fillStyle = '#6e4a26'; x.font = 'bold 16px "Microsoft YaHei",sans-serif'; x.textAlign = 'center';
+            x.fillText('还有 ' + (entries.length - start - shown.length) + ' 张', 0, -8);
+            x.font = '12px "Microsoft YaHei",sans-serif';
+            x.fillText('点这里翻页 ▸', 0, 16);
+            x.restore();
+        }
     }
     if(Interior.gbTex) Interior.gbTex.needsUpdate = true;
 }
@@ -2395,7 +2499,7 @@ function photoTexture(idx, label){
     return t;
 }
 /* [数据接口] 三个内容入口：本件只渲染空态/占位，接入数据时改这里 */
-Interior.setGuestbook = function(entries){ drawGuestbook(entries || []); };
+Interior.setGuestbook = function(entries){ gbPage = 0; drawGuestbook(entries || []); };
 Interior.setChronicle = function(items){ drawChronicle(items || []); };
 Interior.setPhotos = function(list){
     // list 为空：保持占位图；非空时先把张数标到占位图上（真实贴图在后续件接入）
@@ -2403,6 +2507,197 @@ Interior.setPhotos = function(list){
         if(list && list[i]){ /* 后续件：按 list[i] 的地址加载真实照片替换占位图 */ }
     });
 };
+
+/* ==================== 墙面内容（Issue #20 留言上墙 + Issue #24 世界大事记） ====================
+   给 #40 留好的两块墙面容器喂真实内容，治理口径与建议回音（#39）一致：
+   - 留言墙两层数据：①负责人精选清单 GUESTBOOK_FEATURED（声明式，随发版人工更新，
+     无实时后端）；②玩家自己提交过的留言的本机副本（ct2_guest，只存本机、只给本人看）。
+     墙开箱不空靠的是本机这层：写过意见的人进屋就能看见自己的纸条。
+   - 大事记 CHRONICLE（声明式编年表）：室内大事记板挂最近 6 件，齿轮面板里另有
+     「世界大事记」入口看全表（户外也能看）。
+   隐私：不收集任何新信息——本机副本是玩家提交动作发生时在他自己设备上留的存根，
+   精选条目只收投稿时已声明会被精选公开的留言，署名沿用回音三档口径。 */
+
+/* ---------- 精选留言（声明式数据，维护者发版时填） ----------
+   一条 = 一句被负责人选中、可以公开贴上墙的留言。字段：
+     text  留言正文（照玩家原话；投稿文案已声明留言会被精选公开）。
+     name  署名，严格按玩家提交时自选的三档填：
+           · 用代号公开 → 填他的代号（如 '种田小能手'）；
+           · 只写热心玩家 → 填 '一位热心玩家'；
+           · 不公开 → 整条不要收进精选（他的留言只留在他自己设备的墙上）。
+     date  留言日期 'YYYY-MM-DD'（可省）。
+   清单为空是正常状态（功能先行、数据随发版累积）。 */
+const GUESTBOOK_FEATURED = [
+    /* 格式模板（不要取消注释，照着往下面加真实记录）：
+    { text:'湖边的晚霞太好看了，要是能坐在湖边钓鱼就更好了', name:'一位热心玩家', date:'2026-10-21' },
+    */
+];
+
+/* ---------- 世界大事记（声明式编年表，维护者发版时加新条目） ----------
+   一条 = 这个世界真实发生过的一件大事。字段：{ date:'YYYY-MM-DD', text:'一句话' }。
+   按日期从早到晚排列，加新条目就往数组末尾追加一行（日期取版本发布日，别编）。
+   室内大事记板只挂最近 6 件，面板「世界大事记」里看全表。 */
+const CHRONICLE = [
+    { date:'2026-10-20', text:'世界诞生：森林小屋、向日葵、蝴蝶蜜蜂和五种天气' },
+    { date:'2026-10-20', text:'世界改成竖屏，声音全由程序现场合成' },
+    { date:'2026-10-20', text:'镜头学会自己漫游，添了雪夜与秋日色调' },
+    { date:'2026-10-21', text:'门修好了：先敲两下，门朝外开、透出暖光' },
+    { date:'2026-10-21', text:'每日寻宝开张，池塘上放起了河灯' },
+    { date:'2026-10-21', text:'池塘扩成大湖，一条小河顺着草地流向远处' },
+    { date:'2026-10-21', text:'花从一小坨铺成环绕小屋的花带，前院开出能种能收的农田' },
+    { date:'2026-10-21', text:'时间慢下来了：昼夜与天气十分钟才换一次' },
+    { date:'2026-10-21', text:'玩家开始共创：投票选下一个新点子' },
+    { date:'2026-10-21', text:'世界打地基：统一时钟、可行走地图、行为与建模框架' },
+    { date:'2026-10-21', text:'界面有了深浅两套配色' },
+    { date:'2026-10-21', text:'小龙诞生：纯原创仿人形小龙入住，能散步、睡觉，还能由你操控' },
+    { date:'2026-10-21', text:'世界变美了：树冠成簇、草地去波点、开局是海报式构图' },
+    { date:'2026-10-21', text:'能进屋看看了：壁炉、书架、床和屋角的龙窝' },
+    { date:'2026-10-21', text:'建议有了回音：回执码、一对一回信与世界印记' },
+    { date:'2026-10-21', text:'留言上了墙，世界大事记开编' }
+];
+
+/* ---------- 本机留言副本（ct2_guest，只经 store.guest 槽进出） ----------
+   形状：{ notes:[{id, text, date, name}] }，name 是提交时按署名三档定的展示名
+   （代号 / '一位热心玩家' / '' 不署名）。上限 GUEST_LOCAL_MAX 条，超了丢最旧的。 */
+const GUEST_LOCAL_MAX = 12;
+let guestState = null;
+function guestLoad(){
+    const st = store.guest.json(null);
+    const out = { notes: [] };
+    if(st && Array.isArray(st.notes))
+        out.notes = st.notes.filter(n => n && typeof n.text === 'string' && typeof n.id === 'string');
+    return out;
+}
+function guestSave(){ if(guestState) store.guest.save(guestState); }
+function guestDisplayName(naming){
+    if(!naming) return '';
+    if(naming.tier === 'codename') return naming.alias || '';
+    if(naming.tier === 'anon') return '一位热心玩家';
+    return '';
+}
+function guestAddLocal(text, naming){
+    const body = String(text || '').trim();
+    if(!body) return;
+    if(!guestState) guestState = guestLoad();
+    guestState.notes.push({
+        id: 'g' + Date.now().toString(36) + Math.floor(Math.random()*1e4).toString(36),
+        text: body.slice(0, 600),
+        date: new Date().toISOString().slice(0, 10),
+        name: guestDisplayName(naming)
+    });
+    if(guestState.notes.length > GUEST_LOCAL_MAX)
+        guestState.notes = guestState.notes.slice(-GUEST_LOCAL_MAX);
+    guestSave();
+    wallsRefresh();
+}
+function guestDeleteLocal(id){
+    if(!guestState) guestState = guestLoad();
+    guestState.notes = guestState.notes.filter(n => n.id !== id);
+    guestSave();
+    wallsRefresh();
+}
+
+/* ---------- 墙面组装与刷新 ---------- */
+let gbWallEntries = [];   // 当前墙上的条目（与纸条矩形的 idx 对应）
+function wallsBuildEntries(){
+    const out = [];
+    GUESTBOOK_FEATURED.forEach(e=>{
+        if(e && e.text) out.push({ name: e.name || '', text: String(e.text), date: e.date || '', src: 'feat', id: '' });
+    });
+    if(!guestState) guestState = guestLoad();
+    guestState.notes.slice().reverse().forEach(n=>{   // 自己的纸条：新的贴在前面
+        out.push({ name: n.name || '', text: n.text, date: n.date || '', src: 'mine', id: n.id });
+    });
+    return out;
+}
+function wallsRefresh(){
+    if(!Interior.gbCanvas) return;   // 室内还没建好时不刷（setupWalls 会在建好后补刷）
+    gbWallEntries = wallsBuildEntries();
+    Interior.setGuestbook(gbWallEntries);
+    Interior.setChronicle(CHRONICLE.slice(-6));   // 板上只挂最近 6 件，面板里看全表
+}
+
+/* ---------- 点纸条看全文（射线命中留言墙板 → UV → 画布坐标 → 纸条矩形） ---------- */
+let gbCurId = '';
+function guestBoardTap(ray){
+    if(!Interior.active || !Interior.gbMesh) return false;
+    const hits = ray.intersectObject(Interior.gbMesh);
+    if(!hits.length || !hits[0].uv) return false;
+    const cx = hits[0].uv.x*512, cy = (1 - hits[0].uv.y)*320;
+    for(let i = 0; i < gbNoteRects.length; i++){
+        const r = gbNoteRects[i];
+        if(cx >= r.x && cx <= r.x + r.w && cy >= r.y && cy <= r.y + r.h){
+            if(r.idx === -1){   // 翻页签：翻到下一页再重绘（仍是同一批条目）
+                gbPage++;
+                drawGuestbook(gbWallEntries);
+            } else {
+                openGbNote(r.idx);
+            }
+            return true;
+        }
+    }
+    return false;
+}
+function openGbNote(i){
+    const e = gbWallEntries[i];
+    if(!e) return;
+    gbCurId = (e.src === 'mine') ? e.id : '';
+    document.getElementById('gbText').textContent = e.text;
+    const bits = [];
+    if(e.name) bits.push('✎ ' + e.name);
+    if(e.date) bits.push(e.date);
+    bits.push(e.src === 'feat' ? '负责人精选' : '你写过的留言');
+    document.getElementById('gbMeta').textContent = bits.join(' · ');
+    document.getElementById('gbDel').style.display = (e.src === 'mine') ? '' : 'none';
+    document.getElementById('gbMask').classList.add('on');
+}
+function closeGbNote(){ document.getElementById('gbMask').classList.remove('on'); }
+
+/* ---------- 世界大事记面板（户外入口：齿轮面板 → 世界大事记） ---------- */
+let chronOpen = false;
+function renderChronicle(){
+    const body = document.getElementById('chronBody');
+    body.textContent = '';
+    if(!CHRONICLE.length){
+        const p = document.createElement('p');
+        p.className = 'chNone'; p.textContent = '暂无大事发生——这个世界的大事，将来都记在这里。';
+        body.appendChild(p);
+        return;
+    }
+    CHRONICLE.forEach(e=>{
+        const row = document.createElement('div'); row.className = 'chRow';
+        const d = document.createElement('span'); d.className = 'chDate'; d.textContent = e.date;
+        const t = document.createElement('span'); t.className = 'chText'; t.textContent = e.text;
+        row.appendChild(d); row.appendChild(t);
+        body.appendChild(row);
+    });
+}
+function openChronicle(){ renderChronicle(); chronOpen = true; document.getElementById('chronMask').classList.add('on'); }
+function closeChronicle(){ chronOpen = false; document.getElementById('chronMask').classList.remove('on'); }
+
+function setupWalls(){
+    wallsRefresh();
+    document.getElementById('gbClose').addEventListener('click', closeGbNote);
+    document.getElementById('gbMask').addEventListener('click', e=>{
+        if(e.target === document.getElementById('gbMask')) closeGbNote();
+    });
+    document.getElementById('gbDel').addEventListener('click', ()=>{
+        if(gbCurId) guestDeleteLocal(gbCurId);
+        gbCurId = '';
+        closeGbNote();
+    });
+    document.getElementById('chronOpenBtn').addEventListener('click', openChronicle);
+    document.getElementById('chronX').addEventListener('click', closeChronicle);
+    document.getElementById('chronOk').addEventListener('click', closeChronicle);
+    document.getElementById('chronMask').addEventListener('click', e=>{
+        if(e.target === document.getElementById('chronMask')) closeChronicle();
+    });
+    document.addEventListener('keydown', e=>{
+        if(e.key !== 'Escape') return;
+        if(document.getElementById('gbMask').classList.contains('on')){ closeGbNote(); e.stopPropagation(); }
+        else if(chronOpen){ closeChronicle(); e.stopPropagation(); }
+    }, true);
+}
 
 /* ---------- 建模小件（全部走 ModelKit 的 paint/mergePainted 口径） ---------- */
 function rbox(list, w, h, d, x, y, z, hex, ry){
@@ -2596,6 +2891,7 @@ function createInterior(){
         new THREE.MeshStandardMaterial({map: Interior.gbTex, roughness: 0.9}));
     gb.rotation.y = -Math.PI/2; gb.position.set(2.79, 1.98, -0.35);
     g.add(gb);
+    Interior.gbMesh = gb;   // #20：点纸条看全文要按这块板做射线命中
     [0.78, 1.38, 1.98].forEach((pz, i)=>{
         const pt = photoTexture(i);
         Interior.photoTexs.push(pt);
@@ -2779,6 +3075,8 @@ function roomTap(e){
     _roomRay.setFromCamera(_roomNdc, camera);
     // 先判门扇：点门出屋
     if(Interior.doorLeaf && _roomRay.intersectObject(Interior.doorLeaf, true).length){ exitRoom(); return; }
+    // 再判留言墙（#20）：点中纸条看全文
+    if(guestBoardTap(_roomRay)) return;
     // 再判地板落点：参观目标挪过去（夹在屋内、避开家具）
     const o = _roomRay.ray.origin, d = _roomRay.ray.direction;
     if(Math.abs(d.y) < 1e-5) return;
@@ -4755,6 +5053,7 @@ function dragonClickMove(e){
     _dgRay.setFromCamera(_dgNdc, camera);
     const o = _dgRay.ray.origin, d = _dgRay.ray.direction;
     if(window.__roomDragon){   // #40：室内点击移动，落点取室内地板平面、走房间口径
+        if(guestBoardTap(_dgRay)) return;   // #20：操控小龙时点中留言墙纸条，先看全文、不移动
         if(Math.abs(d.y) < 1e-5) return;
         const tt2 = (Interior.floorWorldY() - o.y)/d.y;
         if(tt2 < 0) return;
@@ -5865,6 +6164,7 @@ function setupFeedback(){
         const naming=feedbackNaming();
         const code=echoGenCode();
         echoAddReceipt(code, naming);
+        guestAddLocal((ta.value||'').trim(), naming);   // 留言上墙（#20）：本机留一份副本，进屋贴上留言墙
         const text=feedbackText()+'\n回执码：'+code+' · 署名：'+echoTierLabel(naming);
         // ① 先复制 —— 这一步不依赖网络，永远可用
         copyToClipboard(text).then(()=>{
@@ -7819,6 +8119,7 @@ function init(){
     setupDragonControls();
     setupModules();
     createInterior();
+    setupWalls();
     window.addEventListener('resize',onResize);
     window.addEventListener('keydown',onKeyDown);
 
@@ -8119,7 +8420,7 @@ function setupGlobal(){
     if(!app) return;
     var HIDE_MS = 3000, timer = null;
     function anyDialogOpen(){
-        var ids = ['modPanel','fbMask','ltMask','helpMask','voteMask','logMask','dragonMask','echoMask','codexMask'], i, el;
+        var ids = ['modPanel','fbMask','ltMask','helpMask','voteMask','logMask','dragonMask','echoMask','codexMask','gbMask','chronMask'], i, el;
         for(i = 0; i < ids.length; i++){
             el = document.getElementById(ids[i]);
             if(el && el.classList.contains('on')) return true;
@@ -8137,7 +8438,7 @@ function setupGlobal(){
         app.classList.remove('bars-off');
         arm();
     }
-    ['ui','status','fbBtn','lanternBtn','modBtn','modPanel','fbMask','ltMask','helpMask','voteMask','logMask','echoMask','codexMask'].forEach(function(id){
+    ['ui','status','fbBtn','lanternBtn','modBtn','modPanel','fbMask','ltMask','helpMask','voteMask','logMask','echoMask','codexMask','gbMask','chronMask'].forEach(function(id){
         var el = document.getElementById(id);
         if(!el) return;
         ['pointerdown','input','change','wheel'].forEach(function(ev){
