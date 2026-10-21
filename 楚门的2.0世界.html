@@ -172,6 +172,44 @@
     #voteMsg{margin-top:9px;font-size:12px;color:#9ee49e;min-height:17px;line-height:1.5}
     #voteMsg.err{color:#ffb4b4}
 
+    /* ===== 更新日志（开页自动展示 / 弹窗与帮助同题 / Issue #37） ===== */
+    #logMask{display:none;position:absolute;inset:0;z-index:134;
+        background:rgba(0,0,0,.45);backdrop-filter:blur(2px);
+        align-items:center;justify-content:center;padding:16px}
+    #logMask.on{display:flex}
+    #logBox{width:460px;max-width:100%;max-height:100%;overflow:auto;
+        background:rgba(14,26,14,.97);color:#e6f4e6;border:1px solid rgba(140,220,140,.35);
+        border-radius:14px;padding:16px 18px;box-shadow:0 18px 50px rgba(0,0,0,.55);font-size:13px}
+    .logHead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+    #logBox h4{margin:0 0 4px;font-size:15px;color:#bfe8bf}
+    #logX{background:none;border:none;color:#9fc79f;font-size:16px;cursor:pointer;padding:0 2px;line-height:1.2;flex:none}
+    #logX:hover{color:#e6f4e6}
+    #logBox p.sub{margin:0 0 10px;font-size:11.5px;color:#93b093;line-height:1.5}
+    .logTabs{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 11px}
+    .logTabs button{font-family:inherit;font-size:12px;padding:5px 11px;border-radius:999px;cursor:pointer;
+        border:1px solid rgba(140,220,140,.3);background:rgba(255,255,255,.04);color:#cfe3cf;transition:background .15s}
+    .logTabs button:hover{background:rgba(120,220,120,.10)}
+    .logTabs button.on{background:#3f8f4a;border-color:#5fb86b;color:#fff;font-weight:600}
+    .logTheme{font-size:12.5px;color:#ffd97a;margin:0 0 8px;line-height:1.5}
+    .logList{margin:0;padding:0 0 0 17px}
+    .logList li{font-size:12.5px;line-height:1.6;color:#cfe3cf;margin:0 0 5px}
+    .logList li::marker{color:#7fc97f}
+    #logRow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    #logRow button{font-family:inherit;font-size:12.5px;padding:8px 14px;border-radius:8px;cursor:pointer;
+        border:1px solid rgba(140,220,140,.35);background:rgba(30,50,30,.9);color:#d8f0d8;transition:background .15s}
+    #logRow button:hover{background:rgba(45,80,45,.95)}
+    #logRow button.primary{background:#3f8f4a;border-color:#5fb86b;color:#fff;font-weight:600}
+    #logRow button.primary:hover{background:#4aa457}
+    @media (max-width:600px),(pointer:coarse){
+        #logBox{padding:13px 14px}
+        #logMask{padding:env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+                        env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px)}
+    }
+    /* 功能面板里打开日志的入口按钮（与 .mpGlobal 按钮同题） */
+    .mpVerBtn{width:100%;padding:8px 6px;margin:0 0 8px;font-family:inherit;font-size:12px;border-radius:8px;cursor:pointer;
+        border:1px solid rgba(140,220,140,.35);background:rgba(30,50,30,.85);color:#d8f0d8}
+    .mpVerBtn:hover{background:rgba(45,80,45,.95)}
+
     /* ===== 留言弹窗：固定共建文案 ===== */
     .fbCreed{display:grid;gap:3px;margin:2px 0 10px;padding:10px 12px;border-radius:9px;
         background:rgba(80,140,90,.10);border-left:3px solid rgba(120,210,130,.55)}
@@ -421,6 +459,7 @@
     <div class="mpStat" id="mpStat"></div>
     <div class="mpSep"></div>
     <div class="mpSub">版本日志</div>
+    <button type="button" id="logOpenBtn" class="mpVerBtn">📋 查看完整更新日志</button>
     <div class="mpVer" id="mpVer"></div>
     <div class="mpDisclaimer">
         本世界为开放式共创，访客提交的构想、命名与素材需经负责人审核后才会进入公共场景；
@@ -503,6 +542,20 @@
             <button type="button" class="ghost" id="voteClose">关闭</button>
         </div>
         <div id="voteMsg"></div>
+    </div>
+</div>
+<div id="logMask">
+    <div id="logBox" role="dialog" aria-modal="true" aria-labelledby="logTitle">
+        <div class="logHead">
+            <h4 id="logTitle">📋 更新日志</h4>
+            <button type="button" id="logX" aria-label="关闭">✕</button>
+        </div>
+        <p class="sub">楚门的世界一直在长大。这是最新一版的新鲜事，点上面的版本号，也能翻翻它一路长过来的样子。</p>
+        <div class="logTabs" id="logTabs"></div>
+        <div id="logBody"></div>
+        <div id="logRow">
+            <button type="button" class="primary" id="logOk">开始游玩</button>
+        </div>
     </div>
 </div>
 <div id="wishBubble"></div>
@@ -4201,6 +4254,152 @@ const VERSIONS = [
     { v:'v1',   d:'2026-10-20', n:'森林小屋、向日葵、蝴蝶蜜蜂、五种天气' }
 ];
 
+/* ---------- 站内更新日志（Issue #37） ----------
+   开页先展示当前版，玩家可切版本翻看旧版，× / 「开始游玩」/ 点遮罩都能立马关。
+   ⚠ 同源维护约定：下面这份 CHANGELOG_NOTES 与仓库根目录 CHANGELOG.md 是同一份日志的两个出口——
+   发版时必须两处同步更新（CHANGELOG.md 记全量、含维护侧；这里只摘「用户能感知的」条目，
+   并改写成面向玩家的通俗文案，条目可精简合并，维护侧条目不要端给玩家）。 */
+const CHANGELOG_NOTES = [
+    { v:'v3.6', d:'2026-10-21', theme:'场景补全、种田玩法、水系扩容、共创投票、时间流逝放慢', items:[
+        '打开页面先看到这份更新日志啦：新版改了什么一目了然，点版本号还能翻看以前每一版',
+        '时间慢下来了：昼夜和天气 10 分钟才换一次；顶栏多了「自动轮转」开关，你手动选了天气，它就不再自作主张',
+        '能种田了：点农田里空着的地播种、再点一下浇水（下雨自动浇），熟了再点一下收获，收成记在状态栏',
+        '池塘变成大湖了，还拉出一条小河顺着草地流向远处；放河灯改在湖面上漂',
+        '顶栏多了「🗳️ 投票选点子」：下一个新点子做什么，你说了算（一台设备一票）',
+        '顶栏多了「📸 快照存图」：碰上晚霞、河灯这种好时候，一键把画面存成图片',
+        '花成带了：房子周围铺了一圈花，空地也补了野花和草丛，自动巡游转一圈都有景；屋后还添了树林和两座小山',
+        '前院开了块农田：种着向日葵、玉米、南瓜，田埂木框都齐了',
+        '视角能锁了：顶栏「视角锁定」，摆好角度不怕手滑（缩放还能用）',
+        '留言能分类了：画面 / 玩法 / 声音 / 其它，提意见更好找',
+        '顶栏有「❓ 操作帮助」：全部玩法一页说清，新手不懵',
+        '界面会自己让开：顶栏和底栏停手 3 秒自动隐藏，画面干干净净；点屏幕右缘的小圆钮就唤回来',
+        '上下拖动的方向改顺了：往下拖镜头升高看全景，往上拖镜头降低看近处'
+    ]},
+    { v:'v3.5', d:'2026-10-21', theme:'敲门互动、每日寻宝、放河灯、质感与性能、天气平滑过渡', items:[
+        '门修好啦：点门先轻轻敲两下，随后门朝外打开、透出暖光；门口新挂了「楚门小屋」门牌，还有台阶和两盆花',
+        '每天一场寻宝：场景里每天藏 5 件小物（橡果、蘑菇、羽毛、松果、彩蛋），点中收集，集齐有祝贺；第二天换一批新藏点',
+        '池塘能放河灯了：左下角写一句愿望，灯就漂上水面，慢慢漂向塘心',
+        '画面更有质感了：木墙有了木纹、石基有了斑驳、草地有了细碎色块，墙脚也添了阴影感',
+        '天气切换变顺了：天空、光线、雨幕都慢慢过渡到位，不再一跳一变',
+        '更流畅了：树木、栅栏、蝴蝶这些改成省力气的画法，同样的画面，负担降了一半多'
+    ]},
+    { v:'v3.4', d:'2026-10-21', theme:'手机适配补强（刘海屏、手势、点击延迟）', items:[
+        '刘海屏不压边了：面板、按钮和弹窗都会给圆角和灵动岛让位',
+        '双指只缩放相机：想拉近场景，不会再把整个页面放大',
+        '点击更跟手了：按钮没有了那零点几秒的延迟，长按画面也不会误选文字或弹菜单',
+        '全屏不再留白边，画面铺得满满的'
+    ]},
+    { v:'v3.3', d:'2026-10-21', theme:'加载兜底、分享、弱网低画质、版本日志', items:[
+        '打开不再是白屏了：场景起来之前有进度条和百分比，好了自动退场',
+        '出错会说人话：脚本没加载上、显卡出问题，都会用中文告诉你怎么回事、怎么办',
+        '面板里可以一键复制分享链接，发给朋友直接打开',
+        '网慢也不怕：有「弱网低画质」开关，画面省一点、打开快一点',
+        '面板里能直接看到每个版本改了什么（就是这份日志的前身）',
+        '访问次数只记在你自己的浏览器里，不上传到任何地方'
+    ]},
+    { v:'v3.2', d:'2026-10-21', theme:'功能模块化打底（维护规范）', items:[
+        '每个功能都成了独立开关：坏一个不影响其它，关掉就是彻底停用',
+        '每次发布前会先去线上实探一遍，确认打开没问题才算数'
+    ]},
+    { v:'v3.1', d:'2026-10-20', theme:'自适应与氛围包', items:[
+        '多了自动漫游：没人操作时，镜头自己慢慢在院子里逛，手一拖它就让位',
+        '色调氛围从 4 套变 6 套：新添了雪夜和秋日',
+        '画质会自己调节：卡了就降一点清晰度换流畅，顺了再慢慢升回来',
+        '电脑上窗口窄一点、矮一点，面板都会自动收窄排版，五个天气按钮始终一行'
+    ]},
+    { v:'v3', d:'2026-10-20', theme:'9:16 竖屏 + 功能模块化', items:[
+        '画面改成原生竖屏 9:16：手机上铺满更好看，不再是把横屏硬转过来',
+        '8 个可插拔开关上线：背景音乐、环境音、氛围粒子、预设视角这些都能单独开关',
+        '声音全是程序现场合成的，没有音频文件：风声、雨声、篝火声，还有随天气变的背景音乐和鸟鸣虫鸣',
+        '门和篝火能点了：有开门、点火的小动画',
+        '留言表单上线：写完先复制一份兜底，也能静默发回给负责人'
+    ]},
+    { v:'v2', d:'2026-10-20', theme:'安全与手机', items:[
+        '手机操作齐活了：单指拖着转、双指捏合缩放、点按切天气',
+        '页面做了安全加固，打开更放心',
+        '意见通道打通：想法先复制一份，也能直接发回去'
+    ]},
+    { v:'v1', d:'2026-10-20', theme:'初始版本', items:[
+        '第一版楚门的世界：Three.js 森林小屋、树木和树上的小动物、向日葵花田、蝴蝶和蜜蜂',
+        '五种天气：晴天、雾天、夜间、雨天、金色时刻'
+    ]}
+];
+
+let logOpen = false, logCur = 0;
+function renderLog(){
+    const body = document.getElementById('logBody');
+    const tabs = document.getElementById('logTabs');
+    if(!body || !tabs) return;
+    tabs.textContent = '';
+    CHANGELOG_NOTES.forEach(function(n, i){
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = n.v;
+        if(i === logCur) b.classList.add('on');
+        b.addEventListener('click', function(){ logCur = i; renderLog(); });
+        tabs.appendChild(b);
+    });
+    body.textContent = '';
+    const cur = CHANGELOG_NOTES[logCur];
+    const th = document.createElement('p');
+    th.className = 'logTheme';
+    th.textContent = cur.v + ' · ' + cur.d + ' · ' + cur.theme;
+    body.appendChild(th);
+    const ul = document.createElement('ul');
+    ul.className = 'logList';
+    cur.items.forEach(function(t){
+        const li = document.createElement('li');
+        li.textContent = t;
+        ul.appendChild(li);
+    });
+    body.appendChild(ul);
+    const box = document.getElementById('logBox');
+    if(box) box.scrollTop = 0;
+}
+function openLog(){
+    if(logOpen) return;
+    logOpen = true;
+    logCur = 0;                       // 每次打开都先定位当前版本
+    renderLog();
+    document.getElementById('logMask').classList.add('on');
+    // 从齿轮面板进来时顺手收起面板，别两层叠着
+    const panel = document.getElementById('modPanel');
+    if(panel) panel.classList.remove('on');
+}
+function closeLog(){
+    if(!logOpen) return;
+    logOpen = false;
+    document.getElementById('logMask').classList.remove('on');
+}
+function setupChangelog(){
+    const mask = document.getElementById('logMask');
+    if(!mask) return;
+    document.getElementById('logX').addEventListener('click', closeLog);
+    document.getElementById('logOk').addEventListener('click', closeLog);
+    mask.addEventListener('click', function(e){ if(e.target === mask) closeLog(); });
+    document.addEventListener('keydown', function(e){
+        if(e.key === 'Escape' && logOpen){ closeLog(); e.stopPropagation(); }
+    }, true);
+    const entry = document.getElementById('logOpenBtn');
+    if(entry) entry.addEventListener('click', openLog);
+    /* 开页自动展示：等加载层退场后再弹（负责人要求每次打开先看，不做已读抑制）。
+       加载失败时 #boot 不会走 .hide 而是被 showFatal 直接 display:none，那时不弹日志盖错误提示。 */
+    const boot = document.getElementById('boot');
+    if(!boot){ openLog(); return; }
+    let waited = 0;
+    const wait = setInterval(function(){
+        waited += 250;
+        const gone = boot.classList.contains('hide');
+        const dead = boot.style.display === 'none' && !gone;
+        if(gone){
+            clearInterval(wait);
+            setTimeout(openLog, 450);
+        }else if(dead || waited >= 15000){
+            clearInterval(wait);
+        }
+    }, 250);
+}
+
 function bootTo(p, msg){
     const bar=document.getElementById('bootBar'), pct=document.getElementById('bootPct');
     const m=document.getElementById('bootMsg');
@@ -4280,6 +4479,9 @@ function setupGlobal(){
     const lq=document.getElementById('lowqBtn');
     if(lq) lq.addEventListener('click', function(){ lowQuality=!lowQuality; applyLowQuality(); });
 
+    /* 站内更新日志（Issue #37）：入口在上方功能面板的「版本日志」一节，开页自动展示当前版 */
+    setupChangelog();
+
     /* 资源加载失败降级：脚本/样式/图片 404 时给一句人话，而不是白屏 */
     window.addEventListener('error', function(ev){
         const t=ev.target;
@@ -4309,7 +4511,7 @@ function setupGlobal(){
     if(!app) return;
     var HIDE_MS = 3000, timer = null;
     function anyDialogOpen(){
-        var ids = ['modPanel','fbMask','ltMask','helpMask','voteMask'], i, el;
+        var ids = ['modPanel','fbMask','ltMask','helpMask','voteMask','logMask'], i, el;
         for(i = 0; i < ids.length; i++){
             el = document.getElementById(ids[i]);
             if(el && el.classList.contains('on')) return true;
@@ -4327,7 +4529,7 @@ function setupGlobal(){
         app.classList.remove('bars-off');
         arm();
     }
-    ['ui','status','fbBtn','lanternBtn','modBtn','modPanel','fbMask','ltMask','helpMask','voteMask'].forEach(function(id){
+    ['ui','status','fbBtn','lanternBtn','modBtn','modPanel','fbMask','ltMask','helpMask','voteMask','logMask'].forEach(function(id){
         var el = document.getElementById(id);
         if(!el) return;
         ['pointerdown','input','change','wheel'].forEach(function(ev){
