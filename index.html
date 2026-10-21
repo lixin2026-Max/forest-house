@@ -1766,8 +1766,11 @@ function createFarm(){
 }
 
 /* ==================== 种田玩法（Issue #4） ====================
-   循环：点可玩格播种（向日葵→玉米→南瓜轮换）→ 点苗浇水（雨天自动算浇过）→
-   昼夜轮转满一圈（自动时序 sunny→golden→night→mist 走完回到 sunny）成熟 → 点一下收获。
+   循环：点可玩格播种（向日葵→玉米→南瓜轮换）→ 点苗浇水（雨天自动算浇过）→ 成熟 → 点一下收获。
+   成熟有两条路，互不重复结算（靠 mature 标记，结过的不再结）：
+   ① 自动轮转开着时，昼夜满一圈（自动时序回到 sunny）调 farmNewDay；
+   ② 进页面时存档日期（lastDate）和真实今天对不上，说明跨了天，同样调 farmNewDay 结算——
+      玩家把自动轮转关了（Issue #26）作物也不会卡死。
    可玩格的土贴片与各阶段作物合并成一个 mesh，状态变化时整体重建（绘制 +1）。
    状态与收获数存本机 ct2_farm（FARM_KEY 写死，照 ct2_hunt / ct2_help 的治理先例）。 */
 const FARM_KEY='ct2_farm';
@@ -1785,6 +1788,7 @@ function loadFarm(){
     if(typeof saved.day!=='number') saved.day=0;
     if(typeof saved.harvest!=='number') saved.harvest=0;
     if(!saved.cells||typeof saved.cells!=='object') saved.cells={};
+    if(typeof saved.lastDate!=='string') saved.lastDate='';   // 上次进页面的真实日期，跨天结算用
     return saved;
 }
 function saveFarm(){
@@ -1885,6 +1889,22 @@ function farmNewDay(){
     saveFarm();
     if(ripe>0){ renderPlayCrops(); showHuntToast('🌾 有 '+ripe+' 块地的作物成熟啦，点一点就能收获'); }
 }
+/* 跨天结算（Issue #4 收尾）：进页面时比对存档日期与真实今天。
+   老存档没有 lastDate（空串）只补记今天、不追溯结算；日期变了就走 farmNewDay 同一条路。
+   防重复：farmNewDay 只把 watered && !mature 的结成 mature，已结的不动，
+   所以日期路径和自动满圈路径谁先到都只结一次。 */
+function farmTodayStr(){
+    const d=new Date();
+    return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());
+}
+function farmSettleByDate(){
+    if(!farmState) return;
+    const today=farmTodayStr();
+    if(farmState.lastDate===today) return;
+    if(!farmState.lastDate){ farmState.lastDate=today; saveFarm(); return; }
+    farmState.lastDate=today;
+    farmNewDay();
+}
 // 雨天自动浇水：下雨时还没浇的苗一律算浇过（animate 里每帧调，未下雨时立即返回）
 function farmRainCheck(){
     if(!farmState) return;
@@ -1933,6 +1953,7 @@ function bindFarmTap(){
 }
 function buildFarmGame(){
     farmState=loadFarm();
+    farmSettleByDate();
     renderPlayCrops();
     bindFarmTap();
 }
