@@ -2783,13 +2783,23 @@ function buildDragonModel(){
     const torsoMesh = new THREE.Mesh(ModelKit.mergePainted([
         dgPart(new THREE.SphereGeometry(0.315, 18, 14), DRG_BODY, 0, 0.24, 0, {s:[1.02, 1.08, 0.78]}),
         dgPart(new THREE.SphereGeometry(0.25, 16, 12), DRG_BODY, 0, -0.03, 0, {s:[1.08, 0.78, 0.80]}),
+        /* 脖颈基座：躯干顶端一圈隆起，与头组里的颈球上下夹住头-躯干交界，
+           转头/垂头时交界处始终有肉身过渡，不露缝 */
+        dgPart(new THREE.SphereGeometry(0.19, 14, 10), DRG_BODY, 0, 0.50, 0, {s:[1.08, 0.66, 1.0]}),
         dgPart(new THREE.SphereGeometry(0.205, 14, 10), DRG_BELLY, 0, 0.33, 0.169, {s:[0.88, 0.52, 0.55]}),
         dgPart(new THREE.SphereGeometry(0.215, 14, 10), DRG_BELLY, 0, 0.185, 0.173, {s:[0.90, 0.54, 0.55]}),
         dgPart(new THREE.SphereGeometry(0.20, 14, 10), DRG_BELLY, 0, 0.045, 0.143, {s:[0.86, 0.52, 0.55]}),
-        dgPart(new THREE.ConeGeometry(0.075, 0.20, 6), DRG_CORAL, 0, 0.47, -0.204, {rx:0.35, s:[1, 1, 0.45]}),
-        dgPart(new THREE.ConeGeometry(0.085, 0.24, 6), DRG_CORAL, 0, 0.30, -0.238, {rx:0.22, s:[1, 1, 0.45]}),
-        dgPart(new THREE.ConeGeometry(0.075, 0.20, 6), DRG_CORAL, 0, 0.12, -0.234, {rx:0.10, s:[1, 1, 0.45]}),
-        dgPart(new THREE.ConeGeometry(0.06, 0.15, 6), DRG_CORAL, 0, -0.05, -0.195, {rx:-0.05, s:[1, 1, 0.45]})
+        /* 背刺：底盘沉根之外，每根刺根部再加一颗沿锥轴压扁的根包覆丘（半径比底盘大
+           0.025）——弧面背上平底盘总有一段边沿探出表面，包覆丘把整圈盘边吞进过渡
+           件里，刺像从一颗根丘上长出来（探针按底盘圆环对 躯干∪包覆丘 复测） */
+        dgPart(new THREE.ConeGeometry(0.075, 0.20, 6), DRG_CORAL, 0, 0.47, -0.174, {rx:0.35, s:[1, 1, 0.45]}),
+        dgPart(new THREE.SphereGeometry(0.10, 10, 8), DRG_CORAL, 0, 0.385, -0.205, {rx:0.35, s:[1, 0.5, 1]}),
+        dgPart(new THREE.ConeGeometry(0.085, 0.24, 6), DRG_CORAL, 0, 0.30, -0.208, {rx:0.22, s:[1, 1, 0.45]}),
+        dgPart(new THREE.SphereGeometry(0.11, 10, 8), DRG_CORAL, 0, 0.193, -0.232, {rx:0.22, s:[1, 0.5, 1]}),
+        dgPart(new THREE.ConeGeometry(0.075, 0.20, 6), DRG_CORAL, 0, 0.12, -0.183, {rx:0.10, s:[1, 1, 0.45]}),
+        dgPart(new THREE.SphereGeometry(0.10, 10, 8), DRG_CORAL, 0, 0.030, -0.192, {rx:0.10, s:[1, 0.5, 1]}),
+        dgPart(new THREE.ConeGeometry(0.06, 0.15, 6), DRG_CORAL, 0, -0.05, -0.165, {rx:-0.05, s:[1, 1, 0.45]}),
+        dgPart(new THREE.SphereGeometry(0.085, 10, 8), DRG_CORAL, 0, -0.115, -0.162, {rx:-0.05, s:[1, 0.5, 1]})
     ]), paintMat);
     torsoMesh.castShadow = true;
     body.add(torsoMesh);
@@ -2802,6 +2812,12 @@ function buildDragonModel(){
     const head = new THREE.Group(); head.position.set(0, 0.79, 0.15); body.add(head);
     const skullMesh = new THREE.Mesh(ModelKit.mergePainted([
         dgPart(new THREE.SphereGeometry(0.325, 18, 14), DRG_BODY, 0, -0.01, -0.13, {s:[1, 0.95, 0.94]}),
+        /* 颈球：挂在头组下缘、随头一起转，底部始终沉在躯干与脖颈基座里——
+           张望/低头/睡姿垂头时脖子不断开、不露空 */
+        dgPart(new THREE.SphereGeometry(0.195, 14, 10), DRG_BODY, 0, -0.26, -0.07, {s:[1, 0.79, 1]}),
+        /* 脑后颈窝肉：补颅骨后下缘与颈球之间的月牙空缺（探针实测睡姿该处颅底
+           距躯干/颈球最远 0.12）——一团随头转的后脑勺肉把空缺填实 */
+        dgPart(new THREE.SphereGeometry(0.15, 12, 9), DRG_BODY, 0, -0.15, -0.28, {s:[1.05, 0.9, 1]}),
         dgPart(new THREE.SphereGeometry(0.165, 14, 10), DRG_BELLY, 0, -0.125, 0.095, {s:[1.28, 0.74, 0.95]}),
         dgPart(new THREE.SphereGeometry(0.08, 10, 8), DRG_BLUSH, -0.225, -0.11, 0.085, {s:[1, 0.75, 0.45]}),
         dgPart(new THREE.SphereGeometry(0.08, 10, 8), DRG_BLUSH,  0.225, -0.11, 0.085, {s:[1, 0.75, 0.45]}),
@@ -2812,9 +2828,14 @@ function buildDragonModel(){
     skullMesh.castShadow = true;
     head.add(skullMesh);
     head.add(new THREE.Mesh(ModelKit.mergePainted([
-        dgPart(new THREE.ConeGeometry(0.082, 0.42, 9), DRG_BELLY, -0.155, 0.305, -0.16, {rx:-0.30, rz:0.17}),
-        dgPart(new THREE.ConeGeometry(0.082, 0.42, 9), DRG_BELLY,  0.155, 0.305, -0.16, {rx:-0.30, rz:-0.17}),
-        dgPart(new THREE.ConeGeometry(0.07, 0.18, 6), DRG_CORAL, 0, 0.14, -0.41, {rx:0.55, s:[1, 1, 0.45]})
+        /* 角：底盘加宽（0.082→0.09）做根部 flare。注：dgPart 的坐标是锥体形心，
+           底盘心还要沿锥轴往回 0.21——实测底盘深埋颅骨内（探针按真实底盘心复测），
+           高度保持原值不缩水 */
+        dgPart(new THREE.ConeGeometry(0.09, 0.42, 9), DRG_BELLY, -0.155, 0.305, -0.16, {rx:-0.30, rz:0.17}),
+        dgPart(new THREE.ConeGeometry(0.09, 0.42, 9), DRG_BELLY,  0.155, 0.305, -0.16, {rx:-0.30, rz:-0.17}),
+        dgPart(new THREE.ConeGeometry(0.07, 0.18, 6), DRG_CORAL, 0, 0.113, -0.385, {rx:0.55, s:[1, 1, 0.45]}),
+        /* 后脑刺根包覆丘：同背刺，吞掉底盘探出颅面的那段边沿 */
+        dgPart(new THREE.SphereGeometry(0.095, 10, 8), DRG_CORAL, 0, 0.044, -0.427, {rx:0.55, s:[1, 0.5, 1]})
     ]), paintMat));
     /* 耳鳍：左右各成一组（枢轴在鳍根）——睡姿侧躺时像动物压耳朵一样向上折拢到头顶，
        否则倒下侧的鳍尖会被整组滚转压进地面（探针实测鳍尖 -0.18） */
@@ -2836,7 +2857,10 @@ function buildDragonModel(){
        一件合并：肩头 + 手臂 + 圆手 + 朝前内侧的小拇指 */
     function armMesh(sign){
         return new THREE.Mesh(ModelKit.mergePainted([
-            dgPart(new THREE.SphereGeometry(0.078, 10, 8), DRG_BODY, 0, -0.01, 0),
+            /* 肩头关节球：加大到 0.108 并下沉到枢轴下——原 0.078 球与躯干侧面只是相切
+               （内缘 0.267 对躯干表面 0.267），看着像贴上去的；现在整颗球咬进躯干约 0.05，
+               摆臂/睡姿折臂时肩头始终是连在身上的关节球 */
+            dgPart(new THREE.SphereGeometry(0.108, 12, 9), DRG_BODY, 0, -0.04, 0),
             dgPart(new THREE.CylinderGeometry(0.062, 0.052, 0.30, 10), DRG_BODY, 0, -0.16, 0),
             dgPart(new THREE.SphereGeometry(0.068, 10, 8), DRG_BODY, 0, -0.345, 0.005, {s:[1, 1.15, 1]}),
             dgPart(new THREE.SphereGeometry(0.028, 8, 6), DRG_BODY, -sign*0.055, -0.335, 0.032)
@@ -2847,10 +2871,15 @@ function buildDragonModel(){
     const armR = new THREE.Group(); armR.position.set(0.345, 0.44, 0.03);
     armR.add(armMesh(1)); armR.rotation.z = 0.14; armR.userData.baseZ = 0.14; body.add(armR);
 
-    /* 双腿：枢轴在髋部（与 body 同高、挂 lie 层），短腿 + 圆头脚 + 三个奶油脚趾 */
+    /* 双腿：枢轴在髋部（与 body 同高、挂 lie 层），腿筒 + 踝关节球 + 圆头脚 + 三个奶油脚趾。
+       【连接修复】原腿筒下端（-0.33）与脚背（-0.412）之间有 0.082 的空气间隙——脚是悬空
+       吊在腿下的一块，迈步时看着像掉在地上。这次腿筒加长到 -0.45 扎进脚里，再加一颗踝
+       关节球（-0.435）把腿筒下端与脚后跟整圈包住：腿-踝-脚三段两两重叠成一体，
+       脚的位置/触地高度（底 -0.538）一丝不动，步态与防沉地结论不回退 */
     function legMesh(){
         return new THREE.Mesh(ModelKit.mergePainted([
-            dgPart(new THREE.CylinderGeometry(0.088, 0.098, 0.32, 10), DRG_BODY, 0, -0.17, 0),
+            dgPart(new THREE.CylinderGeometry(0.088, 0.10, 0.46, 10), DRG_BODY, 0, -0.22, 0),
+            dgPart(new THREE.SphereGeometry(0.102, 12, 9), DRG_BODY, 0, -0.435, 0.03, {s:[1, 0.85, 1.15]}),
             dgPart(new THREE.SphereGeometry(0.115, 12, 9), DRG_BODY, 0, -0.475, 0.075, {s:[1, 0.55, 1.35]}),
             dgPart(new THREE.SphereGeometry(0.032, 8, 6), DRG_BELLY, -0.055, -0.478, 0.20),
             dgPart(new THREE.SphereGeometry(0.034, 8, 6), DRG_BELLY, 0, -0.472, 0.21),
@@ -2877,15 +2906,22 @@ function buildDragonModel(){
 
     /* 三节渐细长尾：自尾根下垂拖在身后（droop 为各节基准俯角，存在 userData 里给
        dragonAnimate 叠加摆动/睡姿压尾），每节背上一根小背刺，末节带珊瑚色竖扁尾尖 */
-    function tailSeg(rTip, rBase, len, spikeR, spikeH){
+    function tailSeg(rTip, rBase, len, spikeR, spikeH, jointR, rootMound){
         const parts = [ dgPart(new THREE.CylinderGeometry(rTip, rBase, len, 10), DRG_BODY, 0, 0, -len/2, {rx:-Math.PI/2}) ];
         if(spikeR) parts.push(dgPart(new THREE.ConeGeometry(spikeR, spikeH, 6), DRG_CORAL, 0, (rTip + rBase)*0.4, -len/2, {rx:0.3, s:[1, 1, 0.45]}));
+        /* 关节包覆球：长在本节末端、套着下一节的根部——两节相对摆动时接头始终被球包住，
+           不会像两片圆盘对顶那样在弯侧张开楔口 */
+        if(jointR) parts.push(dgPart(new THREE.SphereGeometry(jointR, 10, 8), DRG_BODY, 0, 0, -len));
+        /* 尾根丘：第一节根部的肉丘，跨在躯干后表面两侧，尾巴怎么摆根部都不脱开 */
+        if(rootMound) parts.push(dgPart(new THREE.SphereGeometry(0.125, 12, 9), DRG_BODY, 0, 0, 0.03, {s:[1.05, 0.95, 0.75]}));
         return new THREE.Mesh(ModelKit.mergePainted(parts), paintMat);
     }
-    const tail1 = new THREE.Group(); tail1.position.set(0, -0.04, -0.21);
-    tail1.add(tailSeg(0.082, 0.105, 0.32, 0.055, 0.13)); tail1.userData.droop = -0.22; body.add(tail1);
+    /* 尾根：原位（z=-0.21）底盘与躯干后表面只是相切——整组内嵌 0.055 扎进髋部，
+       再加尾根丘包覆，根部成一体（总尾长随之短 0.055，垂地余量复核见探针） */
+    const tail1 = new THREE.Group(); tail1.position.set(0, -0.04, -0.155);
+    tail1.add(tailSeg(0.082, 0.105, 0.32, 0.055, 0.13, 0.084, true)); tail1.userData.droop = -0.22; body.add(tail1);
     const tail2 = new THREE.Group(); tail2.position.set(0, 0, -0.32);
-    tail2.add(tailSeg(0.06, 0.082, 0.28, 0.045, 0.11)); tail2.userData.droop = -0.14; tail1.add(tail2);
+    tail2.add(tailSeg(0.06, 0.082, 0.28, 0.045, 0.11, 0.062, false)); tail2.userData.droop = -0.14; tail1.add(tail2);
     const tail3 = new THREE.Group(); tail3.position.set(0, 0, -0.28);
     tail3.add(new THREE.Mesh(ModelKit.mergePainted([
         dgPart(new THREE.CylinderGeometry(0.038, 0.06, 0.24, 10), DRG_BODY, 0, 0, -0.12, {rx:-Math.PI/2}),
