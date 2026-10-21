@@ -399,6 +399,24 @@
     /* 触屏手感：去掉 300ms 点击延迟与长按选中/高亮 */
     button, label, input[type=range]{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
     #scene, #scene canvas{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+    /* ===== 小龙操控（#27）：底部中间小按钮条 + 移动端虚拟摇杆 ===== */
+    #dragonBar{position:absolute;left:50%;bottom:15px;transform:translateX(-50%);z-index:120;
+        display:flex;gap:8px}
+    #dragonBar button{background:rgba(10,20,10,.82);color:#ffe2b0;border:1px solid rgba(255,190,90,.45);
+        padding:9px 15px;border-radius:22px;font-size:13px;font-family:inherit;cursor:pointer;
+        backdrop-filter:blur(6px);transition:background .15s}
+    #dragonBar button:hover{background:rgba(60,40,10,.9)}
+    #dragonBar button.on{background:#b06f1e;border-color:#e09a35;color:#fff;font-weight:600}
+    #joy{position:absolute;left:26px;bottom:86px;width:112px;height:112px;border-radius:50%;z-index:121;
+        background:rgba(10,20,10,.35);border:1.5px solid rgba(255,255,255,.4);display:none;touch-action:none}
+    #joy.on{display:block}
+    #joyKnob{position:absolute;left:50%;top:50%;width:48px;height:48px;border-radius:50%;
+        background:rgba(255,226,176,.85);border:1.5px solid rgba(120,70,10,.5);
+        transform:translate(-50%,-50%);pointer-events:none}
+    @media (max-width:600px),(pointer:coarse){
+        #dragonBar{bottom:calc(64px + env(safe-area-inset-bottom, 0px))}
+        #joy{bottom:calc(140px + env(safe-area-inset-bottom, 0px))}
+    }
 </style>
 </head>
 <body>
@@ -430,6 +448,11 @@
     </div>
 </div>
 <div id="status">初始化中…</div>
+<div id="dragonBar">
+    <button type="button" id="dragonBtn">🐉 操控小龙</button>
+    <button type="button" id="viewBtn" style="display:none">👁️ 第三人称</button>
+</div>
+<div id="joy"><div id="joyKnob"></div></div>
 
 <!-- ===== 可插拔功能面板：每个功能一个独立开关，关掉即彻底停用 ===== -->
 <button id="modBtn" type="button" title="功能开关">⚙</button>
@@ -968,9 +991,11 @@ function makeOrbitControls(cam, dom){
         target:new THREE.Vector3(0,4,0),
         theta:Math.PI*0.22, phi:Math.PI*0.30, radius:38,
         tTheta:null, tPhi:null, tRadius:null,
-        dragging:false, locked:false, lastX:0, lastY:0
+        dragging:false, locked:false, lastX:0, lastY:0,
+        external:false   // 外部相机接管标记（#27 小龙操控）：为真时本控制器完全停手
     };
     function apply(){
+        if(st.external) return;
         if(st.tTheta!==null && !st.locked){
             st.theta+=(st.tTheta-st.theta)*0.06; st.phi+=(st.tPhi-st.phi)*0.06;
             st.radius+=(st.tRadius-st.radius)*0.06;
@@ -997,6 +1022,7 @@ function makeOrbitControls(cam, dom){
         return Math.hypot(p[0].x-p[1].x, p[0].y-p[1].y);
     }
     dom.addEventListener('pointerdown',e=>{
+        if(st.external)return;
         if(e.pointerType==='mouse'&&e.button!==0)return;
         if(dom.setPointerCapture){ try{dom.setPointerCapture(e.pointerId);}catch(_){} }
         pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
@@ -1040,6 +1066,7 @@ function makeOrbitControls(cam, dom){
     dom.addEventListener('contextmenu',e=>e.preventDefault());
 
     dom.addEventListener('wheel',e=>{
+        if(st.external)return;
         e.preventDefault();
         st.radius*=e.deltaY>0?1.08:0.92;
         st.radius=Math.max(9,Math.min(130,st.radius));
@@ -1048,7 +1075,11 @@ function makeOrbitControls(cam, dom){
     return { update:apply, target:st.target,
         flyTo(theta,phi,radius){ if(st.locked) return; st.tTheta=theta; st.tPhi=phi; st.tRadius=radius; },
         setLocked(v){ st.locked=!!v; if(st.locked) st.tTheta=st.tPhi=st.tRadius=null; },
-        isLocked(){ return st.locked; } };
+        isLocked(){ return st.locked; },
+        /* 外部相机（小龙第一/第三人称）接管开关：接管期间轨道相机不写相机、
+           不响应拖拽/滚轮；交还后从原轨道状态无缝继续 */
+        setExternal(v){ st.external=!!v; if(st.external){ st.dragging=false; pointers.clear(); } },
+        isExternal(){ return st.external; } };
 }
 
 /* ==================== 天空穹顶（渐变 shader，随天气插值） ==================== */
@@ -1301,7 +1332,10 @@ const ModelKit = {
     /* 石头：正十二面体低多边形，r 为半径 */
     rock(r){ return new THREE.DodecahedronGeometry(r, 0); },
     /* 农田作物：一格一份几何（sunflower/corn 不用 rnd 参数，pumpkin 用它撒籽点位） */
-    crops: { sunflower: farmSunflowerGeos, corn: farmCornGeos, pumpkin: farmPumpkinGeos, sprout: sproutGeos }
+    crops: { sunflower: farmSunflowerGeos, corn: farmCornGeos, pumpkin: farmPumpkinGeos, sprout: sproutGeos },
+    /* 小龙（#27）：带关节的角色是工具箱的例外——返回拼装好的 { group, parts }，
+       零件几何仍全部经本箱的 paint/mergePainted 产出（实现在小龙一节） */
+    dragon: buildDragonModel
 };
 /* 统一色板：全场反复用的颜色只在这里定义一份，改色改一处、全场一致。
    数值与收编前逐一相同（完整色板表见 MODELING.md）。 */
@@ -2582,6 +2616,493 @@ function createInsects(){
     scene.add(fireflies[0].points);
 }
 
+/* ==================== 小龙（Issue #27 · v4.0 build 1） ====================
+   森林小屋原野上的一条原创幼龙：纯程序建模（零件全走 ModelKit 的
+   paint/mergePainted 合批），圆润奶黄 + 珊瑚橙背刺/耳鳍/尾尖 + 奶油肚皮，
+   造型与标志元素均为本项目原创。比例：站立高约 1.55（门高 2.36 的三分之二）、
+   身长（含尾）约 2.6，与小屋、树木、松鼠/小鸟的相对尺度按 low-poly 全场统一。
+   动画不用骨骼资源：分组节点（躯干/头/翅/腿/三节尾）做呼吸、眨眼、步态、睡姿。
+   行为走 AgentKit：白天散步/发呆，夜间走 GClock 阶段去篝火边睡；
+   玩家接管后切换为双端操控（键鼠/点击/虚拟摇杆）+ 第一/第三人称相机。 */
+const DRG_BODY = 0xf6cd62;    // 奶黄（主色）
+const DRG_BELLY = 0xfff3d4;   // 奶油（肚皮/吻部/角/翅骨）
+const DRG_CORAL = 0xef8f4d;   // 珊瑚橙（背刺/耳鳍/尾尖）
+const DRG_WING = 0xf9b968;    // 翅膜浅橙
+const DRG_BLUSH = 0xf2a18e;   // 腮红
+
+/* 零件小帮手：缩放→旋转→平移→刷色，返回可进 mergePainted 的几何体 */
+function dgPart(geo, hex, x, y, z, o){
+    o = o || {};
+    if(o.s) geo.scale(o.s[0], o.s[1], o.s[2]);
+    if(o.rx) geo.rotateX(o.rx);
+    if(o.ry) geo.rotateY(o.ry);
+    if(o.rz) geo.rotateZ(o.rz);
+    geo.translate(x, y, z);
+    return ModelKit.paint(geo, hex);
+}
+
+function buildDragonModel(){
+    const paintMat = new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.9});
+    const root = new THREE.Group(); root.name = 'dragon';
+    const body = new THREE.Group(); body.position.y = 0.76; root.add(body);
+
+    /* 躯干（1 件合并：圆肚 + 奶油肚皮 + 珊瑚背刺一排） */
+    const torsoMesh = new THREE.Mesh(ModelKit.mergePainted([
+        dgPart(new THREE.SphereGeometry(0.55, 14, 11), DRG_BODY, 0, 0, 0, {s:[1, 0.92, 1.22]}),
+        dgPart(new THREE.SphereGeometry(0.46, 12, 9), DRG_BELLY, 0, -0.13, 0.13, {s:[0.85, 0.8, 1.02]}),
+        dgPart(new THREE.ConeGeometry(0.09, 0.24, 5), DRG_CORAL, 0, 0.47, 0.30, {rx:-0.25, s:[1, 1, 0.45]}),
+        dgPart(new THREE.ConeGeometry(0.10, 0.28, 5), DRG_CORAL, 0, 0.50, 0.03, {rx:-0.10, s:[1, 1, 0.45]}),
+        dgPart(new THREE.ConeGeometry(0.09, 0.24, 5), DRG_CORAL, 0, 0.46, -0.25, {rx:0.12, s:[1, 1, 0.45]}),
+        dgPart(new THREE.ConeGeometry(0.075, 0.19, 5), DRG_CORAL, 0, 0.40, -0.50, {rx:0.30, s:[1, 1, 0.45]})
+    ]), paintMat);
+    torsoMesh.castShadow = true;
+    body.add(torsoMesh);
+
+    /* 头（枢轴在脖子处，转头/垂头都绕这里） */
+    const head = new THREE.Group(); head.position.set(0, 0.40, 0.50); body.add(head);
+    head.add(new THREE.Mesh(ModelKit.mergePainted([
+        dgPart(new THREE.SphereGeometry(0.40, 14, 11), DRG_BODY, 0, 0, 0, {s:[1, 0.94, 0.98]}),
+        dgPart(new THREE.SphereGeometry(0.21, 10, 8), DRG_BELLY, 0, -0.13, 0.28, {s:[1.2, 0.72, 0.95]}),
+        dgPart(new THREE.SphereGeometry(0.085, 8, 6), DRG_BLUSH, -0.25, -0.07, 0.27, {s:[1, 0.8, 0.5]}),
+        dgPart(new THREE.SphereGeometry(0.085, 8, 6), DRG_BLUSH,  0.25, -0.07, 0.27, {s:[1, 0.8, 0.5]})
+    ]), paintMat));
+    head.add(new THREE.Mesh(ModelKit.mergePainted([
+        dgPart(new THREE.ConeGeometry(0.085, 0.30, 7), DRG_BELLY, -0.19, 0.33, -0.06, {rx:-0.55, rz:0.25}),
+        dgPart(new THREE.ConeGeometry(0.085, 0.30, 7), DRG_BELLY,  0.19, 0.33, -0.06, {rx:-0.55, rz:-0.25}),
+        dgPart(new THREE.ConeGeometry(0.16, 0.34, 6), DRG_CORAL, -0.40, 0.10, -0.03, {rz:1.15, s:[1, 1, 0.35]}),
+        dgPart(new THREE.ConeGeometry(0.16, 0.34, 6), DRG_CORAL,  0.40, 0.10, -0.03, {rz:-1.15, s:[1, 1, 0.35]})
+    ]), paintMat));
+    /* 双眼 + 鼻孔合成一件：网格原点钉在眼线上，眨眼时整体 scale.y 压扁即可 */
+    const eyeMesh = new THREE.Mesh(ModelKit.merge([
+        new THREE.SphereGeometry(0.078, 10, 8).translate(-0.165, 0, 0.335),
+        new THREE.SphereGeometry(0.078, 10, 8).translate( 0.165, 0, 0.335),
+        new THREE.SphereGeometry(0.018, 6, 5).translate(-0.06, -0.115, 0.445),
+        new THREE.SphereGeometry(0.018, 6, 5).translate( 0.06, -0.115, 0.445)
+    ]), new THREE.MeshStandardMaterial({color:0x33241a, roughness:0.3}));
+    eyeMesh.position.set(0, 0.05, 0);
+    head.add(eyeMesh);
+
+    /* 小翅膀：叶形膜 + 奶油翅骨，一侧一件，镜像复用 */
+    function wingMesh(sign){
+        const mem = new THREE.SphereGeometry(0.5, 10, 7);
+        mem.scale(1.05, 0.10, 0.55); mem.translate(sign*0.30, 0, -0.10);
+        const spar = new THREE.CylinderGeometry(0.028, 0.045, 0.72, 6);
+        spar.rotateZ(sign*1.15); spar.rotateY(sign*0.35); spar.translate(sign*0.26, 0.03, 0.12);
+        return new THREE.Mesh(ModelKit.mergePainted([
+            ModelKit.paint(mem, DRG_WING), ModelKit.paint(spar, DRG_BELLY)
+        ]), paintMat);
+    }
+    const wingL = new THREE.Group(); wingL.position.set(-0.30, 0.32, -0.08);
+    wingL.add(wingMesh(-1)); wingL.rotation.z = -0.22; wingL.userData.base = -0.22; body.add(wingL);
+    const wingR = new THREE.Group(); wingR.position.set(0.30, 0.32, -0.08);
+    wingR.add(wingMesh(1)); wingR.rotation.z = 0.22; wingR.userData.base = 0.22; body.add(wingR);
+
+    /* 四条短腿：枢轴在髋/肩处，步态绕枢轴前后摆 */
+    function legMesh(){
+        return new THREE.Mesh(ModelKit.mergePainted([
+            dgPart(new THREE.CylinderGeometry(0.085, 0.105, 0.36, 7), DRG_BODY, 0, -0.18, 0),
+            dgPart(new THREE.SphereGeometry(0.115, 8, 6), DRG_BODY, 0, -0.37, 0.035, {s:[1, 0.55, 1.3]})
+        ]), paintMat);
+    }
+    function legAt(x, z){
+        const g = new THREE.Group(); g.position.set(x, -0.32, z); g.add(legMesh()); body.add(g); return g;
+    }
+    const legFL = legAt(-0.27, 0.33), legFR = legAt(0.27, 0.33);
+    const legBL = legAt(-0.29, -0.33), legBR = legAt(0.29, -0.33);
+
+    /* 三节尾：逐节变细，末节带珊瑚色竖扁尾尖（本龙的标志件） */
+    function tailSeg(r1, r2, len, tip){
+        const parts = [ dgPart(new THREE.CylinderGeometry(r2, r1, len, 8), DRG_BODY, 0, 0, -len/2, {rx:-Math.PI/2}) ];
+        if(tip) parts.push(dgPart(new THREE.ConeGeometry(0.13, 0.30, 6), DRG_CORAL, 0, 0.02, -len-0.10, {rx:-Math.PI/2, s:[0.4, 1, 1]}));
+        return new THREE.Mesh(ModelKit.mergePainted(parts), paintMat);
+    }
+    const tail1 = new THREE.Group(); tail1.position.set(0, 0.04, -0.60); tail1.add(tailSeg(0.155, 0.115, 0.36, false)); body.add(tail1);
+    const tail2 = new THREE.Group(); tail2.position.set(0, 0, -0.36); tail2.add(tailSeg(0.115, 0.08, 0.32, false)); tail1.add(tail2);
+    const tail3 = new THREE.Group(); tail3.position.set(0, 0, -0.32); tail3.add(tailSeg(0.08, 0.05, 0.26, true)); tail2.add(tail3);
+
+    return { group: root, parts: {
+        body: body, bodyBaseY: 0.76, head: head, eyes: eyeMesh,
+        wingL: wingL, wingR: wingR,
+        legFL: legFL, legFR: legFR, legBL: legBL, legBR: legBR,
+        tail: [tail1, tail2, tail3]
+    } };
+}
+
+/* ---------- 小龙的家与睡点 ---------- */
+const DRAGON_HOME = {x:5.5, z:6.5};
+function pickDragonSleep(){
+    // 篝火在 (-8.5, 8.5)：在它周边按顺位找一块真正能落脚的干地
+    const cands = [[-5.6, 10.8], [-11.6, 10.4], [-4.9, 6.2], [-6.0, 12.6], [-12.4, 6.8]];
+    for(const c of cands) if(WalkMap.isWalkable(c[0], c[1])) return {x:c[0], z:c[1]};
+    return {x:DRAGON_HOME.x, z:DRAGON_HOME.z};
+}
+/* 睡点必须懒计算：可行走地图依赖的 HUNT_SPOTS 等常量定义在本节之后，
+   脚本加载期就调用会撞上 TDZ。createDragon（init 阶段）里算第一次。 */
+let DRAGON_SLEEP = null;
+let dragonAgent = null;
+
+function dragonFace(a, targetYaw, dt){
+    let diff = targetYaw - a.group.rotation.y;
+    while(diff > Math.PI) diff -= Math.PI*2;
+    while(diff < -Math.PI) diff += Math.PI*2;
+    a.group.rotation.y += diff * Math.min(1, dt*8);
+}
+/* 带贴墙滑动的地面移动：整步不通就分轴试，返回这帧是否真的动了 */
+function dragonWalkTo(a, tx, tz, speed, dt){
+    const p = a.group.position;
+    const dx = tx - p.x, dz = tz - p.z;
+    const d = Math.hypot(dx, dz);
+    if(d < 1e-4) return false;
+    const step = Math.min(speed*dt, d);
+    const ux = dx/d, uz = dz/d;
+    const tries = [[ux*step, uz*step], [ux*step, 0], [0, uz*step]];
+    for(const tr of tries){
+        const nx = p.x + tr[0], nz = p.z + tr[1];
+        if(Math.hypot(nx, nz) > 58) continue;          // 世界边界
+        if(!WalkMap.isWalkable(nx, nz)) continue;      // 不落水、不穿房树篝火
+        p.x = nx; p.z = nz; p.y = terrainH(nx, nz);
+        dragonFace(a, Math.atan2(ux, uz), dt);
+        return true;
+    }
+    dragonFace(a, Math.atan2(ux, uz), dt);
+    return false;
+}
+function dragonPickTarget(a){
+    for(let i = 0; i < 12; i++){
+        const ang = Math.random()*Math.PI*2, r = 5 + Math.random()*20;
+        const x = DRAGON_HOME.x + Math.cos(ang)*r, z = DRAGON_HOME.z + Math.sin(ang)*r;
+        if(Math.hypot(x, z) > 55) continue;
+        if(WalkMap.isWalkable(x, z)) return {x:x, z:z};
+    }
+    return null;
+}
+
+/* ---------- 小龙的关节动画（全状态共用，靠 moveAmt / pose 两个量驱动） ---------- */
+function dragonAnimate(a, dt, t){
+    const P = a.parts;
+    const poseT = (a.state === 'sleep') ? 1 : 0;
+    a.pose += Math.max(-dt*1.6, Math.min(dt*1.6, poseT - a.pose));
+    const moving = a.moveAmt;
+    // 呼吸：醒着轻快，睡着更慢更深
+    const br = a.pose > 0.5 ? Math.sin(t*1.1)*0.035 : Math.sin(t*1.9)*0.018;
+    P.body.scale.set(1, 1 + br, 1);
+    // 睡姿：伏低 + 头垂下
+    P.body.position.y = P.bodyBaseY - a.pose*0.17 + Math.abs(Math.sin(a.walkPhase))*0.045*moving;
+    P.body.rotation.x = a.pose*0.10;
+    P.head.rotation.x = a.pose*0.42 + Math.sin(t*0.7)*0.03*(1 - a.pose);
+    // 眨眼：随机间隔闭一下；睡着常闭
+    if(a.pose > 0.5){ P.eyes.scale.y = 0.08; }
+    else{
+        a.blinkT -= dt;
+        if(a.blinkT <= 0){ a.blinkT = 2.1 + Math.random()*2.6; a.blinkPh = 0; }
+        if(a.blinkPh >= 0){
+            a.blinkPh += dt;
+            const k = a.blinkPh / 0.16;
+            if(k >= 1){ a.blinkPh = -1; P.eyes.scale.y = 1; }
+            else P.eyes.scale.y = 1 - Math.sin(k*Math.PI)*0.9;
+        }
+    }
+    // 步态：对角步序 + 尾巴随步摆 + 小翅膀轻扇
+    a.walkPhase += dt * 4.6 * moving;
+    const sw = 0.55 * moving;
+    P.legFL.rotation.x = Math.sin(a.walkPhase) * sw;
+    P.legBR.rotation.x = Math.sin(a.walkPhase) * sw;
+    P.legFR.rotation.x = Math.sin(a.walkPhase + Math.PI) * sw;
+    P.legBL.rotation.x = Math.sin(a.walkPhase + Math.PI) * sw;
+    P.tail[0].rotation.y = Math.sin(t*1.4)*0.10 + Math.sin(a.walkPhase*0.5)*0.14*moving;
+    P.tail[1].rotation.y = Math.sin(t*1.4 - 0.7)*0.12 + Math.sin(a.walkPhase*0.5 - 0.6)*0.16*moving;
+    P.tail[2].rotation.y = Math.sin(t*1.4 - 1.4)*0.14;
+    const wf = Math.sin(a.walkPhase)*0.10*moving + Math.sin(t*2.2)*0.02;
+    P.wingL.rotation.z = P.wingL.userData.base + wf;
+    P.wingR.rotation.z = P.wingR.userData.base - wf;
+    // 待机转头张望（玩家操控时由相机接管头部，见操控节）
+    if(a.mode !== 'player'){
+        a.lookYawT -= dt;
+        if(a.lookYawT <= 0){ a.lookYawT = 1.6 + Math.random()*2.8; a.lookYaw = (Math.random() - 0.5)*1.1; }
+        P.head.rotation.y += (a.lookYaw*(1 - a.pose) - P.head.rotation.y) * Math.min(1, dt*3);
+    }
+}
+
+/* ---------- 玩家操控状态（输入 + 人称相机） ---------- */
+const DragonCtl = {
+    active: false, fp: false,
+    yaw: 0, pitch: 0.34, dist: 5.4,
+    keys: new Set(), joy: {x:0, y:0, id:null}, init: false,
+    savedTarget: new THREE.Vector3()
+};
+function dragonPlayerMove(a, dt){
+    const Ctl = DragonCtl, p = a.group.position;
+    let ix = 0, iz = 0;
+    if(Ctl.keys.has('w') || Ctl.keys.has('arrowup')) iz += 1;
+    if(Ctl.keys.has('s') || Ctl.keys.has('arrowdown')) iz -= 1;
+    if(Ctl.keys.has('d') || Ctl.keys.has('arrowright')) ix += 1;
+    if(Ctl.keys.has('a') || Ctl.keys.has('arrowleft')) ix -= 1;
+    ix += Ctl.joy.x; iz += Ctl.joy.y;
+    let moved = false;
+    if(Math.abs(ix) > 0.08 || Math.abs(iz) > 0.08){
+        a.moveTarget = null;   // 手动输入优先于点击目标
+        const fx = -Math.sin(Ctl.yaw), fz = -Math.cos(Ctl.yaw);   // 相机前向（地面投影）
+        const rx = -fz, rz = fx;                                  // 相机右向
+        const wxv = fx*iz + rx*ix, wzv = fz*iz + rz*ix;
+        const wl = Math.hypot(wxv, wzv) || 1;
+        const speed = (Ctl.keys.has('shift') ? 5.4 : 3.6) * Math.min(1, Math.hypot(ix, iz));
+        moved = dragonWalkTo(a, p.x + wxv/wl*3, p.z + wzv/wl*3, speed, dt);
+    } else if(a.moveTarget){
+        const d = Math.hypot(a.moveTarget.x - p.x, a.moveTarget.z - p.z);
+        if(d < 0.4) a.moveTarget = null;
+        else moved = dragonWalkTo(a, a.moveTarget.x, a.moveTarget.z, 3.4, dt);
+    }
+    a.moveAmt += ((moved ? 1 : 0) - a.moveAmt) * Math.min(1, dt*7);
+    if(Ctl.fp) dragonFace(a, Ctl.yaw + Math.PI, dt);   // 第一人称：龙身跟着视线转
+}
+
+const DRAGON_DEF = {
+    name: 'dragon', initial: 'idle',
+    onPhase(ph){
+        if(!dragonAgent || dragonAgent.mode === 'player') return;
+        if(ph === 'night' && dragonAgent.state !== 'sleep' && dragonAgent.state !== 'sleepGo')
+            AgentKit.setState(dragonAgent, 'sleepGo');
+        if(ph !== 'night' && (dragonAgent.state === 'sleep' || dragonAgent.state === 'sleepGo'))
+            AgentKit.setState(dragonAgent, 'idle');
+    },
+    states: {
+        idle: { update(a, dt, t){
+            a.moveAmt = Math.max(0, a.moveAmt - dt*4);
+            dragonAnimate(a, dt, t);
+            if(GClock.phase() === 'night'){ AgentKit.setState(a, 'sleepGo'); return; }
+            a.idleT -= dt;
+            if(a.idleT <= 0){
+                a.target = dragonPickTarget(a);
+                if(a.target) AgentKit.setState(a, 'roam'); else a.idleT = 2;
+            }
+        } },
+        roam: { update(a, dt, t){
+            if(GClock.phase() === 'night'){ AgentKit.setState(a, 'sleepGo'); return; }
+            if(!a.target){ a.idleT = 1; AgentKit.setState(a, 'idle'); return; }
+            const p = a.group.position;
+            if(Math.hypot(a.target.x - p.x, a.target.z - p.z) < 0.35){
+                a.target = null; a.idleT = 2 + Math.random()*4.5; AgentKit.setState(a, 'idle'); return;
+            }
+            const moved = dragonWalkTo(a, a.target.x, a.target.z, 2.1, dt);
+            a.moveAmt += ((moved ? 1 : 0) - a.moveAmt) * Math.min(1, dt*6);
+            if(!moved){ a.target = null; a.idleT = 1.2; AgentKit.setState(a, 'idle'); }
+            dragonAnimate(a, dt, t);
+        } },
+        sleepGo: { update(a, dt, t){
+            if(GClock.phase() !== 'night'){ AgentKit.setState(a, 'idle'); return; }
+            const p = a.group.position;
+            if(Math.hypot(DRAGON_SLEEP.x - p.x, DRAGON_SLEEP.z - p.z) < 0.4){ AgentKit.setState(a, 'sleep'); return; }
+            const moved = dragonWalkTo(a, DRAGON_SLEEP.x, DRAGON_SLEEP.z, 2.4, dt);
+            a.moveAmt += ((moved ? 1 : 0) - a.moveAmt) * Math.min(1, dt*6);
+            if(!moved) AgentKit.setState(a, 'sleep');   // 被地形挡住就原地睡，不死磕
+            dragonAnimate(a, dt, t);
+        } },
+        sleep: { update(a, dt, t){
+            a.moveAmt = Math.max(0, a.moveAmt - dt*4);
+            dragonAnimate(a, dt, t);
+        } },
+        player: { update(a, dt, t){
+            dragonPlayerMove(a, dt);
+            dragonAnimate(a, dt, t);
+        } }
+    }
+};
+
+function createDragon(){
+    DRAGON_SLEEP = pickDragonSleep();
+    const m = ModelKit.dragon();
+    const g = m.group;
+    g.position.set(DRAGON_HOME.x, terrainH(DRAGON_HOME.x, DRAGON_HOME.z), DRAGON_HOME.z);
+    g.rotation.y = -0.7;
+    scene.add(g);
+    dragonAgent = AgentKit.spawn(DRAGON_DEF, {
+        group: g, parts: m.parts,
+        target: null, idleT: 1.5, moveAmt: 0, walkPhase: 0,
+        blinkT: 2 + Math.random()*2, blinkPh: -1,
+        lookYaw: 0, lookYawT: 0, pose: 0, mode: 'auto', moveTarget: null
+    });
+}
+function dragonStateLabel(){
+    if(!dragonAgent) return '-';
+    if(dragonAgent.mode === 'player') return DragonCtl.fp ? '操控·一人称' : '操控·三人称';
+    return {roam:'散步', idle:'发呆', sleepGo:'去睡觉', sleep:'睡觉中'}[dragonAgent.state] || dragonAgent.state;
+}
+
+/* ---------- 接管 / 放手 ---------- */
+function dragonTakeover(){
+    if(!dragonAgent || DragonCtl.active) return;
+    DragonCtl.active = true;
+    dragonAgent.mode = 'player';
+    dragonAgent.moveTarget = null;
+    AgentKit.setState(dragonAgent, 'player');
+    // 互斥规矩：操控优先——巡游自动停、视角锁定自动解（与巡游/锁定互斥的既有口径一致）
+    if(wx.orbit){
+        wx.orbit = false;
+        const oc = document.getElementById('orbitChk'); if(oc) oc.checked = false;
+        const ob = document.getElementById('orbitV'); if(ob) ob.textContent = '关';
+    }
+    if(viewLocked) setViewLock(false);
+    // 轨道相机交权：存好它的注视点，放手时原样还回去
+    DragonCtl.savedTarget.copy(controls.target);
+    controls.setExternal(true);
+    // 起始镜头站到龙身后上方
+    DragonCtl.yaw = dragonAgent.group.rotation.y + Math.PI;
+    DragonCtl.pitch = 0.34; DragonCtl.dist = 5.4; DragonCtl.init = false;
+    const b = document.getElementById('dragonBtn');
+    b.textContent = '🙌 放手让它玩'; b.classList.add('on');
+    const vb = document.getElementById('viewBtn');
+    vb.style.display = '';
+    vb.textContent = DragonCtl.fp ? '👁️ 第一人称' : '👁️ 第三人称';
+    if(IS_TOUCH) document.getElementById('joy').classList.add('on');
+}
+function dragonRelease(){
+    if(!DragonCtl.active) return;
+    DragonCtl.active = false;
+    DragonCtl.keys.clear(); DragonCtl.joy.x = 0; DragonCtl.joy.y = 0;
+    if(dragonAgent){
+        dragonAgent.mode = 'auto'; dragonAgent.moveTarget = null;
+        dragonAgent.idleT = 1.5;
+        AgentKit.setState(dragonAgent, 'idle');
+        dragonAgent.parts.head.rotation.x = 0;
+        dragonAgent.parts.head.visible = true;
+    }
+    DragonCtl.fp = false;
+    controls.target.copy(DragonCtl.savedTarget);
+    controls.setExternal(false);
+    const b = document.getElementById('dragonBtn');
+    b.textContent = '🐉 操控小龙'; b.classList.remove('on');
+    document.getElementById('viewBtn').style.display = 'none';
+    document.getElementById('joy').classList.remove('on');
+}
+function dragonToggleView(){
+    if(!DragonCtl.active) return;
+    DragonCtl.fp = !DragonCtl.fp;
+    DragonCtl.init = false;
+    if(DragonCtl.fp) DragonCtl.pitch = 0;
+    if(dragonAgent) dragonAgent.parts.head.visible = !DragonCtl.fp;   // 一人称藏头（龙眼视角惯例），低头看身体不受影响
+    document.getElementById('viewBtn').textContent = DragonCtl.fp ? '👁️ 第一人称' : '👁️ 第三人称';
+}
+
+/* ---------- 人称相机（每帧在 AgentKit 之后、轨道相机之前调用） ---------- */
+const _dcOff = new THREE.Vector3(), _dcTgt = new THREE.Vector3();
+function updateDragonCam(dt){
+    if(!DragonCtl.active || !dragonAgent) return;
+    const Ctl = DragonCtl, a = dragonAgent, P = a.parts, p = a.group.position;
+    if(Ctl.fp){
+        const fx = -Math.sin(Ctl.yaw), fz = -Math.cos(Ctl.yaw);
+        // 镜头就放在头部中心（头组在一人称时隐藏，不会挡视线）：
+        // 低头时能看到自己的胸口、肚皮和前腿；若把镜头推到头前方，身体全落在镜头背后
+        P.head.getWorldPosition(_dcTgt);
+        const eyeY = _dcTgt.y + 0.06;
+        camera.position.set(_dcTgt.x, eyeY, _dcTgt.z);
+        const cp = Math.cos(Ctl.pitch);
+        _dcTgt.set(camera.position.x + fx*cp, eyeY + Math.sin(Ctl.pitch), camera.position.z + fz*cp);
+        camera.lookAt(_dcTgt);
+        P.head.rotation.y = 0;
+        P.head.rotation.x = -Ctl.pitch*0.5;
+    } else {
+        const cp = Math.cos(Ctl.pitch);
+        _dcOff.set(Math.sin(Ctl.yaw)*cp, Math.sin(Ctl.pitch), Math.cos(Ctl.yaw)*cp);
+        _dcTgt.copy(p).addScaledVector(_dcOff, Ctl.dist);
+        const minY = Math.max(terrainH(_dcTgt.x, _dcTgt.z) + 0.45, p.y + 0.5);
+        if(_dcTgt.y < minY) _dcTgt.y = minY;              // 防穿地（最小高度钳制）
+        if(!Ctl.init){ camera.position.copy(_dcTgt); Ctl.init = true; }
+        else camera.position.lerp(_dcTgt, 1 - Math.exp(-9*dt));
+        _dcOff.set(p.x, p.y + 1.05, p.z);
+        camera.lookAt(_dcOff);
+    }
+}
+
+/* ---------- 输入绑定 ---------- */
+const _dgRay = new THREE.Raycaster(), _dgNdc = new THREE.Vector2();
+function dragonClickMove(e){
+    const r = renderer.domElement.getBoundingClientRect();
+    _dgNdc.set(((e.clientX - r.left)/r.width)*2 - 1, -((e.clientY - r.top)/r.height)*2 + 1);
+    _dgRay.setFromCamera(_dgNdc, camera);
+    const o = _dgRay.ray.origin, d = _dgRay.ray.direction;
+    if(Math.abs(d.y) < 1e-5) return;
+    let tt = -o.y/d.y;
+    if(tt < 0) return;
+    let x = o.x + d.x*tt, z = o.z + d.z*tt;
+    tt = (terrainH(x, z) - o.y)/d.y;                     // 按地形高度再交一次，落点更贴地
+    if(tt > 0){ x = o.x + d.x*tt; z = o.z + d.z*tt; }
+    if(Math.hypot(x, z) > 58) return;
+    if(dragonAgent && WalkMap.isWalkable(x, z)) dragonAgent.moveTarget = {x:x, z:z};
+}
+function setupDragonControls(){
+    const dom = renderer.domElement;
+    document.getElementById('dragonBtn').addEventListener('click', ()=>{
+        if(DragonCtl.active) dragonRelease(); else dragonTakeover();
+    });
+    document.getElementById('viewBtn').addEventListener('click', dragonToggleView);
+    window.addEventListener('keydown', e=>{
+        const tag = (e.target && e.target.tagName) || '';
+        if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        const k = e.key.toLowerCase();
+        if(k === 'v' && DragonCtl.active){ dragonToggleView(); return; }
+        DragonCtl.keys.add(k);
+        if(DragonCtl.active && ['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].indexOf(k) >= 0) e.preventDefault();
+    });
+    window.addEventListener('keyup', e=>{ DragonCtl.keys.delete(e.key.toLowerCase()); });
+    window.addEventListener('blur', ()=>DragonCtl.keys.clear());
+    // 画布拖动转视角 + 点击地面移动（轨道相机的监听已被 external 挡下，不打架）
+    let camPtr = null;
+    dom.addEventListener('pointerdown', e=>{
+        if(!DragonCtl.active) return;
+        camPtr = { id:e.pointerId, x:e.clientX, y:e.clientY, t:performance.now(), moved:0 };
+    });
+    dom.addEventListener('pointermove', e=>{
+        if(!DragonCtl.active || !camPtr || e.pointerId !== camPtr.id) return;
+        const dx = e.clientX - camPtr.x, dy = e.clientY - camPtr.y;
+        camPtr.x = e.clientX; camPtr.y = e.clientY;
+        camPtr.moved += Math.abs(dx) + Math.abs(dy);
+        DragonCtl.yaw -= dx*0.0052;
+        if(DragonCtl.fp){
+            DragonCtl.pitch -= dy*0.0052;                 // 一人称：鼠标上推 = 抬头（FPS 惯例）
+            DragonCtl.pitch = Math.max(-1.25, Math.min(1.25, DragonCtl.pitch));
+        } else {
+            DragonCtl.pitch += dy*0.0052;                 // 三人称：与轨道拖拽同手感（下拖镜头升高）
+            DragonCtl.pitch = Math.max(-0.12, Math.min(1.15, DragonCtl.pitch));
+        }
+    });
+    dom.addEventListener('pointerup', e=>{
+        if(!camPtr || e.pointerId !== camPtr.id) return;
+        const wasClick = camPtr.moved < 7 && (performance.now() - camPtr.t) < 450 && e.pointerType === 'mouse';
+        camPtr = null;
+        if(DragonCtl.active && wasClick) dragonClickMove(e);
+    });
+    dom.addEventListener('pointercancel', ()=>{ camPtr = null; });
+    dom.addEventListener('wheel', e=>{
+        if(!DragonCtl.active || DragonCtl.fp) return;
+        DragonCtl.dist *= e.deltaY > 0 ? 1.1 : 0.9;
+        DragonCtl.dist = Math.max(3, Math.min(9.5, DragonCtl.dist));
+    }, {passive:true});
+    // 虚拟摇杆（触屏接管时显示）
+    const joy = document.getElementById('joy'), knob = document.getElementById('joyKnob');
+    function joySet(e){
+        const r = joy.getBoundingClientRect();
+        let dx = e.clientX - (r.left + r.width/2), dy = e.clientY - (r.top + r.height/2);
+        const d = Math.hypot(dx, dy), max = r.width/2 - 6;
+        if(d > max){ dx *= max/d; dy *= max/d; }
+        knob.style.transform = 'translate(calc(-50% + ' + dx + 'px), calc(-50% + ' + dy + 'px))';
+        DragonCtl.joy.x = dx/max;
+        DragonCtl.joy.y = -dy/max;                        // 推上 = 前进
+    }
+    joy.addEventListener('pointerdown', e=>{
+        DragonCtl.joy.id = e.pointerId;
+        if(joy.setPointerCapture){ try{ joy.setPointerCapture(e.pointerId); }catch(_){} }
+        joySet(e); e.preventDefault();
+    });
+    joy.addEventListener('pointermove', e=>{ if(e.pointerId === DragonCtl.joy.id) joySet(e); });
+    const joyEnd = e=>{
+        if(e.pointerId !== DragonCtl.joy.id) return;
+        DragonCtl.joy.id = null; DragonCtl.joy.x = 0; DragonCtl.joy.y = 0;
+        knob.style.transform = 'translate(-50%,-50%)';
+    };
+    joy.addEventListener('pointerup', joyEnd);
+    joy.addEventListener('pointercancel', joyEnd);
+}
+
 /* ==================== 天气系统 ==================== */
 const SKY={
     sunny :{top:0x3d7bd9,bot:0xbfdff2,fog:0xa8cfe8,dens:0.0016,amb:0.20,hemi:0.30,sunC:0xfff2cc,sunI:2.60,elev:45,azim:0.9,expo:0.12,ev:1.00},
@@ -2934,6 +3455,7 @@ function animate(){
     }
     if(starsGroup)starsGroup.rotation.y+=dt*0.008;
 
+    updateDragonCam(dt);
     controls.update();
     renderer.render(scene,camera);
     fpsTick(dt);
@@ -2965,6 +3487,7 @@ function updateStatus(){
     frag.appendChild(statusLine('蝴蝶:',butterflies.length+' 蜜蜂:'+bees.length));
     frag.appendChild(statusLine('寻宝:',(huntState?huntState.found.length:0)+'/5'));
     frag.appendChild(statusLine('收获:',(farmState?farmState.harvest:0)+''));
+    frag.appendChild(statusLine('小龙:',dragonStateLabel()));
     frag.appendChild(statusLine('天气:',
         weatherLabels[weatherIndex]||'-','#ffd97a'));
     s.textContent='';
@@ -4422,6 +4945,7 @@ function init(){
     createFlowerBands();
     createOutskirts();
     createInsects();
+    createDragon();
 
     controls=makeOrbitControls(camera,renderer.domElement);
     buildWeatherButtons();
@@ -4430,6 +4954,7 @@ function init(){
     setupHelp();
     setupSnapshot();
     setupVote();
+    setupDragonControls();
     setupModules();
     window.addEventListener('resize',onResize);
     window.addEventListener('keydown',onKeyDown);
