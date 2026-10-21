@@ -297,12 +297,12 @@ test('FB 提交：先复制兜底，再只回传到白名单地址', ()=>{    mu
     const outside = abs.filter(u => !/^https:\/\/formsubmit\.co\//.test(u));
     must(outside.length===0,'出现白名单外的绝对 URL：'+outside.join(', '));
     must(!/XMLHttpRequest|sendBeacon|WebSocket/.test(inlineJs),'出现其他网络通道');
-    // 全页只允许十一个具名本地键：ct2_visits（访问计数）、ct2_hunt（寻宝进度）、ct2_help（帮助已提示标记）、ct2_farm（种田存档）、ct2_vote（投票已投标记）、ct2_theme（界面深浅主题偏好）、ct2_echo（建议回音回执）、ct2_bag（小龙背包与喂食计数）、ct2_dragon（小龙自定义外观与个性）、ct2_codex（图鉴解锁集合）与 ct2_guest（留言上墙本机副本），都不上传
+    // 全页只允许十二个具名本地键：ct2_visits（访问计数）、ct2_hunt（寻宝进度）、ct2_help（帮助已提示标记）、ct2_farm（种田存档）、ct2_vote（投票已投标记）、ct2_theme（界面深浅主题偏好）、ct2_echo（建议回音回执）、ct2_bag（小龙背包与喂食计数）、ct2_dragon（小龙自定义外观与个性）、ct2_codex（图鉴解锁集合）、ct2_guest（留言上墙本机副本）与 ct2_music（自定义音乐偏好与歌名），都不上传
     must(!/sessionStorage|document\.cookie/.test(inlineJs),'出现未授权的存储');
     const lsKeys = [...inlineJs.matchAll(/localStorage\.(?:getItem|setItem)\('([^']+)'/g)].map(m=>m[1]);
-    const badKeys = lsKeys.filter(k => k !== 'ct2_visits' && k !== 'ct2_hunt' && k !== 'ct2_help' && k !== 'ct2_farm' && k !== 'ct2_vote' && k !== 'ct2_theme' && k !== 'ct2_echo' && k !== 'ct2_bag' && k !== 'ct2_dragon' && k !== 'ct2_codex' && k !== 'ct2_guest');
+    const badKeys = lsKeys.filter(k => k !== 'ct2_visits' && k !== 'ct2_hunt' && k !== 'ct2_help' && k !== 'ct2_farm' && k !== 'ct2_vote' && k !== 'ct2_theme' && k !== 'ct2_echo' && k !== 'ct2_bag' && k !== 'ct2_dragon' && k !== 'ct2_codex' && k !== 'ct2_guest' && k !== 'ct2_music');
     must(badKeys.length===0,'出现未授权的本地存储键：'+badKeys.join(', '));
-    // 动态键只允许具名常量 HUNT_KEY / HELP_KEY / FARM_KEY / VOTE_KEY / THEME_KEY / ECHO_KEY / BAG_KEY / DRAGON_KEY / CODEX_KEY / GUEST_KEY，且它们的取值必须写死
+    // 动态键只允许具名常量 HUNT_KEY / HELP_KEY / FARM_KEY / VOTE_KEY / THEME_KEY / ECHO_KEY / BAG_KEY / DRAGON_KEY / CODEX_KEY / GUEST_KEY / MUSIC_KEY，且它们的取值必须写死
     must(/const HUNT_KEY='ct2_hunt'/.test(inlineJs),'HUNT_KEY 必须写死为 ct2_hunt');
     must(/const HELP_KEY='ct2_help'/.test(inlineJs),'HELP_KEY 必须写死为 ct2_help');
     must(/const FARM_KEY='ct2_farm'/.test(inlineJs),'FARM_KEY 必须写死为 ct2_farm');
@@ -313,7 +313,8 @@ test('FB 提交：先复制兜底，再只回传到白名单地址', ()=>{    mu
     must(/const ECHO_KEY='ct2_echo'/.test(inlineJs),'ECHO_KEY 必须写死为 ct2_echo');
     must(/const GUEST_KEY='ct2_guest'/.test(inlineJs),'GUEST_KEY 必须写死为 ct2_guest');
     must(/const CODEX_KEY='ct2_codex'/.test(inlineJs),'CODEX_KEY 必须写死为 ct2_codex');
-    must(!/localStorage\.(?:getItem|setItem)\((?!'ct2_visits'|HUNT_KEY|HELP_KEY|FARM_KEY|VOTE_KEY|THEME_KEY|ECHO_KEY|BAG_KEY|DRAGON_KEY|CODEX_KEY|GUEST_KEY)/.test(inlineJs),'存在动态拼接的存储键');
+    must(/const MUSIC_KEY='ct2_music'/.test(inlineJs),'MUSIC_KEY 必须写死为 ct2_music');
+    must(!/localStorage\.(?:getItem|setItem)\((?!'ct2_visits'|HUNT_KEY|HELP_KEY|FARM_KEY|VOTE_KEY|THEME_KEY|ECHO_KEY|BAG_KEY|DRAGON_KEY|CODEX_KEY|GUEST_KEY|MUSIC_KEY)/.test(inlineJs),'存在动态拼接的存储键');
     // 顺序保证：先复制，后发送
     const iCopy = inlineJs.indexOf('copyToClipboard(text).then(');
     const iSend = inlineJs.indexOf('sendFeedback({');
@@ -361,7 +362,11 @@ test('玩家立牌：审核制投稿入口 + 声明式呈现 + 气泡（Issue #1
         '立牌子表单字段缺一');
     // 不支持传图必须在投稿说明里写清，且表单内不得有文件上传控件（无后端、审核制）
     must(/不支持上传图片/.test(html),'投稿说明未写清「不支持上传图片」');
-    must(!/type="file"/.test(html),'页面出现文件上传控件（立牌投稿不收图）');
+    // 立牌表单内不得有文件控件；全页文件控件只许是 #18 的音频导入（accept 限定 audio）
+    const sdBlock = html.slice(html.indexOf('id="sdForm"'), html.indexOf('id="sdForm"')+3000);
+    must(!/type="file"/.test(sdBlock),'立牌表单出现文件上传控件（立牌投稿不收图）');
+    const fileInputs = html.match(/<input[^>]*type="file"[^>]*>/g) || [];
+    must(fileInputs.every(t => /accept="audio/.test(t)),'出现非音频的文件上传控件：'+fileInputs.join(' '));
     must(/function submitStandeePost\(/.test(inlineJs),'缺少立牌投稿提交 submitStandeePost');
     must(/kind:'standee'/.test(inlineJs) && /meta\.kind==='standee'/.test(inlineJs),
         '立牌投稿未走 sendFeedback 的 standee 分支');
@@ -418,6 +423,29 @@ test('FB 回传必须显式带 Referer（FormSubmit 靠它判来源）', ()=>{
     must(/referrerPolicy:FB_RELAY\?'unsafe-url':undefined/.test(inlineJs), '未指定 referrerPolicy');
     must(/body:FB_RELAY\?new URLSearchParams\(payload\)/.test(inlineJs) ||
          /new URLSearchParams\(payload\)/.test(inlineJs), '未用 urlencoded 简单请求（会触发预检）');
+});
+
+test('自定义音乐：本地文件 BGM、独立通道、偏好只存歌名（Issue #18）', ()=>{
+    must(/const MUSIC_KEY='ct2_music'/.test(inlineJs),'MUSIC_KEY 必须写死为 ct2_music');
+    must(/music:\s+mkSlot/.test(inlineJs),'store 缺少 music 槽');
+    must(/function setupMusic\(/.test(inlineJs),'缺少 setupMusic');
+    must(/function musicAddFiles\(/.test(inlineJs),'缺少导入 musicAddFiles');
+    must(/function musicCustomActive\(/.test(inlineJs),'缺少 musicCustomActive');
+    // 面板入口与控件齐全
+    must(/id="musPlay"/.test(html) && /id="musPrev"/.test(html) && /id="musNext"/.test(html),'缺播放/上一首/下一首按钮');
+    must(/id="musVol" type="range"/.test(html),'缺音量滑杆');
+    must(/id="musLoop"/.test(html),'缺循环模式按钮');
+    must(/id="musFile" type="file" accept="audio\/\*" multiple/.test(html),'缺多选音频文件入口');
+    must(/id="musList"/.test(html),'缺播放列表容器');
+    // 文件只在本机内存里播：对象 URL 播放，偏好只存音量/循环/歌名
+    must(/URL\.createObjectURL/.test(inlineJs),'未用对象 URL 本机播放');
+    must(/media-src blob:;/.test(html),'CSP 未给 blob 媒体开本机口子');
+    must(/store\.music\.save\(\{\s*vol:/.test(inlineJs) && /names:/.test(inlineJs),'偏好未按 vol/loop/names 存');
+    // 自选音乐在播时程序化 BGM 必须让行（不叠音打架）
+    must(/FEAT\.bgm\.on && !musicCustomActive\(\)/.test(inlineJs),'audioTick 未给自选音乐让行');
+    // 版权与浏览器限制提示在面板里写明
+    must(/不上传、也不分发/.test(html),'面板缺版权提示');
+    must(/刷新页面后需重新选一次文件/.test(html),'面板缺刷新重选提示');
 });
 
 // ---------- 迭代维护规范：模块隔离 ----------
