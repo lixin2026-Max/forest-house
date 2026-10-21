@@ -2210,6 +2210,50 @@ function makeOrbitControls(cam, dom){
         isExternal(){ return st.external; } };
 }
 
+/* ==================== 天空与雪山背景（Issue #74 · v5.0） ====================
+   对标负责人参考帧（高山草甸之上的雪山＋云雾带、浓郁饱和晴空）：
+   ① 世界外围雪山背景环：半径 322 的程序贴图圆柱环（在外圈地面 308 与
+      天空穹顶 280 之外），一张贴图里画全脊线/雪线/山腰云雾带/山脚林线，
+      环脚渐隐溶进谷缘；联动只读现行口径——雾走 scene.fog（天气统一口，
+      雾天被雾吞、雨夜自动沉）、明暗跟云色缓动因子 cloudDarkF（与天空云
+      同源同率，夜里压到 0.10 不亮白山）、雪线随 Season.name 整图切换
+      （冬季下移），不自建天气/季节状态、不新增存档键；
+   ② 天空云升级：整团积云贴图（十余个软团叠绘成一朵、中隆边收、平底），
+      每组主团＋副团两个 sprite——云量观感更蓬松，sprite 数反而比旧版
+      多团散点更少；漂移与 #73 地面云影同源同速（见 skyBackdropTick）。
+   参数全集中在 SKY_CFG（#75 集中化收编），双档 tiers 各给一份值：
+   拉满档贴图 4096×256＋环 128 分段，保底档 2048×256＋64 分段（宽高比
+   按周长:环高配平、像素近似方形，见 tiers 注），雪线/云带/林线四要素
+   两档都在，降的只是分辨率。draw calls 增量：
+   山环 +1、云 sprite 净减，合计 ≤+2。
+   与 #81 分工：雾效/天光/Bloom 等氛围层归 #81 在本件之上叠加，
+   本件只做天空与背景本体，不另起雾/风摆实现。 */
+const SKY_CFG = {
+    tiers: {
+        // 环贴图宽高比按「周长:环高」（2023:132≈15.3）配平：像素在世界里
+        // 近似方形，否则竖向笔触会被横向拉宽数倍成砖块（截图实测教训）
+        full: { ringTexW: 4096, ringTexH: 256, ringSegs: 128, cloudTexW: 512, cloudTexH: 256 },
+        lite: { ringTexW: 2048, ringTexH: 256, ringSegs: 64,  cloudTexW: 256, cloudTexH: 128 }
+    },
+    ring: {
+        radius: 322, height: 132, baseY: -8,
+        snowDepth: { spring: 0.10, summer: 0.09, autumn: 0.10, winter: 0.34 },   // 雪盖厚度（v，自脊线向下；相对脊线而非绝对高度——绝对雪线会把高脊区整片刷白、与浅色天底糊成一碗）
+        snowMinRidge: { spring: 0.70, summer: 0.74, autumn: 0.70, winter: 0.0 }, // 脊线低于此值不积雪（冬季全积）；夏/春/秋只许高峰戴帽——门槛太低会连成一圈白帘（收口实测教训）
+        cloudBandY: 0.40, cloudBandAlpha: 0.30,     // 山腰云雾带中心 v 与峰值不透明度
+        treeBand: 0.17                               // 林线带顶部 v
+    },
+    clouds: {
+        groups: { full: 16, lite: 10 },
+        rMin: 80, rMax: 165, yMin: 52, yMax: 80,
+        scaleW: [36, 64],                            // 云团宽（米），比旧版更大更蓬松
+        wrap: 185                                    // 漂移回卷半边长（与云影同源漂移，见 skyBackdropTick）
+    }
+};
+let skyTier = 'full';
+function skyTierAuto(){
+    return (IS_MOBILE || (typeof lowQuality !== 'undefined' && lowQuality)) ? 'lite' : 'full';
+}
+
 /* ==================== 天空穹顶（渐变 shader，随天气插值） ==================== */
 let skyMat;
 function createSky(){
@@ -2235,28 +2279,307 @@ function createSky(){
     scene.add(sky);
 }
 
-/* ==================== 云（sprite 群） ==================== */
-let cloudGroup;
-function createClouds(){
-    cloudGroup=new THREE.Group(); cloudGroup.name='clouds';
-    const tex=glowTexture('rgba(255,255,255,0.9)','rgba(255,255,255,0.45)');
-    const mat=new THREE.SpriteMaterial({map:tex,transparent:true,opacity:0.85,depthWrite:false,fog:false});
-    for(let i=0;i<(IS_MOBILE?10:16);i++){
-        const cl=[];
-        const n=3+(Math.random()*4|0);
-        for(let k=0;k<n;k++){
-            const s=new THREE.Sprite(mat.clone());
-            s.scale.setScalar(14+Math.random()*16);
-            s.position.set(k*7-n*3.5,(Math.random()-0.5)*2.5,(Math.random()-0.5)*5);
-            cl.push(s);
+/* ==================== 雪山背景环（Issue #74） ==================== */
+/* 周期值噪声（横向无缝，贴图左右可拼）：per 为一圈内的格数 */
+function mtnNoise1(x, per){
+    const xi=Math.floor(x), f=x-xi;
+    const a=hash2(((xi%per)+per)%per, 7.31), b=hash2((((xi+1)%per)+per)%per, 7.31);
+    const u=f*f*(3-2*f);
+    return a+(b-a)*u;
+}
+function mtnFbm(x, per){
+    return mtnNoise1(x,per)*0.55 + mtnNoise1(x*2,per*2)*0.28 + mtnNoise1(x*4,per*4)*0.17;
+}
+function mtnRidgeV(u){   // 山脊线 v（0..1），三座主峰＋fbm 起伏
+    let v=0.55 + (mtnFbm(u*9,9)-0.5)*0.55;
+    const peaks=[[0.16,0.14],[0.52,0.18],[0.84,0.11]];
+    for(const pk of peaks){
+        let du=Math.abs(u-pk[0]); du=Math.min(du,1-du);
+        v+=pk[1]*Math.exp(-(du*du)/(2*0.045*0.045));
+    }
+    return Math.max(0.46, Math.min(0.94, v));
+}
+const MTN_SEASON_PAINT = {
+    spring: { rock:'#5a6878', tree:'#2a4522', wash:null },
+    summer: { rock:'#5b6a82', tree:'#24401e', wash:null },
+    autumn: { rock:'#6b5a41', tree:'#31401f', wash:'rgba(190,120,50,0.10)' },
+    winter: { rock:'#6d7683', tree:'#20301e', wash:null }
+};
+function mountainTexture(seasonName){
+    const T=SKY_CFG.tiers[skyTier], W=T.ringTexW, H=T.ringTexH;
+    const c=makeCanvas(W,H), g=c.getContext('2d');
+    const P=MTN_SEASON_PAINT[seasonName] || MTN_SEASON_PAINT.summer;
+    const rnd=mulberry32(4100 + W + seasonName.length*131);
+    // 贴图 px ↔ 世界单位换算：笔触一律按世界尺寸画，两档宽高比下观感一致，
+    // 不再被环映射的横纵比拉变形（实测教训：旧 1024 宽下竖条纹拉成砖块）
+    const pxU = W / (2*Math.PI*SKY_CFG.ring.radius);   // 横向 px/世界单位
+    const pyU = H / SKY_CFG.ring.height;               // 纵向 px/世界单位
+    const ridgeY=[], snowY=[];
+    const snowDepth=SKY_CFG.ring.snowDepth[seasonName] ?? SKY_CFG.ring.snowDepth.summer;
+    const snowMinR=SKY_CFG.ring.snowMinRidge[seasonName] ?? SKY_CFG.ring.snowMinRidge.summer;
+    for(let x=0;x<=W;x+=4){
+        const u=x/W, rv=mtnRidgeV(u);
+        ridgeY.push([x,(1-rv)*H]);
+        // 雪盖贴脊线走：雪顶 = 脊线 − 厚度×起伏；脊线太低则不积雪（雪顶推过脊线＝空集）
+        let sv=rv - snowDepth*(0.75+0.5*mtnFbm(u*13+40,13));
+        if(rv<snowMinR) sv=rv+0.01;
+        snowY.push([x,(1-sv)*H]);
+    }
+    const bodyPath=()=>{   // 山体轮廓：沿脊线到环底
+        g.beginPath();
+        g.moveTo(0,H);
+        ridgeY.forEach(p=>g.lineTo(p[0],p[1]));
+        g.lineTo(W,H); g.closePath();
+    };
+    // 远景第二脊（收口补）：相位错开的浅蓝灰脊，只在主脊低处探头——两层
+    // 脊线一深一浅，是「连绵山峦」与「一堵灰墙」的分界；先画，主山体盖其下半
+    {
+        const farY=[], farSnow=[];
+        for(let x=0;x<=W;x+=4){
+            const u=x/W, fv=Math.min(0.97, mtnRidgeV(u+0.31)*0.92+0.09);
+            farY.push([x,(1-fv)*H]);
+            let sv=fv-0.07*(0.75+0.5*mtnFbm(u*13+71,13));
+            if(fv<0.78) sv=fv+0.01;
+            farSnow.push([x,(1-sv)*H]);
         }
-        const grp=new THREE.Group(); grp.add(...cl);
-        const a=i/16*Math.PI*2+Math.random()*0.4, r=70+Math.random()*90;
-        grp.position.set(Math.cos(a)*r,42+Math.random()*22,Math.sin(a)*r);
-        grp.userData.speed=0.15+Math.random()*0.25;
+        const farPath=()=>{ g.beginPath(); g.moveTo(0,H);
+            farY.forEach(p=>g.lineTo(p[0],p[1])); g.lineTo(W,H); g.closePath(); };
+        farPath();
+        const farGrd=g.createLinearGradient(0,0,0,H);
+        farGrd.addColorStop(0,'rgba(168,184,205,0.95)');
+        farGrd.addColorStop(1,'rgba(128,146,168,0.95)');
+        g.fillStyle=farGrd; g.fill();
+        farPath(); g.save(); g.clip();
+        g.beginPath();
+        farSnow.forEach((p,i)=>{ if(i) g.lineTo(p[0],p[1]); else g.moveTo(p[0],p[1]); });
+        g.lineTo(W,0); g.lineTo(0,0); g.closePath();
+        g.fillStyle='rgba(233,241,250,0.92)'; g.fill();
+        g.restore();
+    }
+    // 岩体基底（上冷下暖的竖向渐变打底，再覆刻面条纹）
+    bodyPath(); g.save(); g.clip();
+    const rockGrd=g.createLinearGradient(0,H*0.1,0,H);
+    rockGrd.addColorStop(0,P.rock); rockGrd.addColorStop(1,'#453c31');
+    g.fillStyle=rockGrd; g.fillRect(0,0,W,H);
+    const streaks = skyTier==='full' ? 170 : 85;
+    for(let i=0;i<streaks;i++){
+        const x0=rnd()*W, wdt=(2.5+rnd()*6)*pxU, len=(9+rnd()*22)*pyU, sl=(rnd()-0.5)*8*pxU;
+        const ry=(1-mtnRidgeV(x0/W))*H;
+        g.beginPath();
+        g.moveTo(x0,ry-4); g.lineTo(x0+wdt,ry-4);
+        g.lineTo(x0+wdt+sl,ry+len); g.lineTo(x0+sl,ry+len); g.closePath();
+        g.fillStyle = rnd()>0.5 ? 'rgba(255,255,255,'+(0.03+rnd()*0.07)+')'
+                                : 'rgba(10,14,24,'+(0.04+rnd()*0.08)+')';
+        g.fill();
+    }
+    if(P.wash){ g.fillStyle=P.wash; g.fillRect(0,0,W,H); }
+    // 雪盖：贴脊线向下的雪带（雪顶随脊线走、厚度带噪声起伏，低脊段自动无雪）
+    g.beginPath();
+    snowY.forEach((p,i)=>{ if(i) g.lineTo(p[0],p[1]); else g.moveTo(p[0],p[1]); });
+    g.lineTo(W,0); g.lineTo(0,0); g.closePath();
+    g.save(); g.clip();
+    const snowGrd=g.createLinearGradient(0,0,0,H*0.75);
+    snowGrd.addColorStop(0,'#ffffff'); snowGrd.addColorStop(1,'#d9e9f8');
+    g.fillStyle=snowGrd; g.fillRect(0,0,W,H);
+    for(let i=0;i<streaks;i++){   // 雪面刻面：蓝灰阴影条（让雪盖有体积、不糊白）
+        const x0=rnd()*W, wdt=(2.5+rnd()*5.5)*pxU, len=(8+rnd()*20)*pyU, sl=(rnd()-0.5)*7*pxU;
+        const ry=(1-mtnRidgeV(x0/W))*H;
+        g.beginPath();
+        g.moveTo(x0,ry-4); g.lineTo(x0+wdt,ry-4);
+        g.lineTo(x0+wdt+sl,ry+len); g.lineTo(x0+sl,ry+len); g.closePath();
+        g.fillStyle='rgba(120,155,205,'+(0.08+rnd()*0.14)+')';
+        g.fill();
+    }
+    g.restore();
+    // 雪盖下零星雪斑（沟壑残雪，贴本地脊线下沿放）
+    const patches = skyTier==='full' ? 16 : 8;
+    for(let i=0;i<patches;i++){
+        const x0=rnd()*W, sy=(1-(mtnRidgeV(x0/W)-snowDepth-0.03-rnd()*0.06))*H;
+        const rx=(8+rnd()*13)*pxU, ry2=(2.4+rnd()*4)*pyU;
+        const gr=g.createRadialGradient(x0,sy,1,x0,sy,rx);
+        gr.addColorStop(0,'rgba(240,247,255,0.55)'); gr.addColorStop(1,'rgba(240,247,255,0)');
+        g.fillStyle=gr;
+        g.save(); g.translate(x0,sy); g.scale(1,ry2/rx); g.translate(-x0,-sy);
+        g.fillRect(x0-rx,sy-rx,rx*2,rx*2); g.restore();
+    }
+    // 林线带：山脚深绿针叶带，上缘锯齿、下缘渐入谷色
+    const treeTopV=SKY_CFG.ring.treeBand;
+    g.beginPath();
+    g.moveTo(0,H);
+    for(let x=0;x<=W;x+=4){
+        const u=x/W, tv=treeTopV+(mtnFbm(u*17+80,17)-0.5)*0.06;
+        g.lineTo(x,(1-tv)*H);
+    }
+    g.lineTo(W,H); g.closePath();
+    const treeGrd=g.createLinearGradient(0,H*(1-treeTopV-0.05),0,H);
+    treeGrd.addColorStop(0,P.tree); treeGrd.addColorStop(1,'#3d4a26');
+    g.fillStyle=treeGrd; g.fill();
+    const spikes = skyTier==='full' ? 1500 : 650;   // 针叶尖点（远看是林冠颗粒）
+    g.fillStyle='rgba(12,20,10,0.55)';
+    for(let i=0;i<spikes;i++){
+        const x0=rnd()*W, u=x0/W;
+        const tv=treeTopV+(mtnFbm(u*17+80,17)-0.5)*0.06 - rnd()*0.05;
+        g.fillRect(x0,(1-tv)*H,1.6,2.6);
+    }
+    g.restore();
+    // 山腰云雾带：稀疏软团（左右各补一份保无缝），只做雾气缭绕、不连成白幕
+    const bandY=(1-SKY_CFG.ring.cloudBandY)*H;
+    const blobs = skyTier==='full' ? 13 : 8;
+    for(let i=0;i<blobs;i++){
+        const cx=rnd()*W, cy=bandY+(rnd()-0.5)*H*0.07;
+        const rx=(26+rnd()*26)*pxU, ry=(3.5+rnd()*3)*pyU;
+        for(const ox of [-W,0,W]){
+            const gr=g.createRadialGradient(cx+ox,cy,1,cx+ox,cy,rx);
+            gr.addColorStop(0,'rgba(255,255,255,'+(SKY_CFG.ring.cloudBandAlpha*(0.5+rnd()*0.5))+')');
+            gr.addColorStop(1,'rgba(255,255,255,0)');
+            g.fillStyle=gr;
+            g.save(); g.translate(cx+ox,cy); g.scale(1,ry/rx); g.translate(-(cx+ox),-cy);
+            g.fillRect(cx+ox-rx,cy-rx,rx*2,rx*2); g.restore();
+        }
+    }
+    // 环脚渐隐：最下 10% 溶进雾/谷缘，不留硬边圆盘感
+    const fadeG=g.createLinearGradient(0,H*0.90,0,H);
+    fadeG.addColorStop(0,'rgba(0,0,0,0)'); fadeG.addColorStop(1,'rgba(0,0,0,1)');
+    g.globalCompositeOperation='destination-out';
+    g.fillStyle=fadeG; g.fillRect(0,H*0.90,W,H*0.10);
+    g.globalCompositeOperation='source-over';
+    const t=new THREE.CanvasTexture(c);
+    if(THREE.sRGBEncoding!==undefined) t.encoding=THREE.sRGBEncoding;
+    return t;
+}
+let mtnMesh=null, mtnTexSet=null, mtnSeasonApplied=null;
+function createMountains(){
+    skyTier=skyTierAuto();
+    mtnTexSet={};
+    for(const s of ['spring','summer','autumn','winter']) mtnTexSet[s]=mountainTexture(s);
+    const T=SKY_CFG.tiers[skyTier];
+    const geo=new THREE.CylinderGeometry(SKY_CFG.ring.radius, SKY_CFG.ring.radius,
+        SKY_CFG.ring.height, T.ringSegs, 1, true);
+    const s0=(typeof Season!=='undefined' && Season.name && mtnTexSet[Season.name]) ? Season.name : 'summer';
+    const mat=new THREE.MeshBasicMaterial({ map:mtnTexSet[s0], transparent:true,
+        fog:true, depthWrite:false, side:THREE.BackSide });
+    mtnMesh=new THREE.Mesh(geo,mat);
+    mtnMesh.position.y=SKY_CFG.ring.baseY + SKY_CFG.ring.height/2;
+    mtnMesh.name='mountainRing';
+    mtnMesh.renderOrder=-10;   // 透明层里最先画：它是所有景物的底
+    scene.add(mtnMesh);
+    mtnSeasonApplied=s0;
+    window.__skyRing=mtnMesh;   // #75 中枢 / 调试认领
+    window.__skyTierName=skyTier;
+}
+/* 背景层每帧联动（animate 里紧跟 lerpWeather 调用）：
+   山环——季节换图（雪线随 Season 整图切换）＋明暗跟 cloudDarkF（与天空云
+   同一缓动因子：夜 0.10/雨 0.45/雾 0.75/晴 1，绝不夜里亮一圈白山）；
+   远近雾化走材质 fog（scene.fog 由天气统一驱动，雾天自然被雾吞）。
+   天空云漂移——与 #73 地面云影同源同速：读同一组 ATMO_U（uCloudDir/
+   uCloudDrift/uCloudScale），图样特征速度 = drift/scale、方向为 -dir
+   （着色器里图样沿 -dir 移动），__windSway.setCloud 改参数两边一起变；
+   #75 收编时若要再对齐，只动这一处口径。 */
+function skyBackdropTick(dt){
+    if(mtnMesh){
+        if(typeof Season!=='undefined' && Season.name && mtnSeasonApplied!==Season.name && mtnTexSet[Season.name]){
+            mtnMesh.material.map=mtnTexSet[Season.name];
+            mtnSeasonApplied=Season.name;
+        }
+        mtnMesh.material.color.setScalar(cloudDarkF);
+    }
+    if(cloudGroup && typeof ATMO_U!=='undefined'){
+        const dir=ATMO_U.uCloudDir.value;
+        const sp=ATMO_U.uCloudDrift.value/Math.max(0.001,ATMO_U.uCloudScale.value);
+        const vx=-dir.x*sp, vz=-dir.y*sp, W=SKY_CFG.clouds.wrap;
+        cloudGroup.children.forEach(g=>{
+            g.position.x+=vx*dt; g.position.z+=vz*dt;
+            if(g.position.x>W)g.position.x-=2*W; else if(g.position.x<-W)g.position.x+=2*W;
+            if(g.position.z>W)g.position.z-=2*W; else if(g.position.z<-W)g.position.z+=2*W;
+        });
+    }
+}
+/* 双档切换（弱网低画质开关经 applyLowQuality 同步调用，口径同 #77 水体
+   __waterTier）：只重建山环贴图/分段与云贴图分辨率，云组数在建造时按
+   设备档定（见 SKY_CFG.clouds.groups），不在切换时增删。 */
+window.__skyTier=function(t){
+    if(t!=='full'&&t!=='lite') return;
+    window.__skyTierName=t;
+    if(t===skyTier) return;
+    skyTier=t;
+    if(mtnMesh && mtnTexSet){
+        for(const s in mtnTexSet) mtnTexSet[s].dispose();
+        mtnTexSet={};
+        for(const s of ['spring','summer','autumn','winter']) mtnTexSet[s]=mountainTexture(s);
+        mtnMesh.material.map=mtnTexSet[mtnSeasonApplied]||mtnTexSet.summer;
+        const old=mtnMesh.geometry;
+        mtnMesh.geometry=new THREE.CylinderGeometry(SKY_CFG.ring.radius, SKY_CFG.ring.radius,
+            SKY_CFG.ring.height, SKY_CFG.tiers[skyTier].ringSegs, 1, true);
+        old.dispose();
+    }
+    if(cloudGroup){
+        const nt=cloudClusterTexture();
+        cloudGroup.children.forEach(g=>g.children.forEach(sp=>{ sp.material.map=nt; }));
+        if(cloudTex) cloudTex.dispose();
+        cloudTex=nt;
+    }
+};
+
+/* ==================== 云（sprite 群 · #74 整团积云） ====================
+   一张贴图里叠绘十余个软团成一朵积云（中隆边收、底部削平），每组 =
+   主团＋一个错位副团：同等云量下 sprite 数比旧版多团散点更少（全场
+   32 个 vs 旧约 72 个），云团却更大更蓬松。明暗/浓淡仍由 lerpWeather
+   的 cloudDarkF/cloudOpF 统一驱动；漂移见 skyBackdropTick（与地面
+   云影同源）。对接点 window.__cloudField 供 #75 中枢读取云场参数。 */
+let cloudGroup, cloudTex=null;
+function cloudClusterTexture(){
+    const T=SKY_CFG.tiers[skyTier], W=T.cloudTexW, H=T.cloudTexH;
+    const c=makeCanvas(W,H), g=c.getContext('2d');
+    const rnd=mulberry32(7411);
+    const blobs = skyTier==='full' ? 18 : 12;
+    for(let i=0;i<blobs;i++){
+        const tt=i/(blobs-1), mound=Math.sin(tt*Math.PI);   // 中间隆起、两端收薄
+        const cx=W*(0.16+0.68*tt)+(rnd()-0.5)*W*0.07;
+        const cy=H*0.60-mound*H*0.24+(rnd()-0.5)*H*0.09;
+        const r=W*(0.09+0.11*mound+rnd()*0.04);
+        const gr=g.createRadialGradient(cx,cy,r*0.15,cx,cy,r);
+        gr.addColorStop(0,'rgba(255,255,255,0.50)');
+        gr.addColorStop(0.65,'rgba(255,255,255,0.28)');
+        gr.addColorStop(1,'rgba(255,255,255,0)');
+        g.fillStyle=gr; g.fillRect(cx-r,cy-r,r*2,r*2);
+    }
+    // 底部削平：积云平底（溶掉下缘 20% 的 alpha）
+    const fadeG=g.createLinearGradient(0,H*0.80,0,H);
+    fadeG.addColorStop(0,'rgba(0,0,0,0)'); fadeG.addColorStop(1,'rgba(0,0,0,0.9)');
+    g.globalCompositeOperation='destination-out';
+    g.fillStyle=fadeG; g.fillRect(0,H*0.80,W,H*0.20);
+    g.globalCompositeOperation='source-over';
+    const t=new THREE.CanvasTexture(c);
+    if(THREE.sRGBEncoding!==undefined) t.encoding=THREE.sRGBEncoding;
+    return t;
+}
+function createClouds(){
+    if(!mtnMesh) skyTier=skyTierAuto();   // 与山环同一档（createMountains 先跑时已定档）
+    cloudGroup=new THREE.Group(); cloudGroup.name='clouds';
+    cloudTex=cloudClusterTexture();
+    const mat=new THREE.SpriteMaterial({map:cloudTex,transparent:true,opacity:0.85,depthWrite:false,fog:false});
+    const CC=SKY_CFG.clouds, n=CC.groups[skyTier]||CC.groups.full;
+    for(let i=0;i<n;i++){
+        const grp=new THREE.Group();
+        const main=new THREE.Sprite(mat.clone());
+        const w=CC.scaleW[0]+Math.random()*(CC.scaleW[1]-CC.scaleW[0]);
+        main.scale.set(w,w*0.44,1);
+        grp.add(main);
+        const puff=new THREE.Sprite(mat.clone());
+        const pw=w*0.48;
+        puff.scale.set(pw,pw*0.46,1);
+        puff.position.set(w*0.30,(Math.random()-0.5)*3,(Math.random()-0.5)*6-3);
+        grp.add(puff);
+        const a=i/n*Math.PI*2+Math.random()*0.4, r=CC.rMin+Math.random()*(CC.rMax-CC.rMin);
+        grp.position.set(Math.cos(a)*r,CC.yMin+Math.random()*(CC.yMax-CC.yMin),Math.sin(a)*r);
         cloudGroup.add(grp);
     }
     scene.add(cloudGroup);
+    // #75 中枢对接：云团组数组、云参数与当前漂移速度（与地面云影同源，读 ATMO_U）
+    window.__cloudField={ group:cloudGroup, cfg:CC,
+        velocity(){ if(typeof ATMO_U==='undefined') return {x:0,z:0};
+            const d=ATMO_U.uCloudDir.value, s=ATMO_U.uCloudDrift.value/Math.max(0.001,ATMO_U.uCloudScale.value);
+            return { x:-d.x*s, z:-d.y*s }; } };
 }
 
 /* ==================== 地形（噪声起伏 + 中央平地） ==================== */
@@ -8252,7 +8575,7 @@ function setupDragonGrowth(){
 
 /* ==================== 天气系统 ==================== */
 const SKY={
-    sunny :{top:0x3d7bd9,bot:0xbfdff2,fog:0xa8cfe8,dens:0.0016,amb:0.20,hemi:0.30,sunC:0xfff2cc,sunI:2.60,elev:45,azim:0.9,expo:0.12,ev:1.00},
+    sunny :{top:0x2f6fd6,bot:0xbfe0f5,fog:0xa8cfe8,dens:0.0016,amb:0.20,hemi:0.30,sunC:0xfff2cc,sunI:2.60,elev:45,azim:0.9,expo:0.12,ev:1.00},
     mist  :{top:0x9fb0bc,bot:0xd7dee3,fog:0xd7dee3,dens:0.018, amb:0.42,hemi:0.40,sunC:0xffffff,sunI:0.55,elev:60,azim:0.4,expo:0.0, ev:1.28},
     night :{top:0x050a1e,bot:0x16213e,fog:0x0a0f24,dens:0.014, amb:0.06,hemi:0.07,sunC:0x8899dd,sunI:0.30,elev:35,azim:-2.2,expo:0.0, ev:0.80},
     rain  :{top:0x39434f,bot:0x66717e,fog:0x55606e,dens:0.010, amb:0.35,hemi:0.40,sunC:0xaabbcc,sunI:1.00,elev:55,azim:1.6,expo:0.0, ev:1.18},
@@ -8404,14 +8727,13 @@ function lerpWeather(dt){
     moonMesh.visible=moonOpF>0.02;
     moonMesh.material.opacity=moonOpF;
     moonMesh.children.forEach(ch=>{ ch.material.opacity=moonOpF; });
-    // 云的明暗与浓淡跟缓动因子走（夜间云压到极暗，否则会把夜空糊成灰褐色）
+    // 云的明暗与浓淡跟缓动因子走（夜间云压到极暗，否则会把夜空糊成灰褐色）；
+    // 云的漂移已移交 skyBackdropTick（#74：与 #73 地面云影同源同速，见该处注释）
     cloudGroup.children.forEach((g,i)=>{
         g.children.forEach(s=>{
             s.material.color.setScalar(cloudDarkF);
             s.material.opacity=cloudOpF;
         });
-        g.position.x+=g.userData.speed*0.016;
-        if(g.position.x>170)g.position.x=-170;
     });
     // 窗户与门灯的暖光随 glowF 渐亮渐暗
     houseWindows.forEach(w=>{
@@ -9300,6 +9622,7 @@ function animate(){
     const t=clock.elapsedTime;
 
     lerpWeather(dt);
+    skyBackdropTick(dt);
     Env.refresh();
     Season.tick(dt, t);
     updateModules(dt, t);
@@ -13399,6 +13722,7 @@ function init(){
 
     createSky();
     createClouds();
+    createMountains();
 
     ambient=new THREE.AmbientLight(0xdcecf7,0.45); scene.add(ambient);
     hemi=new THREE.HemisphereLight(0xbfdff2,0x3a5a2f,0.55); scene.add(hemi);
@@ -13714,6 +14038,7 @@ function applyLowQuality(){
         lq.textContent='📶 弱网低画质：'+(lowQuality?'开':'关');
     }
     if(window.__waterTier) window.__waterTier(lowQuality?'base':'ultra');   // #77 水体双档同步
+    if(window.__skyTier) window.__skyTier(lowQuality?'lite':'full');   // #74 天空/山环双档同步
     if(!renderer) return;
     if(lowQuality){
         dprCur=1;
