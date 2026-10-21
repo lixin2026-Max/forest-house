@@ -297,15 +297,17 @@ test('FB 提交：先复制兜底，再只回传到白名单地址', ()=>{    mu
     const outside = abs.filter(u => !/^https:\/\/formsubmit\.co\//.test(u));
     must(outside.length===0,'出现白名单外的绝对 URL：'+outside.join(', '));
     must(!/XMLHttpRequest|sendBeacon|WebSocket/.test(inlineJs),'出现其他网络通道');
-    // 全页只允许三个具名本地键：ct2_visits（访问计数）、ct2_hunt（寻宝进度）与 ct2_help（帮助已提示标记），都不上传
+    // 全页只允许五个具名本地键：ct2_visits（访问计数）、ct2_hunt（寻宝进度）、ct2_help（帮助已提示标记）、ct2_farm（种田存档）与 ct2_vote（投票已投标记），都不上传
     must(!/sessionStorage|document\.cookie/.test(inlineJs),'出现未授权的存储');
     const lsKeys = [...inlineJs.matchAll(/localStorage\.(?:getItem|setItem)\('([^']+)'/g)].map(m=>m[1]);
-    const badKeys = lsKeys.filter(k => k !== 'ct2_visits' && k !== 'ct2_hunt' && k !== 'ct2_help');
+    const badKeys = lsKeys.filter(k => k !== 'ct2_visits' && k !== 'ct2_hunt' && k !== 'ct2_help' && k !== 'ct2_farm' && k !== 'ct2_vote');
     must(badKeys.length===0,'出现未授权的本地存储键：'+badKeys.join(', '));
-    // 动态键只允许具名常量 HUNT_KEY / HELP_KEY，且它们的取值必须写死
+    // 动态键只允许具名常量 HUNT_KEY / HELP_KEY / FARM_KEY / VOTE_KEY，且它们的取值必须写死
     must(/const HUNT_KEY='ct2_hunt'/.test(inlineJs),'HUNT_KEY 必须写死为 ct2_hunt');
     must(/const HELP_KEY='ct2_help'/.test(inlineJs),'HELP_KEY 必须写死为 ct2_help');
-    must(!/localStorage\.(?:getItem|setItem)\((?!'ct2_visits'|HUNT_KEY|HELP_KEY)/.test(inlineJs),'存在动态拼接的存储键');
+    must(/const FARM_KEY='ct2_farm'/.test(inlineJs),'FARM_KEY 必须写死为 ct2_farm');
+    must(/const VOTE_KEY='ct2_vote'/.test(inlineJs),'VOTE_KEY 必须写死为 ct2_vote');
+    must(!/localStorage\.(?:getItem|setItem)\((?!'ct2_visits'|HUNT_KEY|HELP_KEY|FARM_KEY|VOTE_KEY)/.test(inlineJs),'存在动态拼接的存储键');
     // 顺序保证：先复制，后发送
     const iCopy = inlineJs.indexOf('copyToClipboard(text).then(');
     const iSend = inlineJs.indexOf('sendFeedback({');
