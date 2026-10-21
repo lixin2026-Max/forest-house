@@ -32,8 +32,8 @@ const dangers = {
     'innerHTML/outerHTML': /(inner|outer)HTML/,
     'eval': /\beval\s*\(/,
     'new Function': /new\s+Function\s*\(/,
-    // 只允许两个具名本地键：ct2_visits 字面量与寻宝的 HUNT_KEY 常量（下方另有钉死检查）；其余一律不许
-    'localStorage（非授权键）': /localStorage\.(?:getItem|setItem)\((?!'ct2_visits'|HUNT_KEY)/,
+    // 只允许三个具名本地键：ct2_visits 字面量、寻宝的 HUNT_KEY 与帮助的 HELP_KEY 常量（下方另有钉死检查）；其余一律不许
+    'localStorage（非授权键）': /localStorage\.(?:getItem|setItem)\((?!'ct2_visits'|HUNT_KEY|HELP_KEY)/,
     'sessionStorage': /sessionStorage/,
     'document.cookie': /document\.cookie/,
     'XMLHttpRequest': /XMLHttpRequest/,
@@ -52,6 +52,8 @@ for (const [label, re] of Object.entries(dangers)) {
 
 // 寻宝进度键只能经具名常量使用，且常量取值被钉死（防动态拼键绕过上面的正则）
 check('寻宝存储键 HUNT_KEY 写死为 ct2_hunt', /const HUNT_KEY='ct2_hunt'/.test(html));
+// 帮助已提示标记同理：只能经具名常量 HELP_KEY 使用，取值钉死
+check('帮助存储键 HELP_KEY 写死为 ct2_help', /const HELP_KEY='ct2_help'/.test(html));
 
 // fetch 是唯一例外：只允许恰好一处、且地址来自 fbEndpoint() 的白名单。
 {

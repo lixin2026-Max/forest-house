@@ -93,6 +93,42 @@
     #fbMsg{margin-top:9px;font-size:12px;color:#9ee49e;min-height:17px;line-height:1.5}
     #fbMsg.err{color:#ffb4b4}
 
+    /* ===== 操作帮助（入口 / 弹窗 / 首次轻提示） ===== */
+    #helpBtn{width:100%;margin-top:9px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);
+        color:#dfe8df;padding:7px 4px;border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit;transition:.15s}
+    #helpBtn:hover{background:rgba(255,255,255,.22)}
+    #helpMask{display:none;position:absolute;inset:0;z-index:132;
+        background:rgba(0,0,0,.45);backdrop-filter:blur(2px);
+        align-items:center;justify-content:center;padding:16px}
+    #helpMask.on{display:flex}
+    #helpBox{width:460px;max-width:100%;max-height:100%;overflow:auto;
+        background:rgba(14,26,14,.97);color:#e6f4e6;border:1px solid rgba(140,220,140,.35);
+        border-radius:14px;padding:16px 18px;box-shadow:0 18px 50px rgba(0,0,0,.55);font-size:13px}
+    #helpBox h4{margin:0 0 4px;font-size:15px;color:#bfe8bf}
+    #helpBox p.sub{margin:0 0 6px;font-size:11.5px;color:#93b093;line-height:1.5}
+    .hrow{display:flex;gap:10px;padding:6px 0;border-bottom:1px dashed rgba(140,220,140,.18);
+        font-size:12.5px;line-height:1.55}
+    .hrow:last-of-type{border-bottom:none}
+    .hrow b{flex:none;width:74px;color:#bfe8bf;font-weight:600}
+    .hrow span{color:#cfe3cf}
+    #helpRow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    #helpRow button{font-family:inherit;font-size:12.5px;padding:8px 14px;border-radius:8px;cursor:pointer;
+        border:1px solid rgba(140,220,140,.35);background:rgba(30,50,30,.9);color:#d8f0d8;transition:background .15s}
+    #helpRow button:hover{background:rgba(45,80,45,.95)}
+    #helpRow button.primary{background:#3f8f4a;border-color:#5fb86b;color:#fff;font-weight:600}
+    #helpRow button.primary:hover{background:#4aa457}
+    #helpRow button.ghost{background:transparent}
+    #helpTip{position:absolute;left:50%;top:18%;z-index:124;pointer-events:none;
+        transform:translate(-50%,-8px);opacity:0;transition:opacity .35s,transform .35s;
+        background:rgba(14,26,14,.92);color:#ffe9a8;border:1px solid rgba(255,210,100,.5);
+        padding:10px 18px;border-radius:24px;font-size:14px;white-space:nowrap;
+        box-shadow:0 10px 30px rgba(0,0,0,.4)}
+    #helpTip.on{opacity:1;transform:translate(-50%,0)}
+    @media (max-width:600px),(pointer:coarse){
+        #helpTip{font-size:12.5px;top:15%;white-space:normal;text-align:center;max-width:88vw}
+        #helpBox{padding:13px 14px}
+    }
+
     /* ===== 留言弹窗：固定共建文案 ===== */
     .fbCreed{display:grid;gap:3px;margin:2px 0 10px;padding:10px 12px;border-radius:9px;
         background:rgba(80,140,90,.10);border-left:3px solid rgba(120,210,130,.55)}
@@ -304,6 +340,7 @@
     <div class="row"><label>太阳高度角</label><input type="range" id="sunElev" min="3" max="80" value="45"><b id="sunElevV">45°</b></div>
     <div class="row"><label>雾气浓度</label><input type="range" id="fogAmt" min="0" max="100" value="0"><b id="fogAmtV">0%</b></div>
     <div class="row"><label>自动巡游</label><input type="checkbox" id="orbitChk"><b id="orbitV">关</b></div>
+    <button type="button" id="helpBtn">❓ 操作帮助</button>
 </div>
 <div id="status">初始化中…</div>
 
@@ -375,8 +412,31 @@
         </div>
     </div>
 </div>
+<div id="helpMask">
+    <div id="helpBox" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+        <h4 id="helpTitle">🧭 操作帮助</h4>
+        <p class="sub">这个小世界能玩的东西都在这儿了，慢慢逛。</p>
+        <div class="hrow"><b>旋转视角</b><span>单指或鼠标拖动画面</span></div>
+        <div class="hrow"><b>缩放远近</b><span>双指捏合，或滚动鼠标滚轮</span></div>
+        <div class="hrow"><b>切换天气</b><span>顶栏天气按钮，或按 T 键：晴天、雾天、夜间、雨天、金色时刻</span></div>
+        <div class="hrow"><b>太阳与雾气</b><span>顶栏两条滑杆，拖动即时生效</span></div>
+        <div class="hrow"><b>自动巡游</b><span>顶栏开关，或按 P 键，镜头自己慢慢环游</span></div>
+        <div class="hrow"><b>视角锁定</b><span>顶栏开关，锁住后拖动与巡游都不动镜头（缩放仍可用）</span></div>
+        <div class="hrow"><b>敲门</b><span>点小屋的门：先轻敲两下，门会朝外打开透出暖光</span></div>
+        <div class="hrow"><b>篝火</b><span>点篝火堆可以点火、再点熄火</span></div>
+        <div class="hrow"><b>每日寻宝</b><span>每天藏 5 件小物（橡果、蘑菇、羽毛、松果、彩蛋），走近点中即收集，集齐有祝贺</span></div>
+        <div class="hrow"><b>放河灯</b><span>左下角「🏮 放河灯」，写一句愿望，让它在池塘上漂一会儿</span></div>
+        <div class="hrow"><b>界面隐藏</b><span>顶栏与底栏停手 3 秒会自动隐藏，点屏幕右缘的小圆钮可以唤回</span></div>
+        <div class="hrow"><b>更多设置</b><span>右下角齿轮里有功能开关、预设视角、色调与声音</span></div>
+        <div id="helpRow">
+            <button type="button" class="primary" id="helpOk">知道啦</button>
+            <button type="button" class="ghost" id="helpClose">关闭</button>
+        </div>
+    </div>
+</div>
 <div id="wishBubble"></div>
 <div id="huntToast"></div>
+<div id="helpTip">👋 第一次来？点顶栏里的「❓ 操作帮助」，玩法都在里面</div>
 <button id="wakeBtn" type="button" title="显示操作界面" aria-label="显示操作界面">‹</button>
 </div><!-- /#app -->
 <div id="error"></div>
@@ -2496,6 +2556,57 @@ function setupFeedback(){
     },true);
 }
 
+/* ==================== 操作帮助（Issue #5） ====================
+   顶栏有常驻入口；第一次进来会轻提示一次，提示过就记在本机，不再打扰。 */
+const HELP_KEY='ct2_help';
+let helpOpen=false;
+let helpTipTimer=0;
+function helpSeen(){
+    try{ return !!localStorage.getItem(HELP_KEY); }catch(e){ return true; }
+}
+function markHelpSeen(){
+    try{ localStorage.setItem(HELP_KEY,'1'); }catch(e){ /* 存不了就只当次生效 */ }
+}
+function hideHelpTip(){
+    const tip=fbEl('helpTip');
+    if(tip) tip.classList.remove('on');
+    if(helpTipTimer){ clearTimeout(helpTipTimer); helpTipTimer=0; }
+}
+function showHelpTip(){
+    const tip=fbEl('helpTip');
+    if(!tip) return;
+    tip.classList.add('on');
+    markHelpSeen();
+    helpTipTimer=setTimeout(hideHelpTip,6500);
+}
+function openHelp(){
+    if(helpOpen) return;
+    helpOpen=true;
+    fbEl('helpMask').classList.add('on');
+    markHelpSeen();
+    hideHelpTip();
+}
+function closeHelp(){
+    if(!helpOpen) return;
+    helpOpen=false;
+    fbEl('helpMask').classList.remove('on');
+}
+function setupHelp(){
+    fbEl('helpBtn').addEventListener('click',openHelp);
+    fbEl('helpClose').addEventListener('click',closeHelp);
+    fbEl('helpOk').addEventListener('click',closeHelp);
+    fbEl('helpMask').addEventListener('click',e=>{
+        if(e.target===fbEl('helpMask')) closeHelp();
+    });
+    document.addEventListener('keydown',e=>{
+        if(e.key==='Escape' && helpOpen){
+            closeHelp();
+            e.stopPropagation();
+        }
+    },true);
+    if(!helpSeen()) setTimeout(showHelpTip,1500);
+}
+
 /* ==================== 初始化 ==================== */
 /* ==========================================================================
    可插拔功能模块 v3
@@ -3439,6 +3550,7 @@ function init(){
     buildWeatherButtons();
     setupSliders();
     setupFeedback();
+    setupHelp();
     setupModules();
     window.addEventListener('resize',onResize);
     window.addEventListener('keydown',onKeyDown);
@@ -3586,7 +3698,7 @@ function setupGlobal(){
     if(!app) return;
     var HIDE_MS = 3000, timer = null;
     function anyDialogOpen(){
-        var ids = ['modPanel','fbMask','ltMask'], i, el;
+        var ids = ['modPanel','fbMask','ltMask','helpMask'], i, el;
         for(i = 0; i < ids.length; i++){
             el = document.getElementById(ids[i]);
             if(el && el.classList.contains('on')) return true;
@@ -3604,7 +3716,7 @@ function setupGlobal(){
         app.classList.remove('bars-off');
         arm();
     }
-    ['ui','status','fbBtn','lanternBtn','modBtn','modPanel','fbMask','ltMask'].forEach(function(id){
+    ['ui','status','fbBtn','lanternBtn','modBtn','modPanel','fbMask','ltMask','helpMask'].forEach(function(id){
         var el = document.getElementById(id);
         if(!el) return;
         ['pointerdown','input','change','wheel'].forEach(function(ev){
