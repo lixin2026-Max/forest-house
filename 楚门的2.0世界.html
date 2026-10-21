@@ -801,6 +801,10 @@
         <button type="button" id="dmSpin">🔄 转圈</button>
     </div>
     <div class="dmRow">
+        <button type="button" id="dmHighfive">🤝 击掌</button>
+        <button type="button" id="dmBow">🙇 作揖</button>
+    </div>
+    <div class="dmRow">
         <button type="button" id="dmFeedP">🎃 喂南瓜</button>
         <button type="button" id="dmFeedC">🌽 喂玉米</button>
         <button type="button" id="dmClose">✖ 收起</button>
@@ -876,6 +880,10 @@
         </div>
         <div id="echoQueryMsg"></div>
     </div>
+    <div class="mpSep"></div>
+    <div class="mpSub">季节（按真实日期自动定季）</div>
+    <div class="mpViews" id="seasonBtns"></div>
+    <div class="mpTip" id="seasonTip">手动切换只预览本机本次，不保存；刷新后回到真实日期的季节。</div>
     <div class="mpDisclaimer">
         本世界为开放式共创，访客提交的构想、命名与素材需经负责人审核后才会进入公共场景；
         你桌面上的私人调整只保存在本机浏览器，不影响他人。
@@ -1039,6 +1047,8 @@
             <button type="button" class="dlgX" id="dgX" aria-label="关闭">✕</button>
         </div>
         <p class="sub">这条龙是你的：性别、名字、体色、配饰、性格都归你管。改任何一项都立刻生效，并自动存到本机。</p>
+        <div class="dgSec">成长（陪伴天数到了自己长，只看不能改）</div>
+        <div class="dgHint" id="dgGrowth">🌱 …</div>
         <div class="dgSec">名字</div>
         <div class="dgRow">
             <input type="text" id="dgName" maxlength="16" placeholder="给小龙起个名字">
@@ -1270,6 +1280,19 @@ const WalkMap = {
     /* 角色行走口径：脚下是干地、且不在复合禁区里（供 #27 小龙等地面角色移动查询） */
     isWalkable(x, z){
         return this.waterDry(x, z, 0) && this.clearOf(x, z);
+    },
+    /* 冰面口径（#21 季节）：点是否落在结冰的湖面/河尾潭面上（留 0.3 边距，
+       免得贴着岸边冰缘行走）。只回答「是不是冰」，冻没冻由 Season.frozen 说了算 */
+    iceAt(x, z){
+        const ex=(x-LAKE_C.x)/(LAKE_RX-0.3), ez=(z-LAKE_C.z)/(LAKE_RZ-0.3);
+        if(ex*ex+ez*ez<1) return true;
+        return Math.hypot(x-RIVER_P2.x, z-RIVER_P2.z) < 1.4;
+    },
+    /* 角色行走口径＋冰面：冬季湖冰封后，角色可以踩冰过湖（散布选点仍走
+       isWalkable/clearOf，世界布局不随季节变，指纹口径不动） */
+    charWalkable(x, z){
+        if(this.isWalkable(x, z)) return true;
+        return (typeof Season !== 'undefined') && Season.frozen && this.iceAt(x, z);
     }
 };
 let bfBodyIM=null, bfWingLIM=null, bfWingRIM=null;
@@ -2074,6 +2097,12 @@ function buildTreeInstances(trees){
         groups[(rec.isPine?'pineLeaf':'birchLeaf')+rec.variant].list.push({rec:rec,sway:true});
     });
     const swayItems=[];
+    // 季节层挂钩（#21）：记下每棵树的树冠顶高，冬季积雪帽按此落位
+    window.__treeTops = trees.map(r=>{
+        const g = groups[(r.isPine?'pineLeaf':'birchLeaf')+r.variant];
+        g.geo.computeBoundingBox();
+        return {x:r.x, z:r.z, y:r.y, s:r.s, isPine:r.isPine, top:g.geo.boundingBox.max.y};
+    });
     Object.keys(groups).forEach(key=>{
         const g=groups[key];
         if(!g.list.length) return;
@@ -2750,6 +2779,7 @@ function wallsRefresh(){
     if(!Interior.gbCanvas) return;   // 室内还没建好时不刷（setupWalls 会在建好后补刷）
     gbWallEntries = wallsBuildEntries();
     Interior.setGuestbook(gbWallEntries);
+    window.__chronicleBase = CHRONICLE.slice();   // #52 成长条目的合并基线（applyGrowthChronicle 读它拼成长事件）
     Interior.setChronicle(CHRONICLE.slice(-6));   // 板上只挂最近 6 件，面板里看全表
 }
 
@@ -3828,6 +3858,7 @@ function createOutskirts(){
                 vertexColors:true,depthWrite:false}));
         patches.renderOrder=1;
         scene.add(patches);
+        window.__grassPatches=patches;   // 季节层挂钩（#21）：冬季雪原下淡出草色斑块
     }
     // ② 野花小簇：普撒 + 池塘岸环 + 栅栏外一条
     const wpts=[];
@@ -4586,6 +4617,51 @@ const DRG_ENUMS = {
     pattern:['none','spots','stripes'], horn:['sharp','bud','none'],
     spike:['sharp','round'], tailTip:['leaf','ball','spike']
 };
+/* ---------- 小龙成长（Issue #52 · v4.1）：随陪伴天数慢慢长大 ----------
+   阶段 3 档：幼龙 → 少年龙 → 青年龙。推进口径：不同自然日打开世界计 1 天
+   （累计到访天数），第 1 天幼龙、累计第 4 天少年、第 9 天青年（阈值常量
+   DRG_GROW_STAGE_DAYS，可调）。成长记录 {days,last,stage,seen,events} 复用
+   ct2_dragon 的 grow 字段存本机——不新增存储键。首次打开（或老存档没有
+   grow 字段）从当天起算第 1 天。
+   尺寸走建模参数等比放大（DRG_GROWTH.s）：零件几何与位置同经 dgPart 的
+   成长系数 drgGrowK，所有关节重叠按同比例放大，接缝/防穿模结论不因长大
+   失效；在此之上，角/背刺/尾长再按各自系数额外生长（horn/spike/tail）。
+   阶段解锁互动：少年档「击掌」highfive、青年档「作揖」bow（走 #16 的
+   gesture 叠加层量程）。成长只动尺寸与部件长度，不覆盖配色/配饰/名字/
+   性格；定制面板的「恢复默认」同样不清成长（陪伴记录不是外观设置）。 */
+const DRG_GROW_STAGE_DAYS = [1, 4, 9];
+const DRG_GROWTH = [
+    {label:'幼龙',   s:1.00, horn:1.00, spike:1.00, tail:1.00},
+    {label:'少年龙', s:1.12, horn:1.15, spike:1.12, tail:1.10},
+    {label:'青年龙', s:1.25, horn:1.32, spike:1.25, tail:1.20}
+];
+function drgTodayStr(){
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function drgStageForDays(days){
+    return days >= DRG_GROW_STAGE_DAYS[2] ? 2 : days >= DRG_GROW_STAGE_DAYS[1] ? 1 : 0;
+}
+let drgGrowDirty = false;   // 加载时 grow 有推进/变更 → dragonCfg 建好后落盘一次
+function drgGrowNormalize(raw){
+    const today = drgTodayStr();
+    const g = (raw && typeof raw === 'object') ? raw : null;
+    if(!g || typeof g.days !== 'number' || !g.last){
+        drgGrowDirty = true;
+        return {days:1, last:today, stage:0, seen:0, events:[]};
+    }
+    g.days = Math.max(1, Math.floor(g.days));
+    if(!Array.isArray(g.events)) g.events = [];
+    if(typeof g.seen !== 'number') g.seen = 0;
+    if(g.last !== today){ g.days += 1; g.last = today; drgGrowDirty = true; }
+    const st = drgStageForDays(g.days);
+    if(st !== g.stage){
+        if(typeof g.stage === 'number' && st > g.stage) g.events.push({d:today, s:st});   // 升档记一笔（大事记用）
+        g.stage = st; drgGrowDirty = true;
+    }
+    if(g.seen > g.stage) g.seen = g.stage;
+    return g;
+}
 function drgIsHex(n){ return typeof n === 'number' && n >= 0 && n <= 0xffffff && Math.floor(n) === n; }
 /* 名字过滤：≤8 字（按字数不按字节）、剥掉符号滥用与空白、敏感词打码 */
 const DRG_NAME_BAD = ['傻逼','煞笔','操逼','你妈逼','妈的','贱人','去死吧','fuck','shit','bitch'];
@@ -4602,7 +4678,7 @@ function sanitizeDragonName(s){
 function drgLoadCfg(){
     const c = JSON.parse(JSON.stringify(DRG_DEFAULT_CFG));
     const raw = store.dragon.json(null);
-    if(!raw) return c;
+    if(!raw){ c.grow = drgGrowNormalize(null); c.stage = 0; return c; }
     for(const k of Object.keys(DRG_ENUMS)) if(DRG_ENUMS[k].indexOf(raw[k]) >= 0) c[k] = raw[k];
     if(raw.wingSize === 1.35 || raw.wingSize === 1) c.wingSize = raw.wingSize;
     if(raw.colors && drgIsHex(raw.colors.body) && drgIsHex(raw.colors.belly) && drgIsHex(raw.colors.accent))
@@ -4611,10 +4687,13 @@ function drgLoadCfg(){
     if(c.palette !== 'custom') c.colors = null;          // 预设与自由色二选一，预设优先
     if(raw.acc) for(const k of Object.keys(c.acc)) c.acc[k] = !!raw.acc[k];
     c.name = sanitizeDragonName(raw.name);
+    c.grow = drgGrowNormalize(raw.grow);   // #52：成长记录（跨天推进/升档登记都在这里发生）
+    c.stage = c.grow.stage;
     return c;
 }
 let dragonCfg = drgLoadCfg();
 function dragonSaveCfg(){ store.dragon.save(dragonCfg); }
+if(drgGrowDirty) dragonSaveCfg();          // #52：加载时天数/阶段有推进，立刻落盘
 function drgPers(){ return DRG_PERSONALITY[dragonCfg.personality] || DRG_PERSONALITY.curious; }
 /* 由配置算出本次建模用的全套颜色：预设整表取色；自由选色时翅膜由标志件
    色向白色混 45% 自动派生（保证与身子协调）；腮红随性别变深浅（轻造型差异） */
@@ -4653,19 +4732,28 @@ function dragonCall(){
     setTimeout(()=>{ if(actx && !audioMuted) audioNote(base*1.335, 0.24, 0.05, 'triangle', 0.02, aAmb); }, 115);
 }
 
+/* 成长系数（#52）：buildDragonModel 开工时把本档的等比系数写进来，dgPart
+   等零件出口统一读——几何尺寸与位置同乘，所有关节重叠按同比例放大，
+   「接成一体」的相对关系不因长大改变（等比变换的性质）。 */
+let drgGrowK = 1;
 /* 零件小帮手：缩放→旋转→平移→刷色，返回可进 mergePainted 的几何体 */
 function dgPart(geo, hex, x, y, z, o){
     o = o || {};
+    const K = drgGrowK;
+    if(K !== 1) geo.scale(K, K, K);
     if(o.s) geo.scale(o.s[0], o.s[1], o.s[2]);
     if(o.rx) geo.rotateX(o.rx);
     if(o.ry) geo.rotateY(o.ry);
     if(o.rz) geo.rotateZ(o.rz);
-    geo.translate(x, y, z);
+    geo.translate(x*K, y*K, z*K);
     return ModelKit.paint(geo, hex);
 }
 
 function buildDragonModel(cfg){
 cfg = cfg || DRG_DEFAULT_CFG;
+const GR = DRG_GROWTH[Math.max(0, Math.min(2, cfg.stage || 0))];   // #52 本档成长系数
+const G = GR.s;
+drgGrowK = G;
 const col = drgColorsOf(cfg);
 const BODY = col.body, BELLY = col.belly, CORAL = col.accent, WING = col.wing;
 const BLUSH = col.blush, BLUSHS = col.blushScale;
@@ -4675,24 +4763,26 @@ const root = new THREE.Group(); root.name = 'dragon';
 const lie = new THREE.Group(); root.add(lie);
 /* body：髋部枢轴（y=0.55）。躯干/头/双臂/双翅/尾都挂在它上面，
 呼吸缩放、走路起伏与侧摆作用在这一层；双腿直接挂 lie，与髋同高。 */
-const body = new THREE.Group(); body.position.y = 0.55; lie.add(body);
+const body = new THREE.Group(); body.position.y = 0.55*G; lie.add(body);
 
-/* 背刺造型：sharp = 定型版尖锥；round = 圆润短丘（同位置同底盘，根包覆丘不变） */
+/* 背刺造型：sharp = 定型版尖锥；round = 圆润短丘（同位置同底盘，根包覆丘不变）。
+   #52：刺高在等比放大之外再乘 GR.spike 额外生长（沿锥轴拉长，根部埋得更深、
+   底盘与根包覆丘的位置关系不变，接缝不破） */
 const spikeGeo = (r, h, x, y, z, rx) => cfg.spike === 'round'
-? dgPart(new THREE.SphereGeometry(r*1.18, 10, 8), CORAL, x, y, z, {rx:rx, s:[1, 0.85, 0.55]})
-: dgPart(new THREE.ConeGeometry(r, h, 6), CORAL, x, y, z, {rx:rx, s:[1, 1, 0.45]});
+? dgPart(new THREE.SphereGeometry(r*1.18, 10, 8), CORAL, x, y, z, {rx:rx, s:[1, 0.85*GR.spike, 0.55]})
+: dgPart(new THREE.ConeGeometry(r, h, 6), CORAL, x, y, z, {rx:rx, s:[1, GR.spike, 0.45]});
 /* 横置圆环（条纹/围巾/项圈/帽带共用）：绕 Y 轴的环，可选椭圆缩放与前后倾 */
 function dgRing(r, tube, sx, sz, hex, x, y, z, tiltX){
-const g = new THREE.TorusGeometry(r, tube, 8, 26);
+const g = new THREE.TorusGeometry(r*G, tube*G, 8, 26);
 g.rotateX(Math.PI/2 + (tiltX || 0));
 g.scale(sx, 1, sz);
-g.translate(x, y, z);
+g.translate(x*G, y*G, z*G);
 return ModelKit.paint(g, hex);
 }
 /* 正对前方的圆环（眼镜框） */
 function dgRingZ(r, tube, hex, x, y, z){
-const g = new THREE.TorusGeometry(r, tube, 8, 22);
-g.translate(x, y, z);
+const g = new THREE.TorusGeometry(r*G, tube*G, 8, 22);
+g.translate(x*G, y*G, z*G);
 return ModelKit.paint(g, hex);
 }
 
@@ -4742,7 +4832,7 @@ body.add(torsoMesh);
 圆滚滚的胸口腹甲怼满画面；锚到面部下方（配合躯干前后向收薄），低头能看到
 胸口腹甲，行走时交替前摆的脚尖也会从肚皮下探出来。子级几何按原点位移
 反向平移，静止外观逐点一致。 */
-const head = new THREE.Group(); head.position.set(0, 0.79, 0.15); body.add(head);
+const head = new THREE.Group(); head.position.set(0, 0.79*G, 0.15*G); body.add(head);
 const skullParts = [
 dgPart(new THREE.SphereGeometry(0.325, 18, 14), BODY, 0, -0.01, -0.13, {s:[1, 0.95, 0.94]}),
 /* 颈球：挂在头组下缘、随头一起转，底部始终沉在躯干与脖颈基座里——
@@ -4770,13 +4860,15 @@ head.add(skullMesh);
 none = 不长角。后脑刺与根包覆丘恒有（跟背刺同风格切换） */
 const hornParts = [];
 if(cfg.horn === 'sharp'){
-hornParts.push(dgPart(new THREE.ConeGeometry(0.09, 0.42, 9), BELLY, -0.155, 0.305, -0.16, {rx:-0.30, rz:0.17}));
-hornParts.push(dgPart(new THREE.ConeGeometry(0.09, 0.42, 9), BELLY, 0.155, 0.305, -0.16, {rx:-0.30, rz:-0.17}));
+/* #52：角在等比放大之外再沿锥轴拉长 GR.horn（o.s 在旋转前按局部轴缩放，
+   正是锥的轴向；根部随之埋得更深，角根 flare 与颅面的关系不变） */
+hornParts.push(dgPart(new THREE.ConeGeometry(0.09, 0.42, 9), BELLY, -0.155, 0.305, -0.16, {rx:-0.30, rz:0.17, s:[1, GR.horn, 1]}));
+hornParts.push(dgPart(new THREE.ConeGeometry(0.09, 0.42, 9), BELLY, 0.155, 0.305, -0.16, {rx:-0.30, rz:-0.17, s:[1, GR.horn, 1]}));
 } else if(cfg.horn === 'bud'){
-hornParts.push(dgPart(new THREE.ConeGeometry(0.105, 0.26, 9), BELLY, -0.15, 0.235, -0.155, {rx:-0.30, rz:0.17}));
-hornParts.push(dgPart(new THREE.ConeGeometry(0.105, 0.26, 9), BELLY, 0.15, 0.235, -0.155, {rx:-0.30, rz:-0.17}));
-hornParts.push(dgPart(new THREE.SphereGeometry(0.052, 10, 8), BELLY, -0.178, 0.35, -0.198));
-hornParts.push(dgPart(new THREE.SphereGeometry(0.052, 10, 8), BELLY, 0.178, 0.35, -0.198));
+hornParts.push(dgPart(new THREE.ConeGeometry(0.105, 0.26, 9), BELLY, -0.15, 0.235, -0.155, {rx:-0.30, rz:0.17, s:[1, GR.horn, 1]}));
+hornParts.push(dgPart(new THREE.ConeGeometry(0.105, 0.26, 9), BELLY, 0.15, 0.235, -0.155, {rx:-0.30, rz:-0.17, s:[1, GR.horn, 1]}));
+hornParts.push(dgPart(new THREE.SphereGeometry(0.052, 10, 8), BELLY, -0.178, 0.35 + 0.13*(GR.horn - 1), -0.198));
+hornParts.push(dgPart(new THREE.SphereGeometry(0.052, 10, 8), BELLY, 0.178, 0.35 + 0.13*(GR.horn - 1), -0.198));
 }
 hornParts.push(spikeGeo(0.07, 0.18, 0, 0.113, -0.385, 0.55));
 /* 后脑刺根包覆丘：同背刺，吞掉底盘探出颅面的那段边沿 */
@@ -4789,13 +4881,13 @@ return new THREE.Mesh(ModelKit.mergePainted([
 dgPart(new THREE.ConeGeometry(0.13, 0.29, 7), CORAL, 0, 0, 0, {rz:-sign*1.15, s:[1, 1, 0.35]})
 ]), paintMat);
 }
-const finL = new THREE.Group(); finL.position.set(-0.28, 0.13, -0.16); finL.add(finMesh(-1)); head.add(finL);
-const finR = new THREE.Group(); finR.position.set(0.28, 0.13, -0.16); finR.add(finMesh(1)); head.add(finR);
+const finL = new THREE.Group(); finL.position.set(-0.28*G, 0.13*G, -0.16*G); finL.add(finMesh(-1)); head.add(finL);
+const finR = new THREE.Group(); finR.position.set(0.28*G, 0.13*G, -0.16*G); finR.add(finMesh(1)); head.add(finR);
 const eyeMesh = new THREE.Mesh(ModelKit.merge([
-new THREE.SphereGeometry(0.072, 12, 10).translate(-0.135, 0, 0.285),
-new THREE.SphereGeometry(0.072, 12, 10).translate( 0.135, 0, 0.285)
+new THREE.SphereGeometry(0.072*G, 12, 10).translate(-0.135*G, 0, 0.285*G),
+new THREE.SphereGeometry(0.072*G, 12, 10).translate( 0.135*G, 0, 0.285*G)
 ]), new THREE.MeshStandardMaterial({color:0x33241a, roughness:0.25}));
-eyeMesh.position.set(0, 0.03, -0.13);
+eyeMesh.position.set(0, 0.03*G, -0.13*G);
 head.add(eyeMesh);
 /* 睫毛（女性轻造型差异）：每只眼上外侧三根小睫，根部埋进眼球上缘 */
 let lashMesh = null;
@@ -4823,9 +4915,9 @@ dgPart(new THREE.SphereGeometry(0.068, 10, 8), BODY, 0, -0.345, 0.005, {s:[1, 1.
 dgPart(new THREE.SphereGeometry(0.028, 8, 6), BODY, -sign*0.055, -0.335, 0.032)
 ]), paintMat);
 }
-const armL = new THREE.Group(); armL.position.set(-0.345, 0.44, 0.03);
+const armL = new THREE.Group(); armL.position.set(-0.345*G, 0.44*G, 0.03*G);
 armL.add(armMesh(-1)); armL.rotation.z = -0.14; armL.userData.baseZ = -0.14; body.add(armL);
-const armR = new THREE.Group(); armR.position.set(0.345, 0.44, 0.03);
+const armR = new THREE.Group(); armR.position.set(0.345*G, 0.44*G, 0.03*G);
 armR.add(armMesh(1)); armR.rotation.z = 0.14; armR.userData.baseZ = 0.14; body.add(armR);
 
 /* 双腿：枢轴在髋部（与 body 同高、挂 lie 层），腿筒 + 踝关节球 + 圆头脚 + 三个奶油脚趾。
@@ -4843,23 +4935,23 @@ dgPart(new THREE.SphereGeometry(0.034, 8, 6), BELLY, 0, -0.472, 0.21),
 dgPart(new THREE.SphereGeometry(0.032, 8, 6), BELLY, 0.055, -0.478, 0.20)
 ]), paintMat);
 }
-const legL = new THREE.Group(); legL.position.set(-0.14, 0.55, 0); legL.add(legMesh()); lie.add(legL);
-const legR = new THREE.Group(); legR.position.set(0.14, 0.55, 0); legR.add(legMesh()); lie.add(legR);
+const legL = new THREE.Group(); legL.position.set(-0.14*G, 0.55*G, 0); legL.add(legMesh()); lie.add(legL);
+const legR = new THREE.Group(); legR.position.set(0.14*G, 0.55*G, 0); legR.add(legMesh()); lie.add(legR);
 
 /* 背上小翅膀：叶形膜 + 奶油翅骨，一侧一件（构造沿用 build 1 的合批法，尺寸按人形收小）；
 大小变体只缩放整个翅组（枢轴在翅根，长大是往外上方展开，不碰背） */
 function wingMesh(sign){
-const mem = new THREE.SphereGeometry(0.42, 12, 9);
-mem.scale(1.05, 0.10, 0.55); mem.translate(sign*0.26, 0, -0.08);
-const spar = new THREE.CylinderGeometry(0.024, 0.04, 0.62, 6);
-spar.rotateZ(sign*1.15); spar.rotateY(sign*0.35); spar.translate(sign*0.22, 0.03, 0.10);
+const mem = new THREE.SphereGeometry(0.42*G, 12, 9);
+mem.scale(1.05, 0.10, 0.55); mem.translate(sign*0.26*G, 0, -0.08*G);
+const spar = new THREE.CylinderGeometry(0.024*G, 0.04*G, 0.62*G, 6);
+spar.rotateZ(sign*1.15); spar.rotateY(sign*0.35); spar.translate(sign*0.22*G, 0.03*G, 0.10*G);
 return new THREE.Mesh(ModelKit.mergePainted([
 ModelKit.paint(mem, WING), ModelKit.paint(spar, BELLY)
 ]), paintMat);
 }
-const wingL = new THREE.Group(); wingL.position.set(-0.15, 0.42, -0.20);
+const wingL = new THREE.Group(); wingL.position.set(-0.15*G, 0.42*G, -0.20*G);
 wingL.add(wingMesh(-1)); wingL.rotation.z = -0.22; wingL.userData.base = -0.22; body.add(wingL);
-const wingR = new THREE.Group(); wingR.position.set(0.15, 0.42, -0.20);
+const wingR = new THREE.Group(); wingR.position.set(0.15*G, 0.42*G, -0.20*G);
 wingR.add(wingMesh(1)); wingR.rotation.z = 0.22; wingR.userData.base = 0.22; body.add(wingR);
 wingL.scale.setScalar(cfg.wingSize); wingR.scale.setScalar(cfg.wingSize);
 
@@ -4877,19 +4969,21 @@ return new THREE.Mesh(ModelKit.mergePainted(parts), paintMat);
 }
 /* 尾根：原位（z=-0.21）底盘与躯干后表面只是相切——整组内嵌 0.055 扎进髋部，
 再加尾根丘包覆，根部成一体（总尾长随之短 0.055，垂地余量复核见探针） */
-const tail1 = new THREE.Group(); tail1.position.set(0, -0.04, -0.155);
-tail1.add(tailSeg(0.082, 0.105, 0.32, 0.055, 0.13, 0.084, true)); tail1.userData.droop = -0.22; body.add(tail1);
-const tail2 = new THREE.Group(); tail2.position.set(0, 0, -0.32);
-tail2.add(tailSeg(0.06, 0.082, 0.28, 0.045, 0.11, 0.062, false)); tail2.userData.droop = -0.14; tail1.add(tail2);
-const tail3 = new THREE.Group(); tail3.position.set(0, 0, -0.28);
+/* #52：每节节长在等比放大之外再乘 GR.tail 额外生长（节长参数与下一节的
+   枢轴位置同乘，关节包覆球仍套住下一节根部，节间衔接关系不变） */
+const tail1 = new THREE.Group(); tail1.position.set(0, -0.04*G, -0.155*G);
+tail1.add(tailSeg(0.082, 0.105, 0.32*GR.tail, 0.055, 0.13, 0.084, true)); tail1.userData.droop = -0.22; body.add(tail1);
+const tail2 = new THREE.Group(); tail2.position.set(0, 0, -0.32*G*GR.tail);
+tail2.add(tailSeg(0.06, 0.082, 0.28*GR.tail, 0.045, 0.11, 0.062, false)); tail2.userData.droop = -0.14; tail1.add(tail2);
+const tail3 = new THREE.Group(); tail3.position.set(0, 0, -0.28*G*GR.tail);
 /* 尾巴尖变体：leaf = 定型版竖扁叶尖；ball = 圆球尾尖；spike = 细长尖刺 */
-const tipParts = [ dgPart(new THREE.CylinderGeometry(0.038, 0.06, 0.24, 10), BODY, 0, 0, -0.12, {rx:-Math.PI/2})];
+const tipParts = [ dgPart(new THREE.CylinderGeometry(0.038, 0.06, 0.24*GR.tail, 10), BODY, 0, 0, -0.12*GR.tail, {rx:-Math.PI/2})];
 if(cfg.tailTip === 'ball')
-tipParts.push(dgPart(new THREE.SphereGeometry(0.105, 12, 9), CORAL, 0, 0.01, -0.27));
+tipParts.push(dgPart(new THREE.SphereGeometry(0.105, 12, 9), CORAL, 0, 0.01, -0.27*GR.tail));
 else if(cfg.tailTip === 'spike')
-tipParts.push(dgPart(new THREE.ConeGeometry(0.075, 0.44, 7), CORAL, 0, 0.01, -0.42, {rx:-Math.PI/2, s:[0.4, 1, 1]}));
+tipParts.push(dgPart(new THREE.ConeGeometry(0.075, 0.44, 7), CORAL, 0, 0.01, -0.42*GR.tail, {rx:-Math.PI/2, s:[0.4, 1, 1]}));
 else
-tipParts.push(dgPart(new THREE.ConeGeometry(0.115, 0.30, 7), CORAL, 0, 0.02, -0.335, {rx:-Math.PI/2, s:[0.35, 1, 1]}));
+tipParts.push(dgPart(new THREE.ConeGeometry(0.115, 0.30, 7), CORAL, 0, 0.02, -0.335*GR.tail, {rx:-Math.PI/2, s:[0.35, 1, 1]}));
 tail3.add(new THREE.Mesh(ModelKit.mergePainted(tipParts), paintMat));
 tail3.userData.droop = -0.06; tail2.add(tail3);
 
@@ -4899,8 +4993,8 @@ tail3.userData.droop = -0.06; tail2.add(tail3);
 帽子/蝴蝶结/眼镜挂 head 组（一人称藏头时随头一起藏，合乎实情）。 */
 const accParts = {};
 if(cfg.acc.scarf){
-const flap = new THREE.SphereGeometry(0.09, 10, 8);
-flap.scale(0.48, 0.9, 0.17); flap.translate(0.085, 0.29, 0.26);
+const flap = new THREE.SphereGeometry(0.09*G, 10, 8);
+flap.scale(0.48, 0.9, 0.17); flap.translate(0.085*G, 0.29*G, 0.26*G);
 accParts.scarf = new THREE.Mesh(ModelKit.mergePainted([
 /* 环抱脖颈基座一圈：内缘整圈咬进颈球/基座里 */
 dgRing(0.185, 0.034, 1, 1, 0xd84a35, 0, 0.505, 0.005, -0.20),
@@ -4951,8 +5045,12 @@ dgPart(new THREE.CylinderGeometry(0.011, 0.011, 0.27, 6), 0x2b2320, 0.238, 0.045
 head.add(accParts.glasses);
 }
 
+drgGrowK = 1;   // 本只建完复位，别污染之后任何 dgPart 调用
 return { group: root, parts: {
-body: body, bodyBaseY: 0.55, lie: lie, head: head, eyes: eyeMesh, finL: finL, finR: finR,
+body: body, bodyBaseY: 0.55*G, lie: lie, head: head, eyes: eyeMesh, finL: finL, finR: finR,
+/* #52：动画层的几何量接入点——步态起伏、睡姿支点与手臂枢轴基准都按本档
+   系数取（dragonAnimate 读），角度量（摆角/滚转角）与尺寸无关不缩放 */
+grow: G, armBase: {x:0.345*G, y:0.44*G, z:0.03*G, inX:0.055*G, inZ:0.10*G},
 armL: armL, armR: armR, legL: legL, legR: legR,
 wingL: wingL, wingR: wingR,
 tail: [tail1, tail2, tail3],
@@ -4992,8 +5090,8 @@ function dragonWalkTo(a, tx, tz, speed, dt){
         const nx = p.x + tr[0], nz = p.z + tr[1];
         if(Math.hypot(nx, nz) > 58) continue;          // 世界边界
         // #40：龙在室内时改走房间口径（边界+家具避让），脚下高度是室内地板
-        if(window.__roomDragon ? !Interior.walkableWorld(nx, nz) : !WalkMap.isWalkable(nx, nz)) continue;
-        p.x = nx; p.z = nz; p.y = window.__roomDragon ? Interior.floorWorldY() : terrainH(nx, nz);
+        if(window.__roomDragon ? !Interior.walkableWorld(nx, nz) : !WalkMap.charWalkable(nx, nz)) continue;
+        p.x = nx; p.z = nz; p.y = window.__roomDragon ? Interior.floorWorldY() : Season.floorY(nx, nz);
         dragonFace(a, Math.atan2(ux, uz), dt);
         return true;
     }
@@ -5030,7 +5128,7 @@ function dragonAnimate(a, dt, t){
     // 双足步态：双腿交替前后摆 + 双臂与同侧腿反向摆 + 身体起伏/侧倾/微微前倾
     a.walkPhase += dt * 4.8 * a.moveAmt;
     const wp = a.walkPhase;
-    P.body.position.y = P.bodyBaseY + Math.abs(Math.sin(wp))*0.05*moving + Math.sin(t*0.9)*0.006*(1 - pose);
+    P.body.position.y = P.bodyBaseY + Math.abs(Math.sin(wp))*0.05*P.grow*moving + Math.sin(t*0.9)*0.006*(1 - pose);
     P.body.rotation.z = Math.sin(wp)*0.05*moving;
     P.body.rotation.x = 0.07*moving;
     const legSw = 0.62*moving, armSw = 0.50*moving;
@@ -5042,8 +5140,9 @@ function dragonAnimate(a, dt, t){
     P.armR.rotation.x = Math.sin(wp)*armSw - pose*0.55;
     P.armL.rotation.z = P.armL.userData.baseZ + pose*0.8;   // 睡姿双手再向内收：倒下侧的手落在胸前地面上
     P.armR.rotation.z = P.armR.userData.baseZ - pose*0.8;
-    P.armL.position.set(-0.345 + pose*0.055, 0.44, 0.03 + pose*0.10);  // 睡姿手臂枢轴内收+前移（胳膊收到胸前，
-    P.armR.position.set(0.345 - pose*0.055, 0.44, 0.03 + pose*0.10);   // 肩头不再是侧躺时唯一支地凸点）
+    const AB = P.armBase;   // #52：枢轴基准随成长档等比（数值与建模时 arm 组 position 同源）
+    P.armL.position.set(-AB.x + pose*AB.inX, AB.y, AB.z + pose*AB.inZ);  // 睡姿手臂枢轴内收+前移（胳膊收到胸前，
+    P.armR.position.set(AB.x - pose*AB.inX, AB.y, AB.z + pose*AB.inZ);   // 肩头不再是侧躺时唯一支地凸点）
     // 头：睡着垂头并向倒下侧歪头枕地；醒着只留呼吸浮动（张望在下方单独处理）
     P.head.rotation.x = pose*0.30 + Math.sin(t*0.7)*0.03*(1 - pose);
     P.head.rotation.z = pose*0.18;
@@ -5086,13 +5185,14 @@ function dragonAnimate(a, dt, t){
     P.lie.rotation.z = th;
     P.lie.rotation.x = pose * 0.10;
     const cx = Math.cos(th), sx = Math.sin(th);
+    const pvx = DRG_LIE_PIVOT.x*P.grow, pvy = DRG_LIE_PIVOT.y*P.grow;   // #52：支点随尺寸等比
     P.lie.position.set(
-        DRG_LIE_PIVOT.x - (DRG_LIE_PIVOT.x*cx - DRG_LIE_PIVOT.y*sx),
-        DRG_LIE_PIVOT.y - (DRG_LIE_PIVOT.x*sx + DRG_LIE_PIVOT.y*cx) - pose*DRG_LIE_SINK,
+        pvx - (pvx*cx - pvy*sx),
+        pvy - (pvx*sx + pvy*cx) - pose*DRG_LIE_SINK,
         0);
     /* 互动叠加（#16/#17）：在既有动画全部算完之后加算，只用已被关节验收过的
        量程（垂头 ≤ 睡姿的 0.30、摆臂/转身走独立枢轴），不新增任何关节位移。
-       手势由 a.gesture 驱动（pat/wave/spin），啃食由 state==='eat' 驱动。 */
+       手势由 a.gesture 驱动（pat/wave/spin＋#52 的 highfive/bow），啃食由 state==='eat' 驱动。 */
     if(a.gesture){
         const g = a.gesture;
         g.t += dt;
@@ -5105,7 +5205,23 @@ function dragonAnimate(a, dt, t){
         } else if(g.kind === 'wave'){
             P.armR.rotation.z = P.armR.userData.baseZ + 2.05*genv;  // 右臂抬到头侧（肩关节球原地转，不脱窝）
             P.armR.rotation.x += Math.sin(t*17)*0.28*genv;          // 小幅摆手
-            P.lie.position.y += 0.12*Math.sin(gp*Math.PI);          // 顺带蹦一下（整组升降，脚不穿地）
+            P.lie.position.y += 0.12*P.grow*Math.sin(gp*Math.PI);   // 顺带蹦一下（整组升降，脚不穿地）
+        } else if(g.kind === 'highfive'){
+            // 击掌（#52 少年档解锁）：右臂抬到身前上方伸出去等击掌——z 向 1.55
+            // 小于 wave 的 2.05、x 向前伸 0.85 都在肩关节球原地转的已验量程内
+            P.armR.rotation.z = P.armR.userData.baseZ + 1.55*genv;
+            P.armR.rotation.x += -0.85*genv;
+            P.lie.position.y += 0.05*P.grow*Math.sin(gp*Math.PI);   // 垫脚够一下
+            if(gp > 0.45 && !g._h2){ g._h2 = 1; spawnHearts(5); }
+        } else if(g.kind === 'bow'){
+            // 作揖（#52 青年档解锁）：低头 0.28（睡姿垂头 0.30 量程内）＋上身
+            // 前倾＋双臂向前向内抱合成拳——双臂 z 向收拢 0.32 远小于睡姿 0.8
+            P.head.rotation.x += 0.28*genv;
+            P.body.rotation.x += 0.20*genv;
+            P.armL.rotation.x += -0.80*genv;
+            P.armR.rotation.x += -0.80*genv;
+            P.armL.rotation.z = P.armL.userData.baseZ + 0.32*genv;
+            P.armR.rotation.z = P.armR.userData.baseZ - 0.32*genv;
         } else if(g.kind === 'spin'){
             const ge = gp < .5 ? 2*gp*gp : 1 - Math.pow(-2*gp + 2, 2)/2;
             P.lie.rotation.y = -Math.PI*2*ge;                       // 整组绕自身竖轴转一圈，不动 group 朝向状态
@@ -5130,7 +5246,7 @@ function dragonAnimate(a, dt, t){
         P.head.scale.set(1, 1, 1);
     }
     if(happyK && moving < 0.3 && pose < 0.5)
-        P.body.position.y += Math.abs(Math.sin(t*5.2))*0.02;   // 开心时原地小蹦跶（只抬 body 层，同呼吸浮动一处）
+        P.body.position.y += Math.abs(Math.sin(t*5.2))*0.02*P.grow;   // 开心时原地小蹦跶（只抬 body 层，同呼吸浮动一处）
     // 待机转头张望（玩家操控时由相机接管头部，见操控节）；间隔随性格（#41）
     if(a.mode !== 'player'){
         a.lookYawT -= dt;
@@ -5759,8 +5875,18 @@ function dragonBusy(){
     const s=dragonAgent.state;
     return s==='play' || s==='eatGo' || s==='eat';
 }
+/* 手势时长表（#52 补 highfive/bow 两档成长解锁动作） */
+function drgGestureDur(kind){
+    return kind==='spin' ? 1.1 : kind==='pat' ? 1.8 :
+           kind==='bow' ? 1.9 : kind==='highfive' ? 1.4 : 1.6;
+}
 function dragonGesture(kind){
     const a=dragonAgent; if(!a) return;
+    // #52：成长解锁校验——击掌要少年档、作揖要青年档（菜单里未解锁时按钮
+    // 本就禁用，这里是第二道闸：庆祝自动触发只会用已解锁的新动作）
+    const gw = dragonCfg.grow || {days:1, stage:0};
+    if(kind==='highfive' && gw.stage < 1){ showHuntToast('🔒 击掌是少年龙的本事——再陪它 ' + (DRG_GROW_STAGE_DAYS[1] - gw.days) + ' 天吧'); return; }
+    if(kind==='bow' && gw.stage < 2){ showHuntToast('🔒 作揖是青年龙的礼数——再陪它 ' + (DRG_GROW_STAGE_DAYS[2] - gw.days) + ' 天吧'); return; }
     if(a.mode==='player'){
         // 接管中：移动输入优先——正在动（按键/摇杆/步态未停）就不起手势
         const moving = a.moveAmt>0.25 || DragonCtl.keys.size>0 ||
@@ -5768,7 +5894,7 @@ function dragonGesture(kind){
         if(moving){ showHuntToast('🏃 移动中呢，先停下来再和它玩'); return; }
         if(a.gesture) return;
         a.gesture={kind:kind, t:0};
-        a.gestureDur = kind==='spin' ? 1.1 : (kind==='pat' ? 1.8 : 1.6);
+        a.gestureDur = drgGestureDur(kind);
         if(kind==='pat') spawnHearts(9);
         hideDragonMenu();
         return;
@@ -5777,7 +5903,7 @@ function dragonGesture(kind){
     if(dragonBusy()) return;
     a.returnState = (a.state==='follow') ? 'follow' : 'idle';
     a.gesture={kind:kind, t:0};
-    a.gestureDur = kind==='spin' ? 1.1 : (kind==='pat' ? 1.8 : 1.6);
+    a.gestureDur = drgGestureDur(kind);
     if(kind==='pat') spawnHearts(9);
     hideDragonMenu();
     AgentKit.setState(a, 'play');
@@ -5806,8 +5932,17 @@ function refreshDragonMenu(){
     const fp=document.getElementById('dmFeedP'), fc=document.getElementById('dmFeedC');
     if(fp){ fp.textContent='🎃 喂南瓜 ×'+b.pumpkin; fp.disabled=b.pumpkin<=0; }
     if(fc){ fc.textContent='🌽 喂玉米 ×'+b.corn; fc.disabled=b.corn<=0; }
+    // #52：成长解锁的两个动作——没长到就上锁并写明还差几天
+    const gw=dragonCfg.grow || {days:1, stage:0};
+    const hf=document.getElementById('dmHighfive'), bw=document.getElementById('dmBow');
+    if(hf){ hf.disabled=gw.stage<1; hf.textContent=gw.stage<1 ? '🔒 击掌' : '🤝 击掌'; }
+    if(bw){ bw.disabled=gw.stage<2; bw.textContent=gw.stage<2 ? '🔒 作揖' : '🙇 作揖'; }
     const hint=document.getElementById('dmHint');
-    if(hint) hint.textContent='已喂 '+b.fed+' 次 · 喂饱后它会跟着你玩一阵';
+    if(hint){
+        let h='已喂 '+b.fed+' 次 · 喂饱后它会跟着你玩一阵';
+        if(gw.stage<2) h+=' · 🌱 还差 '+(DRG_GROW_STAGE_DAYS[gw.stage+1]-gw.days)+' 天长成'+DRG_GROWTH[gw.stage+1].label;
+        hint.textContent=h;
+    }
 }
 function hideDragonMenu(){
     const m=document.getElementById('dragonMenu');
@@ -5850,6 +5985,8 @@ function setupDragonInteract(){
     document.getElementById('dmPat').addEventListener('click', ()=>dragonGesture('pat'));
     document.getElementById('dmWave').addEventListener('click', ()=>dragonGesture('wave'));
     document.getElementById('dmSpin').addEventListener('click', ()=>dragonGesture('spin'));
+    document.getElementById('dmHighfive').addEventListener('click', ()=>dragonGesture('highfive'));
+    document.getElementById('dmBow').addEventListener('click', ()=>dragonGesture('bow'));
     document.getElementById('dmFeedP').addEventListener('click', ()=>dragonFeed('pumpkin'));
     document.getElementById('dmFeedC').addEventListener('click', ()=>dragonFeed('corn'));
     document.getElementById('dmClose').addEventListener('click', hideDragonMenu);
@@ -5890,6 +6027,14 @@ function dgOptRow(id, opts, get, set){
 }
 function refreshDragonPanel(){
     const c = dragonCfg;
+    // #52：成长进度（只读）——当前阶段、已陪伴天数、距下一档还差几天
+    const grEl = document.getElementById('dgGrowth');
+    if(grEl){
+        const gw = c.grow || {days:1, stage:0};
+        grEl.textContent = '🌱 现在是' + DRG_GROWTH[gw.stage].label + ' · 已陪伴 ' + gw.days + ' 天' +
+            (gw.stage < 2 ? ' · 再陪 ' + (DRG_GROW_STAGE_DAYS[gw.stage + 1] - gw.days) + ' 天长成' + DRG_GROWTH[gw.stage + 1].label
+                          : ' · 已经长大啦，会一直陪着你');
+    }
     const nameEl = document.getElementById('dgName');
     if(nameEl && document.activeElement !== nameEl) nameEl.value = c.name;
     dgOptRow('dgGender', [{v:'male', label:'♂ 他'}, {v:'female', label:'♀ 她'}],
@@ -5984,10 +6129,46 @@ function setupDragonCustom(){
     });
     document.getElementById('dgCall').addEventListener('click', () => { audioEnsure(); dragonCall(); });
     document.getElementById('dgReset').addEventListener('click', () => {
+        const keepGrow = dragonCfg.grow;   // #52：恢复默认只清外观/性格，成长是陪伴记录，不清
         dragonCfg = JSON.parse(JSON.stringify(DRG_DEFAULT_CFG));
+        if(keepGrow){ dragonCfg.grow = keepGrow; dragonCfg.stage = keepGrow.stage; }
         applyDragonCfg(true); refreshDragonPanel();
     });
     dragonRefreshLabels();
+}
+
+/* ---------- 成长仪式与大事记（Issue #52） ----------
+   升档当天第一次进世界：弹一句提示＋龙用刚学会的新动作庆祝一次，并把
+   seen 记上（同一档只庆祝一次）。成长条目进世界大事记：升档事件存在
+   ct2_dragon 的 grow.events 里，进屋大事记板渲染时与静态条目合并——
+   静态条目的灌入口径：#24 的 CHRONICLE 数据进 window.__chronicleBase，
+   本函数统一灌入（基线条目在前、成长条目在后），两边互不覆盖；#24 未灌入
+   时大事记板就只有成长条目（没有成长事件时为空数组，与空态一致）。 */
+function dragonGrowthChronicleItems(){
+    const g = dragonCfg.grow;
+    if(!g || !Array.isArray(g.events)) return [];
+    return g.events.map(e => ({date:e.d, text:'🐉 ' + dragonCfg.name + '长成了' + DRG_GROWTH[e.s].label}));
+}
+function applyGrowthChronicle(){
+    if(typeof Interior === 'undefined' || !Interior.setChronicle) return;
+    const base = window.__chronicleBase || [];
+    Interior.setChronicle(base.concat(dragonGrowthChronicleItems()).slice(-6));   // 板面口径与 #24 一致：合并后仍只挂最近 6 件
+}
+function setupDragonGrowth(){
+    applyGrowthChronicle();
+    const g = dragonCfg.grow;
+    if(!g || g.stage <= g.seen) return;
+    setTimeout(() => {
+        const st = g.stage;
+        showHuntToast('🎉 ' + dragonCfg.name + '长大啦——现在是' + DRG_GROWTH[st].label + '！' +
+            (st === 1 ? '新本事：🤝 击掌（互动菜单里）' : '新礼数：🙇 作揖（互动菜单里）'));
+        g.seen = st; dragonSaveCfg();
+        applyGrowthChronicle();
+        // 用新学会的动作庆祝；睡着或被接管时不硬打断，只留提示与记录
+        if(dragonAgent && dragonAgent.mode !== 'player' &&
+           dragonAgent.state !== 'sleep' && dragonAgent.state !== 'sleepGo')
+            dragonGesture(st === 2 ? 'bow' : 'highfive');
+    }, 2600);
 }
 
 /* ==================== 天气系统 ==================== */
@@ -6201,6 +6382,7 @@ function addRain(){
         color:0xaaccff,size:0.16,transparent:true,opacity:0.55}));
     rainPoints.userData.vel=vel;
     scene.add(rainPoints);
+    if(typeof Season!=='undefined') Season.stylePrecip();   // 冬季生成即按雪样式（#21）
     rainF=0;
 }
 
@@ -6215,7 +6397,8 @@ const Env = {
     windK: 1,                          // 风力倍率（由天气决定）
     smokeK: 1,                         // 炊烟横移倍率（由天气决定）
     rainK: 0,                          // 雨强 0~1：镜像平滑后的 rainF
-    snowK: 0,                          // 雪强 0~1：冬季预留，现版无雪粒子（恒 0）
+    snowK: 0,                          // 雪强 0~1：冬季雨天即下雪（#21 季节层接入，见 refresh）
+    season: 'summer',                  // 当前季节名（#21）：由 Season 每帧镜像进来
     waterFlow: 0.006,                  // 水纹流动速度（每秒 offset 增量）
     bobFreq: 1.2, bobAmp: 0.015,       // 水面浮沉频率/幅度
     rainSlant: 0.06,                   // 雨丝每帧横移量（斜落）
@@ -6224,6 +6407,9 @@ const Env = {
         Env.windK = CONFIG.windByMode[mode] || 1;
         Env.smokeK = CONFIG.smokeByMode[mode] || 1;
         Env.rainK = rainF;
+        // 季节接入点（#21）：冬季的雨按雪处理——降水样式/落速读 snowK 分支
+        Env.season = (typeof Season !== 'undefined') ? Season.name : 'summer';
+        Env.snowK = (Env.season === 'winter' && mode === 'rain') ? rainF : 0;
     },
     /* 风摆：正弦/余弦两式，(x,z) 处在 t 时刻的风摆量（已含风力倍率） */
     sway(t, x, z, freq, phase){
@@ -6231,6 +6417,368 @@ const Env = {
     },
     swayC(t, x, z, freq, phase){
         return Math.cos(t * freq + phase + (x * Env.windDirX + z * Env.windDirZ) * 0.12) * Env.windK;
+    }
+};
+
+/* ==================== 季节系统（Issue #21 · v4.1 生态萌芽） ====================
+   在天气系统之上再扩一层季节参数（Issue 原话：「春开花、夏暴雨、秋叶变色、
+   冬塘结冰」）。要点：
+   - 定季：只认真实日期（与 GClock 同源的日历口径），不落盘、不新增存储键。
+     覆盖优先级：URL 后门 ?season=spring|summer|autumn|winter ＞ 齿轮面板手动
+     切换（仅本次会话）＞ 真实日期。后门与手动都只改本机本次显示。
+   - 视觉：全部走既有 Env/材质参数——地面贴图（冬季换雪原贴图）与色调、
+     树冠/草叶材质色、湖水色倍率（Season.waterMul，animate 池塘行每帧相乘，
+     夏季 =1 保持基线）、草色斑块透明度；季节物件（湖冰、树冠/屋顶积雪、
+     春花点、秋落叶）只在各自季节生成与显示。切换沿用 2.6 秒 smoothstep
+     补间（与天气过渡同一思路），不硬切。
+   - 天气衔接：天气系统照常；冬季的「雨天」按雪处理——Env.refresh 写
+     Env.season/Env.snowK，降水落速放慢、粒子改白色大颗粒（stylePrecip）。
+   - 冰面行走：冬季 Season.frozen 为真时，WalkMap.charWalkable 放行湖冰，
+     龙的落脚高度走 Season.floorY（冰面高）；散布选点口径不随季节变，
+     世界布局指纹不动。
+   - 农场：成熟走 GClock「新的一天」事件结算，没有生长速率参数可乘；
+     季节不改种田结算口径（硬改会动存档语义，本件不动，接入点即此说明）。
+   - 河灯改冰灯：Issue 里标注「另议」，本件不做。 */
+const SEASON_ORDER = ['spring','summer','autumn','winter'];
+const SEASON_BY_MONTH = ['winter','winter','spring','spring','spring','summer',
+    'summer','summer','autumn','autumn','autumn','winter'];
+/* 每季参数：ground 地面色（十六进制，夏季白=基线）；leaf/needle/grass 是
+   乘在材质基线色上的线性倍率；water 是湖水色倍率（夏季全 1）；map 地面贴图 */
+const SEASON_META = {
+    spring:{ label:'🌸 春', hint:'🌸 春天来了，花带开了新花，桦树抽了新叶',
+        ground:0xdff2c8, map:'grass', leaf:[1.20,1.12,0.70], needle:[1.05,1.08,0.90],
+        grass:[1.08,1.06,0.78], water:[0.94,1.03,0.95] },
+    summer:{ label:'☀️ 夏', hint:'☀️ 夏天来了，草木浓绿，湖水正蓝',
+        ground:0xffffff, map:'grass', leaf:[1,1,1], needle:[1,1,1],
+        grass:[1,1,1], water:[1,1,1] },
+    autumn:{ label:'🍂 秋', hint:'🍂 秋天来了，树叶变金，落叶飘起来了',
+        ground:0xf0cd85, map:'grass', leaf:[2.60,0.42,0.10], needle:[1.30,1.00,0.55],
+        grass:[1.40,1.05,0.45], water:[1.00,0.99,0.95] },
+    winter:{ label:'❄️ 冬', hint:'❄️ 冬天来了，湖面结冰，可以踩着冰过湖啦',
+        ground:0xe8f0f7, map:'snow', leaf:[0.50,0.44,0.38], needle:[0.75,0.85,1.00],
+        grass:[0.85,0.92,1.00], water:[0.88,0.96,1.08] }
+};
+/* 冬季地面：与 grassTexture 同做法的雪原噪波贴图（白噪点＋柔和晕染） */
+function snowTexture(){
+    const c=makeCanvas(512,512), g=c.getContext('2d');
+    g.fillStyle='#e9eff4'; g.fillRect(0,0,512,512);
+    for(let i=0;i<15000;i++){
+        const x=Math.random()*512, y=Math.random()*512, l=Math.random();
+        g.fillStyle = l<0.4?'#dde6ee':l<0.7?'#f4f8fb':'#ffffff';
+        g.fillRect(x,y,2+(Math.random()*3|0),1);
+    }
+    g.fillStyle='rgba(190,205,225,0.10)';
+    for(let i=0;i<2200;i++) g.fillRect(Math.random()*512,Math.random()*512,1.6,1.6);
+    for(let i=0;i<22;i++){
+        const hx=Math.random()*512, hy=Math.random()*512, hr=50+Math.random()*95;
+        const hg=g.createRadialGradient(hx,hy,hr*0.15,hx,hy,hr);
+        hg.addColorStop(0, Math.random()<0.5?'rgba(200,214,228,0.12)':'rgba(255,255,255,0.12)');
+        hg.addColorStop(1,'rgba(0,0,0,0)');
+        g.fillStyle=hg; g.beginPath(); g.arc(hx,hy,hr,0,7); g.fill();
+    }
+    return canvasTex(c, 14, 14);
+}
+
+const Season = {
+    name: 'summer',          // 当前生效季节（Env 每帧镜像它）
+    target: 'summer',        // 过渡目标季节
+    frozen: false,           // 冬季且已切到冬季：湖冰可行走
+    waterMul: new THREE.Color(1,1,1),   // 湖水季节色倍率（animate 每帧相乘）
+    _url: null, _manual: null, _trans: null, _from: null, _to: null,
+    _mapName: 'grass', _fade: {ice:0, snow:0, blossom:0, leaves:0, patch:1},
+    byMonth(m){ return SEASON_BY_MONTH[m]; },
+    ofDate(d){ return SEASON_BY_MONTH[d.getMonth()]; },
+    label(){ return SEASON_META[this.name].label; },
+    /* 角色落脚高度：冰封时踩冰面，其余时候贴地形 */
+    floorY(x, z){
+        if(this.frozen && WalkMap.iceAt(x, z)){
+            if(Math.hypot(x-RIVER_P2.x, z-RIVER_P2.z) < 1.4) return terrainH(x, z) + 0.085;
+            return 0.085;
+        }
+        return terrainH(x, z);
+    },
+    /* 冬季降水按雪样式：白色、大颗粒；其余季节恢复雨样式 */
+    stylePrecip(){
+        if(!rainPoints) return;
+        const w = this.name === 'winter';
+        rainPoints.material.color.set(w ? 0xffffff : 0xaaccff);
+        rainPoints.material.size = w ? 0.30 : 0.16;
+    },
+    init(){
+        const q = ((location.search || '').match(/[?&]season=([a-z]+)/) || [])[1];
+        this._url = SEASON_ORDER.indexOf(q) >= 0 ? q : null;
+        this.name = this._url || this.ofDate(new Date());
+        this.target = this.name;
+        this.frozen = this.name === 'winter';
+        // 基线色在 linearizeMaterials 之后抓：季节目标 = 基线 × 季节倍率
+        this._base = {
+            leafA: LEAF_A.color.clone(), leafB: LEAF_B.color.clone(),
+            needleA: NEEDLE_A.color.clone(), needleB: NEEDLE_B.color.clone(),
+            grass: (typeof grassIM !== 'undefined' && grassIM) ? grassIM.material.color.clone() : null,
+            weed: (typeof weedIM !== 'undefined' && weedIM) ? weedIM.material.color.clone() : null
+        };
+        this._grassTex = window.__terrain ? window.__terrain.material.map : null;
+        this._snowTex = null;
+        this.build();
+        const t = this._target(this.name);
+        this._apply(t, t, 1);
+        this.buildPanel();
+        this.stylePrecip();
+        const hint = SEASON_META[this.name].hint;
+        setTimeout(()=>{ showHuntToast(hint); }, 1800);
+    },
+    /* 季节物件：只建一次、常驻场景，靠 _fade 决定可见与浓淡（切季零重建） */
+    build(){
+        // 湖冰：湖面椭圆＋河尾小潭（河身是活水，不冻）——1 个 mesh
+        const lake = new THREE.CircleGeometry(1,44).rotateX(-Math.PI/2);
+        lake.scale(LAKE_RX, 1, LAKE_RZ); lake.translate(LAKE_C.x, 0, LAKE_C.z);
+        const pool = new THREE.CircleGeometry(1.55, 24).rotateX(-Math.PI/2);
+        pool.translate(RIVER_P2.x, terrainH(RIVER_P2.x, RIVER_P2.z) + 0.005, RIVER_P2.z);
+        this._iceMat = new THREE.MeshStandardMaterial({ color:C(0xd8edf8),
+            roughness:0.3, metalness:0.05, transparent:true, opacity:0, depthWrite:false });
+        this._ice = new THREE.Mesh(mergeGeos([lake, pool]), this._iceMat);
+        this._ice.renderOrder = 2; this._ice.visible = false;
+        scene.add(this._ice);
+        // 积雪：一份材质两处用——树冠雪帽（合并 1 mesh）＋屋顶雪层（挂屋身 1 mesh）
+        this._snowMat = new THREE.MeshStandardMaterial({ color:C(0xf6faff),
+            roughness:0.95, transparent:true, opacity:0 });
+        const blobs = [];
+        (window.__treeTops || []).forEach(tp=>{
+            const g = new THREE.SphereGeometry(1, 10, 7);
+            const rad = (tp.isPine ? 0.95 : 1.10) * tp.s;
+            g.scale(rad, rad * 0.34, rad);
+            g.translate(tp.x, tp.y + tp.top * tp.s - rad * 0.22, tp.z);
+            blobs.push(g);
+        });
+        if(blobs.length){
+            this._snowTrees = new THREE.Mesh(mergeGeos(blobs), this._snowMat);
+            this._snowTrees.visible = false;
+            scene.add(this._snowTrees);
+        }
+        if(window.__house){
+            const parts = [];
+            [-1, 1].forEach(sx=>{
+                const b = new THREE.BoxGeometry(4.95, 0.1, 6.6);
+                b.rotateZ(-sx * 0.5697); b.translate(sx * 1.99, 5.33, 0);
+                parts.push(b);
+            });
+            const ridge = new THREE.CylinderGeometry(0.1, 0.1, 6.6, 8);
+            ridge.rotateX(Math.PI/2); ridge.translate(0, 6.56, 0);
+            parts.push(ridge);
+            this._snowRoof = new THREE.Mesh(mergeGeos(parts), this._snowMat);
+            this._snowRoof.visible = false;
+            window.__house.add(this._snowRoof);
+        }
+        // 春花点：花带与桦树林下撒一层粉白花点——1 个 Points
+        {
+            const rnd = mulberry32(20261);
+            const N = IS_MOBILE ? 170 : 260;
+            const pos = new Float32Array(N * 3), col = new Float32Array(N * 3);
+            const cols = [C(0xffc2d9), C(0xfff0f5), C(0xff9ec4), C(0xffffff)];
+            let i = 0;
+            const put = (x, y, z)=>{
+                pos[i*3] = x; pos[i*3+1] = y; pos[i*3+2] = z;
+                const c = cols[(rnd() * cols.length) | 0];
+                col[i*3] = c.r; col[i*3+1] = c.g; col[i*3+2] = c.b; i++;
+            };
+            while(i < N * 0.55){
+                let lx, lz;
+                if(rnd() < 0.7){ lx = -5 + rnd() * 10; lz = 3.1 + rnd() * 1.8; }
+                else { lx = (rnd() < 0.5 ? -1 : 1) * (3.5 + rnd() * 1.4); lz = -3 + rnd() * 6; }
+                const w = houseLocal(lx, lz);
+                put(w[0], terrainH(w[0], w[1]) + 0.05 + rnd() * 0.25, w[1]);
+            }
+            const birch = (window.__treeTops || []).filter(tp=>!tp.isPine);
+            while(i < N && birch.length){
+                const tp = birch[(rnd() * birch.length) | 0];
+                const a = rnd() * 6.28, d = rnd() * 2.3 * tp.s;
+                const x = tp.x + Math.cos(a) * d, z = tp.z + Math.sin(a) * d;
+                put(x, terrainH(x, z) + 0.05, z);
+            }
+            while(i < N){
+                const a = rnd() * 6.28, d = 6 + rnd() * 20;
+                const x = Math.cos(a) * d, z = Math.sin(a) * d;
+                put(x, terrainH(x, z) + 0.05, z);
+            }
+            const g = new THREE.BufferGeometry();
+            g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+            this._blossomMat = new THREE.PointsMaterial({ size:0.17, map:softDiscTexture(),
+                transparent:true, opacity:0, depthWrite:false, vertexColors:true });
+            this._blossom = new THREE.Points(g, this._blossomMat);
+            this._blossom.visible = false;
+            scene.add(this._blossom);
+        }
+        // 秋落叶：单个 Points 池，树冠生成、落地回收（更新在 tick 里）
+        {
+            const N = IS_MOBILE ? 60 : 90;
+            const pos = new Float32Array(N * 3), col = new Float32Array(N * 3);
+            const cols = [C(0xe8912d), C(0xc95d1e), C(0xd9a441), C(0xa83c1c)];
+            this._leafData = [];
+            for(let i = 0; i < N; i++){
+                const s = this._leafSpawn();
+                s.y -= Math.random() * 3;
+                this._leafData.push({ x:s.x, y:s.y, z:s.z,
+                    ph:Math.random() * 6.28, sp:0.45 + Math.random() * 0.4 });
+                pos[i*3] = s.x; pos[i*3+1] = s.y; pos[i*3+2] = s.z;
+                const c = cols[(Math.random() * cols.length) | 0];
+                col[i*3] = c.r; col[i*3+1] = c.g; col[i*3+2] = c.b;
+            }
+            const g = new THREE.BufferGeometry();
+            g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+            this._leavesMat = new THREE.PointsMaterial({ size:0.24, map:softDiscTexture(),
+                transparent:true, opacity:0, depthWrite:false, vertexColors:true });
+            this._leaves = new THREE.Points(g, this._leavesMat);
+            this._leaves.visible = false;
+            scene.add(this._leaves);
+        }
+    },
+    _leafSpawn(){
+        const tops = window.__treeTops || [];
+        if(!tops.length) return { x:0, y:6, z:0 };
+        const r = tops[(Math.random() * tops.length) | 0];
+        const a = Math.random() * 6.28, d = Math.random() * 1.6 * r.s;
+        return { x:r.x + Math.cos(a) * d, y:r.y + r.top * r.s - Math.random() * 0.8,
+            z:r.z + Math.sin(a) * d };
+    },
+    _target(name){
+        const M = SEASON_META[name], B = this._base;
+        const mul = a => new THREE.Color(a[0], a[1], a[2]);
+        return {
+            ground: C(M.ground),
+            leafA: B.leafA.clone().multiply(mul(M.leaf)),
+            leafB: B.leafB.clone().multiply(mul(M.leaf)),
+            needleA: B.needleA.clone().multiply(mul(M.needle)),
+            needleB: B.needleB.clone().multiply(mul(M.needle)),
+            grass: B.grass ? B.grass.clone().multiply(mul(M.grass)) : null,
+            weed: B.weed ? B.weed.clone().multiply(mul(M.grass)) : null,
+            water: mul(M.water), mapName: M.map,
+            ice: name === 'winter' ? 1 : 0, snow: name === 'winter' ? 1 : 0,
+            blossom: name === 'spring' ? 1 : 0, leaves: name === 'autumn' ? 1 : 0,
+            patch: name === 'winter' ? 0 : 1
+        };
+    },
+    _snap(){
+        const T = window.__terrain;
+        return {
+            ground: T ? T.material.color.clone() : new THREE.Color(1, 1, 1),
+            leafA: LEAF_A.color.clone(), leafB: LEAF_B.color.clone(),
+            needleA: NEEDLE_A.color.clone(), needleB: NEEDLE_B.color.clone(),
+            grass: (typeof grassIM !== 'undefined' && grassIM) ? grassIM.material.color.clone() : null,
+            weed: (typeof weedIM !== 'undefined' && weedIM) ? weedIM.material.color.clone() : null,
+            water: this.waterMul.clone(), mapName: this._mapName,
+            ice: this._fade.ice, snow: this._fade.snow, blossom: this._fade.blossom,
+            leaves: this._fade.leaves, patch: this._fade.patch
+        };
+    },
+    _apply(from, to, e){
+        const T = window.__terrain;
+        if(T) T.material.color.copy(from.ground).lerp(to.ground, e);
+        LEAF_A.color.copy(from.leafA).lerp(to.leafA, e);
+        LEAF_B.color.copy(from.leafB).lerp(to.leafB, e);
+        NEEDLE_A.color.copy(from.needleA).lerp(to.needleA, e);
+        NEEDLE_B.color.copy(from.needleB).lerp(to.needleB, e);
+        if(grassIM && from.grass && to.grass) grassIM.material.color.copy(from.grass).lerp(to.grass, e);
+        if(weedIM && from.weed && to.weed) weedIM.material.color.copy(from.weed).lerp(to.weed, e);
+        this.waterMul.copy(from.water).lerp(to.water, e);
+        for(const k of ['ice','snow','blossom','leaves','patch'])
+            this._fade[k] = from[k] + (to[k] - from[k]) * e;
+        // 地面贴图没法淡变：在补间过半时换图，色调补间负责把观感接住
+        if(to.mapName !== this._mapName && e >= 0.5 && T){
+            if(to.mapName === 'snow'){
+                if(!this._snowTex) this._snowTex = snowTexture();
+                T.material.map = this._snowTex;
+            } else T.material.map = this._grassTex;
+            T.material.needsUpdate = true;
+            this._mapName = to.mapName;
+        }
+        this._applyFades();
+    },
+    _applyFades(){
+        const F = this._fade;
+        if(this._ice){ this._iceMat.opacity = 0.92 * F.ice; this._ice.visible = F.ice > 0.02; }
+        if(this._snowMat) this._snowMat.opacity = F.snow;
+        if(this._snowTrees) this._snowTrees.visible = F.snow > 0.02;
+        if(this._snowRoof) this._snowRoof.visible = F.snow > 0.02;
+        if(this._blossom){ this._blossomMat.opacity = 0.95 * F.blossom; this._blossom.visible = F.blossom > 0.02; }
+        if(this._leaves){ this._leavesMat.opacity = F.leaves; this._leaves.visible = F.leaves > 0.02; }
+        const P = window.__grassPatches;
+        if(P){ P.material.opacity = 0.36 * F.patch; P.visible = F.patch > 0.02; }
+    },
+    /* 切季：起一段 2.6 秒补间（与天气过渡同长同曲线） */
+    setTarget(name, announce){
+        if(!SEASON_META[name]) return;
+        if(name === this.target && !this._trans) { this.refreshPanel(); return; }
+        this._from = this._snap();
+        this._to = this._target(name);
+        this.target = name; this.name = name;
+        this.frozen = name === 'winter';
+        this._trans = { t:0, dur:CONFIG.skyTransSec };
+        this.stylePrecip();
+        this.refreshPanel();
+        if(announce) showHuntToast(SEASON_META[name].hint);
+    },
+    pick(key){
+        if(this._url){ showHuntToast('🔒 地址带了 ?season=' + this._url + '，本页以地址为准'); return; }
+        this._manual = (key === 'auto') ? null : key;
+        this.setTarget(this._manual || this.ofDate(new Date()), true);
+    },
+    buildPanel(){
+        const box = document.getElementById('seasonBtns');
+        if(!box) return;
+        this._panelBtns = {};
+        [['auto','🔄 自动'],['spring','🌸 春'],['summer','☀️ 夏'],
+         ['autumn','🍂 秋'],['winter','❄️ 冬']].forEach(([key, lab])=>{
+            const b = document.createElement('button');
+            b.type = 'button'; b.textContent = lab;
+            b.onclick = ()=>this.pick(key);
+            box.appendChild(b);
+            this._panelBtns[key] = b;
+        });
+        this.refreshPanel();
+    },
+    refreshPanel(){
+        if(!this._panelBtns) return;
+        const cur = this._url ? this._url : (this._manual || 'auto');
+        for(const k in this._panelBtns)
+            this._panelBtns[k].classList.toggle('on', k === cur);
+        const tip = document.getElementById('seasonTip');
+        if(tip) tip.textContent = this._url
+            ? '地址带了 ?season=' + this._url + '，本页以地址为准（仅本地预览、不保存）。'
+            : '现在是' + SEASON_META[this.name].label + '天。手动切换只预览本机本次，不保存；刷新后回到真实日期的季节。';
+    },
+    tick(dt, t){
+        if(this._trans){
+            const tr = this._trans;
+            tr.t += dt;
+            const p = Math.min(1, tr.t / tr.dur), e = p * p * (3 - 2 * p);
+            this._apply(this._from, this._to, e);
+            if(p >= 1) this._trans = null;
+        }
+        // 冰面跟随湖面浮沉（冰层几何在世界坐标，靠 mesh.y 同步）
+        if(this._ice && this._ice.visible && pondMesh)
+            this._ice.position.y = pondMesh.position.y + 0.015;
+        // 春花点轻轻浮动，像落在枝头与花带上
+        if(this._blossom && this._blossom.visible)
+            this._blossom.position.y = Math.sin(t * 0.8) * 0.03;
+        // 秋落叶：飘落＋随风，落地回树冠重生
+        if(this._leaves && this._fade.leaves > 0.02){
+            const arr = this._leaves.geometry.attributes.position.array;
+            const D = this._leafData;
+            for(let i = 0; i < D.length; i++){
+                const L = D[i];
+                L.y -= L.sp * dt;
+                L.x += (Math.sin(t * 1.7 + L.ph) * 0.55 + Env.windDirX * 0.35) * dt;
+                L.z += (Math.cos(t * 1.3 + L.ph) * 0.45 + Env.windDirZ * 0.35) * dt;
+                if(L.y < terrainH(L.x, L.z) + 0.05){
+                    const s = this._leafSpawn();
+                    L.x = s.x; L.y = s.y; L.z = s.z;
+                }
+                arr[i*3] = L.x; arr[i*3+1] = L.y; arr[i*3+2] = L.z;
+            }
+            this._leaves.geometry.attributes.position.needsUpdate = true;
+        }
     }
 };
 
@@ -6242,6 +6790,7 @@ function animate(){
 
     lerpWeather(dt);
     Env.refresh();
+    Season.tick(dt, t);
     updateModules(dt, t);
     farmRainCheck();
     updateDragonFx(dt, t);
@@ -6330,6 +6879,7 @@ function animate(){
     if(pondMesh){
         const pk=Math.max(0,Math.min(1,(curSky.sunI-0.3)/1.4));
         pondMesh.material.color.copy(POND_NIGHT).lerp(POND_DAY,pk);
+        pondMesh.material.color.multiply(Season.waterMul);   // 季节水色（#21）：夏季倍率为 1，保持基线
         if(pondMesh.material.map){
             pondMesh.material.map.offset.set((t*Env.waterFlow)%1, Math.sin(t*0.11)*0.02);
         }
@@ -6340,7 +6890,7 @@ function animate(){
         const arr=rainPoints.geometry.attributes.position.array;
         const vel=rainPoints.userData.vel;
         for(let i=0;i<vel.length;i++){
-            arr[i*3+1]-=vel[i]*60*dt;
+            arr[i*3+1]-=vel[i]*60*dt*(Env.snowK>0.02?0.32:1);   // 冬季雨改雪：落速放慢（#21）
             arr[i*3]+=Env.rainSlant;            // 斜落（环境参数）
             if(arr[i*3+1]<0){arr[i*3+1]=55;arr[i*3]=(Math.random()-0.5)*140;arr[i*3+2]=(Math.random()-0.5)*140;}
         }
@@ -6388,6 +6938,7 @@ function updateStatus(){
     frag.appendChild(statusLine(dragonCfg.name + ':',dragonStateLabel()));
     frag.appendChild(statusLine('天气:',
         weatherLabels[weatherIndex]||'-','#ffd97a'));
+    frag.appendChild(statusLine('季节:', Season.label(), '#ffd97a'));
     s.textContent='';
     s.appendChild(frag);
 }
@@ -9529,6 +10080,7 @@ function init(){
     if(_hi>0) setWeather(_hi,true);
     // 所有材质就位后统一转线性空间（sRGB 输出下才不会被冲淡成灰白）
     linearizeMaterials(scene);
+    Season.init();   // 季节层（#21）：材质已线性化后再抓基线色、当季直接生效
     bootTo(94,'收尾…');
     animate();
     document.getElementById('status').textContent='✅ 运行中';
@@ -9793,6 +10345,9 @@ function setupGlobal(){
 
     /* 小龙定制（Issue #41）：入口是底部小龙按钮条里的「🎨 定制小龙」 */
     setupDragonCustom();
+
+    /* 小龙成长（Issue #52）：升档庆祝 + 成长条目并入室内大事记板 */
+    setupDragonGrowth();
 
     /* 资源加载失败降级：脚本/样式/图片 404 时给一句人话，而不是白屏 */
     window.addEventListener('error', function(ev){
