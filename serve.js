@@ -35,6 +35,7 @@ const MIME = {
     '.webp': 'image/webp',
     '.svg': 'image/svg+xml',
     '.ico': 'image/x-icon',
+    '.glb': 'model/gltf-binary',
     '.md': 'text/markdown; charset=utf-8'
 };
 const ALLOWED_EXT = new Set(Object.keys(MIME));
