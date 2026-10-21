@@ -13582,7 +13582,7 @@ function buildExpansion(){
        树干与岩石刷色合并；树冠单独成两件、挂核心同款季节材质
        （松冠 NEEDLE_A、桦冠 LEAF_B），四季染色与核心树林同步 */
     {
-        const geos=[], pineTops=[], birchTops=[];
+        const geos=[], pineTops=[], birchTops=[], pineTrunkGeos=[], outerPineSpots=[];
         let placed=0, guard=0;
         while(placed<118 && guard++<2600){
             const a=rnd()*Math.PI*2, r=80+Math.pow(rnd(),0.8)*122;
@@ -13595,10 +13595,11 @@ function buildExpansion(){
             if(distToRoads(x,z)<3.4) continue;
             const y=outerGroundY(x,z), s=0.95+rnd()*0.9;
             if(rnd()<0.52){   // 松
-                const t1=new THREE.CylinderGeometry(0.09*s,0.14*s,1.3*s,5); t1.translate(x,y+0.65*s,z); geos.push(paintGeo(t1,0x6e5136));
+                const t1=new THREE.CylinderGeometry(0.09*s,0.14*s,1.3*s,5); t1.translate(x,y+0.65*s,z); pineTrunkGeos.push(paintGeo(t1,0x6e5136));
                 const c1=new THREE.ConeGeometry(1.25*s,2.6*s,7); c1.translate(x,y+(1.3+1.3)*s,z); pineTops.push(c1);
                 const c2=new THREE.ConeGeometry(0.85*s,1.9*s,7); c2.translate(x,y+(1.3+2.6)*s,z); pineTops.push(c2);
                 if(window.__treeTops) window.__treeTops.push({x:x, z:z, y:y, s:1, isPine:true, top:5.6*s});
+                outerPineSpots.push({x:x, y:y, z:z, s:s, ry:rnd()*Math.PI*2});   // #87：高模热替换的位置清单（语义仍走 __treeTops）
             } else {          // 桦/阔叶
                 const t1=new THREE.CylinderGeometry(0.1*s,0.15*s,1.9*s,5); t1.translate(x,y+0.95*s,z); geos.push(paintGeo(t1,0xcfc4ae));
                 const b1=new THREE.IcosahedronGeometry(1.35*s,0); b1.translate(x,y+(1.9+1.0)*s,z); birchTops.push(b1);
@@ -13630,6 +13631,19 @@ function buildExpansion(){
         const birchMesh=new THREE.Mesh(mergeGeos(birchTops), LEAF_B);
         birchMesh.castShadow=true;
         scene.add(birchMesh);
+        /* #87 模型管线挂点：外围松干单独成件（与 nature 同材质口径），同冠一起
+           登记给 ModelPipe——高模档就绪后热替换为 GLB 实例，这两件即回落本体；
+           __treeTops 已照旧登记，图鉴定位/小动物停落等交互与存档语义不依赖网格。 */
+        let pineTrunkMesh=null;
+        if(pineTrunkGeos.length){
+            pineTrunkMesh=new THREE.Mesh(mergePaintedGeos(pineTrunkGeos),
+                new THREE.MeshStandardMaterial({vertexColors:true, roughness:1, flatShading:true}));
+            pineTrunkMesh.castShadow=true;
+            pineTrunkMesh.receiveShadow=true;
+            scene.add(pineTrunkMesh);
+        }
+        window.__outerPineSpots=outerPineSpots;
+        window.__outerPineCode={trunk:pineTrunkMesh, crown:pineMesh};
         // 草簇：与核心同款锥簇、实例化撒进新区草甸（牧场/路边加密）
         const tuftParts=[];
         [[0.16,0,0.5,0],[0,0.16,0.62,2.1],[-0.15,-0.1,0.44,4.2]].forEach(tp=>{
@@ -13801,6 +13815,7 @@ function init(){
     // 所有材质就位后统一转线性空间（sRGB 输出下才不会被冲淡成灰白）
     linearizeMaterials(scene);
     Season.init();   // 季节层（#21）：材质已线性化后再抓基线色、当季直接生效
+    if(window.ModelPipe) ModelPipe.boot();   // #87 模型管线：世界建好后按档位热替换高模（失败自动回落代码模型）
     bootTo(94,'收尾…');
     animate();
     document.getElementById('status').textContent='✅ 运行中';
@@ -13816,6 +13831,215 @@ function onResize(){
         renderer.setPixelRatio(dprCur);
 }
 window.addEventListener('orientationchange',()=>setTimeout(onResize,220));
+/* ==================== 模型管线（Issue #87 · v5.0 换轨地基） ====================
+   模型资产总规则（负责人 2026-10-22 定，详见 MODELING.md「模型管线」一节）：
+   - 模型逐步改走外部 GLB 资源（Blender / Tripo 生产），注册表 MODELS 声明式登记；
+     每条资产强制双版本：hi＝PC 高配（高面数＋完整 PBR 贴图组）、
+     lo＝移动精简（减面＋贴图压缩）；贴图组五槽 basecolor/normal/roughness/metalness/ao，
+     本批证明模型用顶点色、五槽留空（null），结构先行。
+   - 设备自动分级选档（判定口径见 autoTier），设置面板手动切档走 __modelTier（#75 接入）；
+     档位只换「长相」：位置、交互与存档语义（如 __treeTops 锚点）照旧由代码登记，不随模型换。
+   - 分批热替换、一次一类：GLB 异步加载成功才换下代码模型；任何失败（该档文件缺失、
+     加载器缺失、网络或解析错误）都自动回落现有代码模型，玩家无感、不白屏。
+   - 单文件版是低模保底轨：file: 协议直接判 lo，且加载器 js/GLTFLoader.js 不随单文件分发，
+     双重保证单文件永远走代码模型、不会被本管线搞坏。 */
+const MODELS = [
+    {
+        id: 'pine_outer',                 // 外围散布松树（#78 外圈那批，挂点 __outerPineSpots）
+        fallback: 'code',
+        versions: {
+            hi: { src: 'assets/models/pine_outer.hi.glb',
+                  textures: { basecolor: null, normal: null, roughness: null, metalness: null, ao: null } },
+            lo: { src: null,              // 移动精简版待产（槽位先行）；lo 档当前回落代码模型
+                  textures: { basecolor: null, normal: null, roughness: null, metalness: null, ao: null } }
+        }
+    }
+];
+
+const ModelPipe = {
+    _booted: false,
+    _tierOverride: null,          // #75 设置面板手动档：'hi' | 'lo' | null＝自动
+    _entries: {},                 // id → { def, state:'code'|'loading'|'glb', group, folMat, syncTimer }
+    progress: { total: 0, loaded: 0 },
+    _progressCbs: [],
+
+    /* 加载进度回调注册（loaded/total＝已登记资产的加载计数）；默认同时汇入
+       开页进度条 bootTo 的 94→100 段，与现有加载流程同一出口。 */
+    onProgress(fn){ if(typeof fn === 'function') this._progressCbs.push(fn); },
+    _emitProgress(){
+        const p = this.progress;
+        this._progressCbs.forEach(fn => { try{ fn(p); }catch(e){} });
+        if(typeof bootTo === 'function' && p.total > 0){
+            try{ bootTo(94 + Math.round(6 * p.loaded / p.total), '高模资源加载中…'); }catch(e){}
+        }
+    },
+
+    /* 设备自动分级（默认档判定口径）：下列任一成立判 lo，否则 hi——
+       ① file: 协议（单文件保底轨 / 本地直开） ② 移动设备 IS_MOBILE
+       ③ 玩家已开「弱网低画质」 ④ 设备内存 <4GB（浏览器肯报时） ⑤ CPU 逻辑核 <4（同上）。
+       只读设备能力，不采集、不上传。 */
+    autoTier(){
+        try{
+            if(typeof location !== 'undefined' && location.protocol === 'file:') return 'lo';
+            if(typeof IS_MOBILE !== 'undefined' && IS_MOBILE) return 'lo';
+            if(typeof lowQuality !== 'undefined' && lowQuality) return 'lo';
+            if(typeof navigator !== 'undefined'){
+                if(navigator.deviceMemory && navigator.deviceMemory < 4) return 'lo';
+                if(navigator.hardwareConcurrency && navigator.hardwareConcurrency < 4) return 'lo';
+            }
+            return 'hi';
+        }catch(e){ return 'lo'; }
+    },
+    tier(){ return this._tierOverride || this.autoTier(); },
+    setTier(mode){                // #75 手动切档：'hi' | 'lo' | null（恢复自动）
+        this._tierOverride = (mode === 'hi' || mode === 'lo') ? mode : null;
+        this.apply();
+    },
+
+    /* GLTFLoader（three r128 官方版，仓库 js/GLTFLoader.js）按需动态同源加载：
+       index.html 静态脚本仍只有 three.min.js 一个；本文件缺失/失败即全线回落代码模型。 */
+    _loaderState: 'idle', _loaderCbs: [],
+    ensureLoader(cb){
+        if(typeof THREE !== 'undefined' && THREE.GLTFLoader){ cb(true); return; }
+        if(this._loaderState === 'loading'){ this._loaderCbs.push(cb); return; }
+        if(this._loaderState === 'failed'){ cb(false); return; }
+        this._loaderState = 'loading';
+        this._loaderCbs.push(cb);
+        const finish = ok => {
+            this._loaderState = ok ? 'ready' : 'failed';
+            const cbs = this._loaderCbs; this._loaderCbs = [];
+            cbs.forEach(f => { try{ f(ok); }catch(e){} });
+        };
+        try{
+            const s = document.createElement('script');
+            s.src = 'js/GLTFLoader.js';
+            s.onload = () => finish(typeof THREE !== 'undefined' && !!THREE.GLTFLoader);
+            s.onerror = () => finish(false);
+            (document.head || document.documentElement).appendChild(s);
+        }catch(e){ finish(false); }
+    },
+
+    boot(){
+        if(this._booted) return;
+        this._booted = true;
+        MODELS.forEach(def => { this._entries[def.id] = { def: def, state: 'code', group: null, folMat: null, syncTimer: 0, loadedSrc: null }; });
+        this.apply();
+    },
+
+    /* 按当前档位对齐全部已登记资产（双版本语义）：当前档 versions[tier].src 有文件
+       → 异步加载并热替换（已加载的正是该文件则直接显示；加载的是另一档文件则先回
+       代码模型再换版加载）；该档无文件 / file: 单文件轨 → 代码模型（fallback 本体）。
+       加载失败置 'code'，下一次 apply（如切档、画质开关、手动重试）会重新尝试。 */
+    apply(){
+        if(!this._booted) return;
+        const t = this.tier();
+        const fileProto = (typeof location !== 'undefined' && location.protocol === 'file:');
+        Object.keys(this._entries).forEach(id => {
+            const en = this._entries[id];
+            const ver = en.def.versions && en.def.versions[t];
+            const want = (!fileProto && ver && ver.src) ? ver.src : null;
+            if(!want){ this._showCode(en); return; }
+            if(en.state === 'glb' && en.loadedSrc === want){ this._showGLB(en); return; }
+            if(en.state === 'glb'){ this._showCode(en); this._load(en, want); return; }
+            if(en.state === 'code'){ this._load(en, want); }
+            /* state==='loading'：落定后由 _load 回调再对齐 */
+        });
+    },
+
+    _load(en, src){
+        en.state = 'loading';
+        this.progress.total += 1; this._emitProgress();
+        this.ensureLoader(ok => {
+            if(!ok){ en.state = 'code'; this.progress.loaded += 1; this._emitProgress(); this._showCode(en); return; }
+            let loader;
+            try{ loader = new THREE.GLTFLoader(); }
+            catch(e){ en.state = 'code'; this.progress.loaded += 1; this._emitProgress(); return; }
+            loader.load(src,
+                gltf => {
+                    this.progress.loaded += 1; this._emitProgress();
+                    try{
+                        if(this._build(en, gltf)){
+                            en.state = 'glb'; en.loadedSrc = src;
+                            this.apply();   // 按当前档位与已加载文件再对齐显隐
+                        }else{ en.state = 'code'; this._showCode(en); }
+                    }catch(e){ en.state = 'code'; this._showCode(en); }
+                },
+                undefined,
+                () => { this.progress.loaded += 1; this._emitProgress(); en.state = 'code'; this._showCode(en); });
+        });
+    },
+
+    /* 本批唯一的替换目标：外围松树。GLB 两件（PineFoliage / PineTrunk）按登记位置实例化，
+       位置/朝向/缩放与代码模型同源（__outerPineSpots），语义锚 __treeTops 不动；
+       后续批次按同一模式在 _build 里按 def.id 增分支。 */
+    _build(en, gltf){
+        if(en.def.id !== 'pine_outer') return false;
+        const spots = window.__outerPineSpots;
+        if(!spots || !spots.length || typeof scene === 'undefined') return false;
+        let folGeo = null, trunkGeo = null;
+        gltf.scene.traverse(o => {
+            if(o.isMesh && o.geometry){
+                if(o.name === 'PineFoliage') folGeo = o.geometry;
+                else if(o.name === 'PineTrunk') trunkGeo = o.geometry;
+            }
+        });
+        if(!folGeo || !trunkGeo) return false;
+        if(en.group){ try{ scene.remove(en.group); }catch(e){} en.group = null; }   // 换版重载时卸下旧组
+        const dummy = new THREE.Object3D();
+        const mk = (geo, mat) => {
+            const im = new THREE.InstancedMesh(geo, mat, spots.length);
+            spots.forEach((sp, i) => {
+                dummy.position.set(sp.x, sp.y, sp.z);
+                dummy.rotation.set(0, sp.ry || 0, 0);
+                dummy.scale.set(sp.s, sp.s, sp.s);
+                dummy.updateMatrix();
+                im.setMatrixAt(i, dummy.matrix);
+            });
+            im.instanceMatrix.needsUpdate = true;
+            im.castShadow = true;
+            im.frustumCulled = false;
+            return im;
+        };
+        // 冠：顶点色是相对变化量，基色与核心松同源 NEEDLE_A；下方定时对齐保证四季染色同步
+        const folMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 });
+        if(typeof NEEDLE_A !== 'undefined') folMat.color.copy(NEEDLE_A.color);
+        const trunkMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 });
+        const trunkIM = mk(trunkGeo, trunkMat);
+        trunkIM.receiveShadow = true;
+        const g = new THREE.Group();
+        g.add(mk(folGeo, folMat));
+        g.add(trunkIM);
+        g.visible = false;            // 显隐由 _showGLB/_showCode 按组统一控制（子网格不再单独隐藏）
+        scene.add(g);
+        en.group = g; en.folMat = folMat;
+        if(!en.syncTimer && typeof NEEDLE_A !== 'undefined'){
+            en.syncTimer = setInterval(() => {
+                if(en.folMat && !en.folMat.color.equals(NEEDLE_A.color)) en.folMat.color.copy(NEEDLE_A.color);
+            }, 400);
+        }
+        return true;
+    },
+
+    /* 显隐切换只动外围松的代码两件与 GLB 实例组，其余世界对象一概不碰 */
+    _showGLB(en){
+        const code = window.__outerPineCode;
+        if(!en.group) return;
+        en.group.visible = true;
+        if(code){ if(code.trunk) code.trunk.visible = false; if(code.crown) code.crown.visible = false; }
+    },
+    _showCode(en){
+        const code = window.__outerPineCode;
+        if(en.group) en.group.visible = false;
+        if(code){ if(code.trunk) code.trunk.visible = true; if(code.crown) code.crown.visible = true; }
+    }
+};
+window.ModelPipe = ModelPipe;
+/* #75 设置面板预留入口：__modelTier('hi'|'lo'|null) 手动切档；__modelProgress() 读加载进度 */
+function __modelTier(mode){ ModelPipe.setTier(mode); }
+function __modelProgress(){ return ModelPipe.progress; }
+window.__modelTier = __modelTier;
+window.__modelProgress = __modelProgress;
+
 /* ---------- 全局部署模块：加载兜底 / 资源降级 / 访问统计 / 分享 / 弱网低画质 / 版本日志 ----------
    这一层和场景功能完全无关，只依赖 DOM，出问题不影响场景渲染。 */
 const VERSIONS = [
@@ -14031,6 +14255,7 @@ function applyLowQuality(){
     }
     if(window.__waterTier) window.__waterTier(lowQuality?'base':'ultra');   // #77 水体双档同步
     if(window.__skyTier) window.__skyTier(lowQuality?'lite':'full');   // #74 天空/山环双档同步
+    if(window.ModelPipe) ModelPipe.apply();   // #87 模型档位随低画质开关重新对齐
     if(!renderer) return;
     if(lowQuality){
         dprCur=1;
