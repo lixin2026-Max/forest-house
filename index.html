@@ -420,7 +420,7 @@
 <div id="ltMask">
     <div id="ltBox" role="dialog" aria-modal="true" aria-labelledby="ltTitle">
         <h4 id="ltTitle">🏮 放一盏河灯</h4>
-        <p class="sub">写一句愿望，它会乘着灯在池塘上慢慢漂走。<br>愿望只停留在这台设备上，不会上传。</p>
+        <p class="sub">写一句愿望，它会乘着灯在湖面上慢慢漂走。<br>愿望只停留在这台设备上，不会上传。</p>
         <input id="ltText" type="text" maxlength="40" placeholder="例如：愿明天顺顺利利">
         <div id="ltRow">
             <button type="button" class="primary" id="ltGo">放下河灯</button>
@@ -441,7 +441,7 @@
         <div class="hrow"><b>敲门</b><span>点小屋的门：先轻敲两下，门会朝外打开透出暖光</span></div>
         <div class="hrow"><b>篝火</b><span>点篝火堆可以点火、再点熄火</span></div>
         <div class="hrow"><b>每日寻宝</b><span>每天藏 5 件小物（橡果、蘑菇、羽毛、松果、彩蛋），走近点中即收集，集齐有祝贺</span></div>
-        <div class="hrow"><b>放河灯</b><span>左下角「🏮 放河灯」，写一句愿望，让它在池塘上漂一会儿</span></div>
+        <div class="hrow"><b>放河灯</b><span>左下角「🏮 放河灯」，写一句愿望，让它在湖上漂一会儿</span></div>
         <div class="hrow"><b>界面隐藏</b><span>顶栏与底栏停手 3 秒会自动隐藏，点屏幕右缘的小圆钮可以唤回</span></div>
         <div class="hrow"><b>更多设置</b><span>右下角齿轮里有功能开关、预设视角、色调与声音</span></div>
         <div id="helpRow">
@@ -516,6 +516,44 @@ let ambient, hemi, sun, sunMesh, moonMesh, starsGroup = null, rainPoints = null;
 let pondMesh = null, houseWindows = [], lampLight = null, fireflies = [];
 const POND_DAY=new THREE.Color(0x3f7fa8).convertSRGBToLinear();
 const POND_NIGHT=new THREE.Color(0x2a4f6e).convertSRGBToLinear();
+/* ---------- 湖与河（Issue #3）：小池塘扩成小湖，再拉一条小河向东南草地 ---------- */
+const LAKE_C={x:23,z:-9.5}, LAKE_RX=8.6, LAKE_RZ=6.0;
+const RIVER_P0={x:28.9,z:-6.1}, RIVER_P1={x:33,z:-1}, RIVER_P2={x:35.5,z:8.5};
+const RIVER_N=16;
+function riverCenter(t){
+    const u=1-t;
+    return [u*u*RIVER_P0.x+2*u*t*RIVER_P1.x+t*t*RIVER_P2.x,
+            u*u*RIVER_P0.z+2*u*t*RIVER_P1.z+t*t*RIVER_P2.z];
+}
+function riverHalfW(t){ return 1.25-0.35*t; }   // 上游宽、下游略窄
+let RIVER_PTS=null;   // 河道中心线采样（建水面与避让共用）
+function buildRiverPts(){
+    RIVER_PTS=[];
+    for(let i=0;i<=RIVER_N;i++){
+        const t=i/RIVER_N, c=riverCenter(t);
+        RIVER_PTS.push({x:c[0],z:c[1],half:riverHalfW(t)});
+    }
+}
+// 到河面的带边距离：<0 表示已经站在河里
+function distToRiver(x,z){
+    if(!RIVER_PTS) buildRiverPts();
+    let best=1e9;
+    for(let i=0;i<RIVER_PTS.length-1;i++){
+        const a=RIVER_PTS[i], b=RIVER_PTS[i+1];
+        const vx=b.x-a.x, vz=b.z-a.z, wx=x-a.x, wz=z-a.z;
+        const L2=vx*vx+vz*vz||1;
+        let t=(wx*vx+wz*vz)/L2; t=Math.max(0,Math.min(1,t));
+        const dd=Math.hypot(wx-vx*t,wz-vz*t)-(a.half+(b.half-a.half)*t);
+        if(dd<best) best=dd;
+    }
+    return best;
+}
+// 统一的水面避让：湖按椭圆、河按中心线，pad 是要再让出的余量；true=干地可放东西
+function waterClear(x,z,pad){
+    const ex=(x-LAKE_C.x)/(LAKE_RX+pad), ez=(z-LAKE_C.z)/(LAKE_RZ+pad);
+    if(ex*ex+ez*ez<1) return false;
+    return distToRiver(x,z)>=pad;
+}
 let bfBodyIM=null, bfWingLIM=null, bfWingRIM=null;
 let beeBodyIM=null, beeStripeIM=null, beeWingLIM=null, beeWingRIM=null;
 let birds = [], butterflies = [], bees = [], squirrels = [], smokePuffs = [];
@@ -889,6 +927,36 @@ function terrainH(x,z){
     const n2=hash2(Math.floor(x/17)+3,Math.floor(z/17)+7)*2-1;
     return (n*0.5+n2*0.9)*flat;
 }
+// 河道缎带：沿中心线采样点铺一条跟地形的带子（高度三点平滑，免折角）。
+// halfPlus 是在河面半宽上再外扩的量（垫底沙带用）；vScale 控制水纹沿程的密度。
+function ribbonGeo(halfPlus,yOff,vScale){
+    if(!RIVER_PTS) buildRiverPts();
+    const pos=[],nor=[],uv=[],idx=[];
+    const ys=RIVER_PTS.map(p=>terrainH(p.x,p.z));
+    const sm=ys.map((y,i)=>{
+        const a=ys[Math.max(0,i-1)], b=ys[Math.min(ys.length-1,i+1)];
+        return (a+y*2+b)/4;
+    });
+    let len=0;
+    RIVER_PTS.forEach((p,i)=>{
+        if(i>0){ const q=RIVER_PTS[i-1]; len+=Math.hypot(p.x-q.x,p.z-q.z); }
+        const qA=RIVER_PTS[Math.max(0,i-1)], qB=RIVER_PTS[Math.min(RIVER_PTS.length-1,i+1)];
+        let tx=qB.x-qA.x, tz=qB.z-qA.z; const L=Math.hypot(tx,tz)||1; tx/=L; tz/=L;
+        const nx=-tz, nz=tx, hw=p.half+halfPlus;
+        // 河头三站把高度向湖面（≈0）融合，免得入水口出现台阶
+        const blend=Math.min(1,i/3), y=sm[i]*blend+yOff;
+        pos.push(p.x+nx*hw,y,p.z+nz*hw, p.x-nx*hw,y,p.z-nx*hw);
+        nor.push(0,1,0, 0,1,0);
+        uv.push(0,len/vScale, 1,len/vScale);
+        if(i>0){ const b=i*2; idx.push(b-2,b,b-1, b-1,b,b+1); }
+    });
+    const g=new THREE.BufferGeometry();
+    g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+    g.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3));
+    g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+    g.setIndex(idx);
+    return g;
+}
 function createTerrain(){
     const geo=new THREE.PlaneGeometry(160,160,72,72);
     geo.rotateX(-Math.PI/2);
@@ -914,28 +982,58 @@ function createTerrain(){
     const slabs=new THREE.Mesh(mergeGeos(slabGeos),stoneMat);
     slabs.receiveShadow=slabs.castShadow=true;
     scene.add(slabs);
-    // 水塘（带程序水纹，贴图偏移在 animate 里缓慢流动）
-    const pg=new THREE.CircleGeometry(4.2,36).rotateX(-Math.PI/2);
-    pondMesh=new THREE.Mesh(pg,new THREE.MeshStandardMaterial({
-        map:waterTexture(),color:0x3f7fa8,roughness:0.12,metalness:0.5,transparent:true,opacity:0.9}));
-    pondMesh.position.set(20,0.06,-12);
+    // 小湖＋小河（Issue #3）：湖面椭圆与河道缎带合并成一个水面 mesh，绘制仍是 1 次；
+    // 水纹贴图在 animate 里统一流动，河道 v 坐标沿程累积，看着像顺流而下
+    if(!RIVER_PTS) buildRiverPts();
+    const lakeGeo=new THREE.CircleGeometry(1,44).rotateX(-Math.PI/2);
+    lakeGeo.scale(LAKE_RX,1,LAKE_RZ); lakeGeo.translate(LAKE_C.x,0,LAKE_C.z);
+    const waterMat=new THREE.MeshStandardMaterial({
+        map:waterTexture(),color:0x3f7fa8,roughness:0.12,metalness:0.5,
+        transparent:true,opacity:0.9,side:THREE.DoubleSide});
+    if(waterMat.map){ waterMat.map.wrapS=waterMat.map.wrapT=THREE.RepeatWrapping; waterMat.map.repeat.set(2,2); }
+    // 河尾收一个小水潭，免得缎带到头戛然而止
+    const poolGeo=new THREE.CircleGeometry(1.7,24).rotateX(-Math.PI/2);
+    poolGeo.translate(RIVER_P2.x,terrainH(RIVER_P2.x,RIVER_P2.z)+0.005,RIVER_P2.z);
+    pondMesh=new THREE.Mesh(mergeGeos([lakeGeo,ribbonGeo(0,0.01,3),poolGeo]),waterMat);
+    pondMesh.position.y=0.06;
+    pondMesh.name='lakeWater';
     scene.add(pondMesh);
-    // 岸边浅色过渡圈：水线不再是一刀切的圆
-    const shore=new THREE.Mesh(new THREE.CircleGeometry(5.15,36).rotateX(-Math.PI/2),
+    // 岸边过渡：湖一圈沙环（径向渐变贴图随椭圆拉伸）＋河道一条沙带垫底，水线不生硬
+    const lakeShoreGeo=new THREE.CircleGeometry(1,44).rotateX(-Math.PI/2);
+    lakeShoreGeo.scale(LAKE_RX*1.23,1,LAKE_RZ*1.23); lakeShoreGeo.translate(LAKE_C.x,0,LAKE_C.z);
+    const poolShoreGeo=new THREE.CircleGeometry(2.4,24).rotateX(-Math.PI/2);
+    poolShoreGeo.translate(RIVER_P2.x,terrainH(RIVER_P2.x,RIVER_P2.z)+0.005,RIVER_P2.z);
+    const shore=new THREE.Mesh(mergeGeos([lakeShoreGeo,poolShoreGeo]),
         new THREE.MeshBasicMaterial({map:shoreTexture(),transparent:true,depthWrite:false}));
-    shore.position.set(20,0.045,-12);
+    shore.position.y=0.045;
     scene.add(shore);
-    // 塘边石头：9 块合并成 1 个 mesh
+    const riverBed=new THREE.Mesh(ribbonGeo(0.55,0.035,3),
+        new THREE.MeshStandardMaterial({color:0xcbb98a,roughness:1,side:THREE.DoubleSide}));
+    riverBed.receiveShadow=true;
+    scene.add(riverBed);
+    // 湖边＋河岸石头：沿湖岸椭圆摆一圈（河口一段留空出水），河边沿岸点缀，合并 1 个 mesh
     const rockMat=new THREE.MeshStandardMaterial({color:0x8a8f94,roughness:1});
     const rockGeos=[];
-    for(let i=0;i<9;i++){
-        const a=i/9*Math.PI*2;
-        const rg=new THREE.DodecahedronGeometry(0.5+Math.random()*0.5,0);
-        rg.rotateX(Math.random()); rg.rotateY(Math.random()); rg.rotateZ(Math.random());
-        rg.translate(20+Math.cos(a)*4.6,0.25,-12+Math.sin(a)*4.6);
+    const rockRnd=mulberry32(20260303);
+    function pushRock(x,z,s){
+        const rg=new THREE.DodecahedronGeometry(s,0);
+        rg.rotateX(rockRnd()*3); rg.rotateY(rockRnd()*3); rg.rotateZ(rockRnd()*3);
+        rg.translate(x,terrainH(x,z)+s*0.45,z);
         rockGeos.push(rg);
     }
-    const rocks=new THREE.Mesh(mergeGeos(rockGeos),rockMat);
+    for(let i=0;i<13;i++){
+        const a=i/13*Math.PI*2+rockRnd()*0.3;
+        if(a>0.3&&a<1.1) continue;   // 河口方向留空
+        pushRock(LAKE_C.x+Math.cos(a)*(LAKE_RX+0.55), LAKE_C.z+Math.sin(a)*(LAKE_RZ+0.55), 0.4+rockRnd()*0.5);
+    }
+    for(let i=0;i<7;i++){
+        const si=2+((rockRnd()*(RIVER_N-3))|0);
+        const p=RIVER_PTS[si], pa=RIVER_PTS[Math.max(0,si-1)], pb=RIVER_PTS[Math.min(RIVER_N,si+1)];
+        let tx=pb.x-pa.x, tz=pb.z-pa.z; const L=Math.hypot(tx,tz)||1; tx/=L; tz/=L;
+        const side=rockRnd()<0.5?-1:1, off=p.half+0.5+rockRnd()*0.3, jit=(rockRnd()-0.5)*0.8;
+        pushRock(p.x-tz*side*off+tx*jit, p.z+tx*side*off+tz*jit, 0.26+rockRnd()*0.34);
+    }
+    const rocks=new THREE.Mesh(mergeGeos(rockGeos),stoneMat);
     rocks.castShadow=rocks.receiveShadow=true;
     scene.add(rocks);
 }
@@ -1165,7 +1263,7 @@ function createTrees(){
     function ok(x,z,minGap){
         if(Math.hypot(x+7,z+4)<9)return false;          // 避开小屋
         if(Math.hypot(x-8,z-6)<13)return false;         // 避开空地
-        if(Math.hypot(x-20,z+12)<7)return false;        // 避开水塘
+        if(!waterClear(x,z,1.2))return false;          // 避开小湖与小河
         for(const p of placed) if(Math.hypot(p[0]-x,p[1]-z)<minGap) return false;
         return true;
     }
@@ -1660,7 +1758,7 @@ function scatterClear(x,z){
     const rx=x-HOUSE_POS.x, rz=z-HOUSE_POS.z;
     const lx=rx*HOUSE_R.x+rz*HOUSE_R.z, lz=rx*HOUSE_F.x+rz*HOUSE_F.z;
     if(lx>FARM_RECT.lx0-1.2 && lx<-8.6 && lz>FARM_RECT.lz0-1.2 && lz<9.4) return false;
-    if(Math.hypot(x-20,z+12)<6.3) return false;
+    if(!waterClear(x,z,1.1)) return false;
     if(x>-3.4 && x<9.6 && z>1.4 && z<4.0) return false;
     if(Math.hypot(x+8.5,z-8.5)<2.2) return false;
     if(!hillClear(x,z,-2)) return false;
@@ -1712,8 +1810,16 @@ function createOutskirts(){
         if(p) wpts.push(p);
     }
     for(let i=0;i<26;i++){
-        const a=rnd()*Math.PI*2, d=6.5+rnd()*3.0;
-        const x=20+Math.cos(a)*d, z=-12+Math.sin(a)*d;
+        const a=rnd()*Math.PI*2, f=1.16+rnd()*0.30;
+        const x=LAKE_C.x+Math.cos(a)*LAKE_RX*f, z=LAKE_C.z+Math.sin(a)*LAKE_RZ*f;
+        if(scatterClear(x,z)) wpts.push([x,z]);
+    }
+    // 河两岸也点缀一串，跟着水走
+    if(!RIVER_PTS) buildRiverPts();
+    for(let i=0;i<14;i++){
+        const p=RIVER_PTS[1+((rnd()*RIVER_N)|0)];
+        const side=rnd()<0.5?-1:1;
+        const x=p.x+side*(p.half+0.9+rnd()*0.8), z=p.z+(rnd()-0.5)*1.6;
         if(scatterClear(x,z)) wpts.push([x,z]);
     }
     for(let i=0;i<22;i++){
@@ -3073,8 +3179,8 @@ const HUNT_DEFS=[
     { id:'egg', name:'彩蛋' }
 ];
 const HUNT_SPOTS=[
-    [16.2,-8.2],[3.2,3.4],[-6.2,7.2],[10.5,9.5],[-11.5,-7.5],
-    [14.8,1.8],[-14.5,2.5],[6.5,-3.5],[19.5,-15.5],[-3.5,-9.0]
+    [9,-14],[3.2,3.4],[-6.2,7.2],[10.5,9.5],[-11.5,-7.5],
+    [14.8,1.8],[-14.5,2.5],[6.5,-3.5],[27,-21],[-3.5,-9.0]
 ];
 let huntGroup=null, huntItems=[], huntState=null;
 let huntToastTimer=0, huntTapState=null, huntTapBound=false;
@@ -3243,9 +3349,9 @@ function updateHunt(dt,t){
     }
 }
 
-/* ---------- 放河灯：池塘许愿 ----------
-   纯本地：灯从岸边漂向塘心，愿望以浮字气泡跟着灯走一会儿，随后灯淡出。 */
-const POND_C={x:20,z:-12};
+/* ---------- 放河灯：湖面许愿 ----------
+   纯本地：灯从湖岸漂向湖心（椭圆湖面，Issue #3 扩容后按湖半径折算），愿望以浮字气泡跟着灯走一会儿，随后灯淡出。 */
+const POND_C={x:23,z:-9.5};   // 与 LAKE_C 同心（河灯按湖椭圆折算漂流范围）
 let lanterns=[], lanternBound=false, ltOpen=false;
 let wishLantern=null, wishAge=0;
 function bindLanternUI(){
@@ -3300,10 +3406,10 @@ function spawnLantern(wish){
     const g=new THREE.Group();
     g.add(box,flame,glow);
     const a=Math.random()*Math.PI*2;
-    g.position.set(POND_C.x+Math.cos(a)*3.3,0.14,POND_C.z+Math.sin(a)*3.3);
+    g.position.set(POND_C.x+Math.cos(a)*LAKE_RX*0.8,0.14,POND_C.z+Math.sin(a)*LAKE_RZ*0.8);
     scene.add(g);
     const L={grp:g,box:box,flame:flame,glow:glow,age:0,dur:30,
-        ang:a,rad:3.3,phase:Math.random()*6.28,wish:wish};
+        ang:a,k:0.8,phase:Math.random()*6.28,wish:wish};
     lanterns.push(L);
     if(lanterns.length>4){
         const old=lanterns[0];
@@ -3352,9 +3458,9 @@ function updateLanterns(dt,t){
             continue;
         }
         L.ang+=dt*0.07;
-        L.rad=3.3-2.0*Math.min(1,k*1.4);
-        L.grp.position.x=POND_C.x+Math.cos(L.ang)*L.rad;
-        L.grp.position.z=POND_C.z+Math.sin(L.ang)*L.rad;
+        L.k=0.8-0.48*Math.min(1,k*1.4);   // 沿椭圆湖面从近岸慢慢漂向湖心
+        L.grp.position.x=POND_C.x+Math.cos(L.ang)*LAKE_RX*L.k;
+        L.grp.position.z=POND_C.z+Math.sin(L.ang)*LAKE_RZ*L.k;
         L.grp.position.y=0.14+Math.sin(t*1.7+L.phase)*0.03;
         L.grp.rotation.y=L.phase+Math.sin(t*0.6+L.phase)*0.2;
         const fadeIn=Math.min(1,L.age/1.2);
