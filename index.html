@@ -1188,7 +1188,7 @@ function createTerrain(){
     const rockGeos=[];
     const rockRnd=mulberry32(20260303);
     function pushRock(x,z,s){
-        const rg=new THREE.DodecahedronGeometry(s,0);
+        const rg=ModelKit.rock(s);
         rg.rotateX(rockRnd()*3); rg.rotateY(rockRnd()*3); rg.rotateZ(rockRnd()*3);
         rg.translate(x,terrainH(x,z)+s*0.45,z);
         rockGeos.push(rg);
@@ -1249,7 +1249,11 @@ function paintGeo(geo,hex){
     geo.setAttribute('color',new THREE.BufferAttribute(arr,3));
     return geo;
 }
-// 合并已刷色的几何体：与 concatGeos 同法，但多搬一份 color（原 concatGeos 不带顶点色）
+// 合并已刷色的几何体：与 concatGeos 同法，但多搬一份 color。
+// 【顶点色的坑】普通 concatGeos 只搬 position/normal/uv，不搬 color：
+// 哪个零件漏了 paintGeo 刷色，它的 color 段就是全 0，渲染出来整片发黑——
+// 农田上线时就踩过一次。所以带色零件一律走这条 mergePaintedGeos，
+// 且每个零件入列前必须先 paintGeo，没有例外。
 function mergePaintedGeos(geos){
     const nonIndexed=geos.map(g=>g.index?g.toNonIndexed():g);
     let vc=0; nonIndexed.forEach(g=>vc+=g.attributes.position.count);
@@ -1270,6 +1274,35 @@ function mergePaintedGeos(geos){
     out.setAttribute('color',new THREE.BufferAttribute(col,3));
     return out;
 }
+
+/* ==================== 建模工具箱（Issue #33 · 地基） ====================
+   全场建模的正式入口：参数化构件生成器 + 几何合并 + 统一色板。
+   新模型（#27 小龙、#36 场景大优化、室内家具…）按 MODELING.md 的步骤
+   从这里取件，不要在场景代码里散写几何拼装。工具箱只产几何与材质，
+   不碰场景图与浏览器接口——同一套件换到任何渲染宿主都能用。 */
+const ModelKit = {
+    /* 几何合并：mergeGeos（普通件）/ paint + mergePainted（顶点色件，见上方坑注） */
+    merge: mergeGeos,
+    paint: paintGeo,
+    mergePainted: mergePaintedGeos,
+    /* 参数化构件：树（seed 决定造型，同 seed 必同形） */
+    pine: buildPineGeo,
+    birch: buildBirchGeo,
+    /* 石头：正十二面体低多边形，r 为半径 */
+    rock(r){ return new THREE.DodecahedronGeometry(r, 0); },
+    /* 农田作物：一格一份几何（sunflower/corn 不用 rnd 参数，pumpkin 用它撒籽点位） */
+    crops: { sunflower: farmSunflowerGeos, corn: farmCornGeos, pumpkin: farmPumpkinGeos, sprout: sproutGeos }
+};
+/* 统一色板：全场反复用的颜色只在这里定义一份，改色改一处、全场一致。
+   数值与收编前逐一相同（完整色板表见 MODELING.md）。 */
+const PALETTE = {
+    stem:   0x4f7a2e,   // 花茎/藤蔓绿
+    leaf:   0x5c8a38,   // 叶片/草簇绿
+    stalk:  0x55802f,   // 作物茎绿（玉米/嫩芽）
+    leafLt: 0x63963a,   // 亮叶绿
+    disk:   0x5a3a15,   // 花盘/花芯褐
+    petal:  0xe8a81a    // 向日葵瓣金黄
+};
 const TREE_BARK = new THREE.MeshStandardMaterial({color:0x6e4a26,roughness:1});
 const TREE_BIRCH= new THREE.MeshStandardMaterial({color:0xe6e1cf,roughness:1});
 const NEEDLE_A  = new THREE.MeshStandardMaterial({color:0x2e7d32,roughness:1});
@@ -1319,12 +1352,12 @@ function plantTree(x,z,isPine,seed){
 // 替代原来每棵树 2 个 mesh 的 68 次绘制；树冠仍逐棵随风摆动（每帧重算实例矩阵）
 function buildTreeInstances(trees){
     const groups={
-        pineBark:{geo:mergeGeos(buildPineGeo(1000).bark), mat:TREE_BARK, list:[]},
-        birchBark:{geo:mergeGeos(buildBirchGeo(2000).bark), mat:TREE_BIRCH, list:[]},
-        pineLeaf0:{geo:mergeGeos(buildPineGeo(1000).leaves), mat:NEEDLE_B, list:[]},
-        pineLeaf1:{geo:mergeGeos(buildPineGeo(1001).leaves), mat:NEEDLE_A, list:[]},
-        birchLeaf0:{geo:mergeGeos(buildBirchGeo(2000).leaves), mat:LEAF_B, list:[]},
-        birchLeaf1:{geo:mergeGeos(buildBirchGeo(2001).leaves), mat:LEAF_A, list:[]}
+        pineBark:{geo:mergeGeos(ModelKit.pine(1000).bark), mat:TREE_BARK, list:[]},
+        birchBark:{geo:mergeGeos(ModelKit.birch(2000).bark), mat:TREE_BIRCH, list:[]},
+        pineLeaf0:{geo:mergeGeos(ModelKit.pine(1000).leaves), mat:NEEDLE_B, list:[]},
+        pineLeaf1:{geo:mergeGeos(ModelKit.pine(1001).leaves), mat:NEEDLE_A, list:[]},
+        birchLeaf0:{geo:mergeGeos(ModelKit.birch(2000).leaves), mat:LEAF_B, list:[]},
+        birchLeaf1:{geo:mergeGeos(ModelKit.birch(2001).leaves), mat:LEAF_A, list:[]}
     };
     trees.forEach(rec=>{
         groups[rec.isPine?'pineBark':'birchBark'].list.push({rec:rec,sway:false});
@@ -1551,7 +1584,7 @@ function createHouse(){
     step.position.set(0,0.07,3.05); step.receiveShadow=step.castShadow=true;
     house.add(step);
     const potMat=new THREE.MeshStandardMaterial({color:0xa8502e,roughness:0.95});
-    const bushMat=new THREE.MeshStandardMaterial({color:0x4f7a2e,roughness:1});
+    const bushMat=new THREE.MeshStandardMaterial({color:PALETTE.stem,roughness:1});
     const bloomMat=new THREE.MeshStandardMaterial({color:0xe86a8a,roughness:0.8});
     [-1.18,1.18].forEach(px=>{
         const pot=new THREE.Mesh(new THREE.CylinderGeometry(0.17,0.13,0.26,8),potMat);
@@ -1680,7 +1713,7 @@ function createSunflowers(){
     // 花杆实例
     const stemGeo=new THREE.CylinderGeometry(0.06,0.09,1,5).translate(0,0.5,0);
     flowerStemIM=new THREE.InstancedMesh(stemGeo,
-        new THREE.MeshStandardMaterial({color:0x4f7a2e,roughness:1}),N);
+        new THREE.MeshStandardMaterial({color:PALETTE.stem,roughness:1}),N);
     flowerStemIM.castShadow=true;
     // 花头实例（盘+花瓣预合并）
     // 花盘与花瓣统一朝 +Z 组装：花瓣在 XY 平面内放射，实例化时再整体转向
@@ -1703,7 +1736,7 @@ function createSunflowers(){
     const coreGeo=new THREE.CylinderGeometry(0.17,0.17,0.05,18);
     coreGeo.rotateX(Math.PI/2); coreGeo.translate(0,0,0.08);
     const coreIM=new THREE.InstancedMesh(coreGeo,
-        new THREE.MeshStandardMaterial({color:0x5a3a15,roughness:1}),N);
+        new THREE.MeshStandardMaterial({color:PALETTE.disk,roughness:1}),N);
     scene.add(flowerStemIM,flowerHeadIM,coreIM);
     flowerHeadIM.userData.cores=coreIM;
 
@@ -1773,20 +1806,20 @@ function farmCellCenter(r,c){
 function farmSunflowerGeos(){
     const parts=[];
     const stem=new THREE.CylinderGeometry(0.045,0.07,1.5,5); stem.translate(0,0.75,0);
-    parts.push(paintGeo(stem,0x4f7a2e));
+    parts.push(paintGeo(stem,PALETTE.stem));
     for(const s of [-1,1]){
         const leaf=new THREE.SphereGeometry(0.24,5,4); leaf.scale(1,0.22,0.5);
         leaf.rotateY(s*0.7); leaf.translate(s*0.2,0.72,0);
-        parts.push(paintGeo(leaf,0x5c8a38));
+        parts.push(paintGeo(leaf,PALETTE.leaf));
     }
     const head=[];
     const disk=new THREE.CylinderGeometry(0.26,0.26,0.09,10);
     disk.rotateX(Math.PI/2); disk.translate(0,0,0.02);
-    head.push(paintGeo(disk,0x5a3a15));
+    head.push(paintGeo(disk,PALETTE.disk));
     for(let j=0;j<10;j++){
         const p=new THREE.ConeGeometry(0.11,0.36,4);
         p.scale(1,1,0.3); p.translate(0,0.42,0); p.rotateZ(j/10*Math.PI*2);
-        head.push(paintGeo(p,0xe8a81a));
+        head.push(paintGeo(p,PALETTE.petal));
     }
     const hm=new THREE.Matrix4().makeRotationX(-0.42); hm.setPosition(0,1.52,0.05);
     head.forEach(g=>g.applyMatrix4(hm));
@@ -1795,11 +1828,11 @@ function farmSunflowerGeos(){
 function farmCornGeos(){
     const parts=[];
     const stalk=new THREE.CylinderGeometry(0.05,0.085,2.0,5); stalk.translate(0,1.0,0);
-    parts.push(paintGeo(stalk,0x55802f));
+    parts.push(paintGeo(stalk,PALETTE.stalk));
     const leafAt=(y,ry,tilt)=>{
         const l=new THREE.ConeGeometry(0.15,0.95,4); l.scale(1,1,0.22);
         l.translate(0,0.42,0); l.rotateX(tilt); l.rotateY(ry); l.translate(0,y,0);
-        parts.push(paintGeo(l,0x63963a));
+        parts.push(paintGeo(l,PALETTE.leafLt));
     };
     leafAt(0.65,0.4,0.85); leafAt(0.95,2.4,0.95); leafAt(1.3,4.2,0.8); leafAt(1.55,1.4,1.0);
     const cob=new THREE.CylinderGeometry(0.085,0.11,0.52,6);
@@ -1814,12 +1847,12 @@ function farmPumpkinGeos(rnd){
     const parts=[];
     const vine=new THREE.TorusGeometry(0.34,0.045,5,12,Math.PI*1.5);
     vine.rotateX(Math.PI/2); vine.rotateY(rnd()*3); vine.translate(0,0.05,0);
-    parts.push(paintGeo(vine,0x4f7a2e));
+    parts.push(paintGeo(vine,PALETTE.stem));
     for(let i=0;i<3;i++){
         const lf=new THREE.SphereGeometry(0.27,6,4); lf.scale(1,0.2,1);
         const a=rnd()*6.28, d=0.25+rnd()*0.25;
         lf.translate(Math.cos(a)*d,0.10,Math.sin(a)*d);
-        parts.push(paintGeo(lf,0x5c8a38));
+        parts.push(paintGeo(lf,PALETTE.leaf));
     }
     const fruits=[[0.28,0.05,0.32],[-0.30,-0.14,0.25]];
     for(const f of fruits){
@@ -1828,7 +1861,7 @@ function farmPumpkinGeos(rnd){
         parts.push(paintGeo(p,0xe07b24));
         const st=new THREE.CylinderGeometry(0.035,0.05,0.12,5);
         st.translate(f[0],f[2]*1.5+0.05,f[1]);
-        parts.push(paintGeo(st,0x4f7a2e));
+        parts.push(paintGeo(st,PALETTE.stem));
     }
     return parts;
 }
@@ -1860,8 +1893,7 @@ function createFarm(){
         farmGrid.push({row:r,col:c,lx:cell[0],lz:cell[1],x:w[0],z:w[1],crop:crop,
             playable:!!PLAYABLE_CELLS[r+','+c]});
         if(!crop) continue;
-        const parts= crop==='sunflower' ? farmSunflowerGeos()
-                   : crop==='corn' ? farmCornGeos() : farmPumpkinGeos(rnd);
+        const parts= ModelKit.crops[crop](rnd);
         const sc=0.92+rnd()*0.2;
         const m=new THREE.Matrix4().makeRotationY(rnd()*6.28);
         m.setPosition(cell[0]+(rnd()-0.5)*0.24, 0.21, cell[1]+(rnd()-0.5)*0.24);
@@ -1912,19 +1944,18 @@ function saveFarm(){
 function sproutGeos(){
     const parts=[];
     const stem=new THREE.CylinderGeometry(0.03,0.045,0.34,5); stem.translate(0,0.17,0);
-    parts.push(paintGeo(stem,0x55802f));
+    parts.push(paintGeo(stem,PALETTE.stalk));
     for(const s of [-1,1]){
         const leaf=new THREE.SphereGeometry(0.13,5,4); leaf.scale(1,0.25,0.55);
         leaf.rotateZ(s*0.5); leaf.translate(s*0.11,0.34,0);
-        parts.push(paintGeo(leaf,0x63963a));
+        parts.push(paintGeo(leaf,PALETTE.leafLt));
     }
     return parts;
 }
 function cropGeosAt(crop,cell,stage){
     // stage: 0 刚发芽（通用嫩芽） 1 已浇水长成半大 2 成熟（全尺寸）
     if(stage===0) return sproutGeos();
-    const parts= crop==='sunflower' ? farmSunflowerGeos()
-               : crop==='corn' ? farmCornGeos() : farmPumpkinGeos(mulberry32(cell.row*10+cell.col+3));
+    const parts= ModelKit.crops[crop](mulberry32(cell.row*10+cell.col+3));
     const sc= stage===2 ? 1.0 : 0.55;
     const m=new THREE.Matrix4().makeRotationY((cell.row*7+cell.col*3)%6);
     m.setPosition(cell.lx,0.24,cell.lz);
@@ -2086,7 +2117,7 @@ const WILD_TINTS=[0xe86a8a,0xf2c230,0x9a7ec8,0xf5e6a8,0xe86a3a,0xf2f2f2];
 function placeWildflowers(pts,rnd){
     if(!pts.length) return;
     const stems=new THREE.InstancedMesh(wildStemGeo(),
-        new THREE.MeshStandardMaterial({color:0x4f7a2e,roughness:1}),pts.length);
+        new THREE.MeshStandardMaterial({color:PALETTE.stem,roughness:1}),pts.length);
     const heads=new THREE.InstancedMesh(wildHeadGeo(),
         new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.85}),pts.length);
     pts.forEach((p,i)=>{
@@ -2196,7 +2227,7 @@ function createOutskirts(){
     const tuftGeo=concatGeos(blades.map(g=>g.toNonIndexed()));
     const NT=IS_MOBILE?150:240;
     const tufts=new THREE.InstancedMesh(tuftGeo,
-        new THREE.MeshStandardMaterial({color:0x5c8a38,roughness:1}),NT);
+        new THREE.MeshStandardMaterial({color:PALETTE.leaf,roughness:1}),NT);
     tufts.receiveShadow=true;
     let placedT=0;
     for(let i=0;i<NT;i++){
@@ -2216,7 +2247,7 @@ function createOutskirts(){
     for(let i=0;i<80;i++){
         const p=scatterPoint(rnd,4,0,13,50);
         if(!p) continue;
-        const d=new THREE.DodecahedronGeometry(0.13+rnd()*0.17,0);
+        const d=ModelKit.rock(0.13+rnd()*0.17);
         d.rotateY(rnd()*3); d.scale(1,0.6,1);
         d.translate(p[0],terrainH(p[0],p[1])+0.05,p[1]);
         pebGeos.push(d);
@@ -2240,7 +2271,7 @@ function createGrass(){
     const tuftGeo=concatGeos(blades.map(g=>g.toNonIndexed()));
     const N=IS_MOBILE?140:260;
     grassIM=new THREE.InstancedMesh(tuftGeo,
-        new THREE.MeshStandardMaterial({color:0x5c8a38,roughness:1}),N);
+        new THREE.MeshStandardMaterial({color:PALETTE.leaf,roughness:1}),N);
     grassIM.castShadow=false; grassIM.receiveShadow=true;
     scene.add(grassIM);
 
