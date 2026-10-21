@@ -297,19 +297,20 @@ test('FB 提交：先复制兜底，再只回传到白名单地址', ()=>{    mu
     const outside = abs.filter(u => !/^https:\/\/formsubmit\.co\//.test(u));
     must(outside.length===0,'出现白名单外的绝对 URL：'+outside.join(', '));
     must(!/XMLHttpRequest|sendBeacon|WebSocket/.test(inlineJs),'出现其他网络通道');
-    // 全页只允许七个具名本地键：ct2_visits（访问计数）、ct2_hunt（寻宝进度）、ct2_help（帮助已提示标记）、ct2_farm（种田存档）、ct2_vote（投票已投标记）、ct2_theme（界面深浅主题偏好）与 ct2_echo（建议回音回执），都不上传
+    // 全页只允许八个具名本地键：ct2_visits（访问计数）、ct2_hunt（寻宝进度）、ct2_help（帮助已提示标记）、ct2_farm（种田存档）、ct2_vote（投票已投标记）、ct2_theme（界面深浅主题偏好）、ct2_echo（建议回音回执）与 ct2_codex（图鉴解锁集合），都不上传
     must(!/sessionStorage|document\.cookie/.test(inlineJs),'出现未授权的存储');
     const lsKeys = [...inlineJs.matchAll(/localStorage\.(?:getItem|setItem)\('([^']+)'/g)].map(m=>m[1]);
-    const badKeys = lsKeys.filter(k => k !== 'ct2_visits' && k !== 'ct2_hunt' && k !== 'ct2_help' && k !== 'ct2_farm' && k !== 'ct2_vote' && k !== 'ct2_theme' && k !== 'ct2_echo');
+    const badKeys = lsKeys.filter(k => k !== 'ct2_visits' && k !== 'ct2_hunt' && k !== 'ct2_help' && k !== 'ct2_farm' && k !== 'ct2_vote' && k !== 'ct2_theme' && k !== 'ct2_echo' && k !== 'ct2_codex');
     must(badKeys.length===0,'出现未授权的本地存储键：'+badKeys.join(', '));
-    // 动态键只允许具名常量 HUNT_KEY / HELP_KEY / FARM_KEY / VOTE_KEY / THEME_KEY / ECHO_KEY，且它们的取值必须写死
+    // 动态键只允许具名常量 HUNT_KEY / HELP_KEY / FARM_KEY / VOTE_KEY / THEME_KEY / ECHO_KEY / CODEX_KEY，且它们的取值必须写死
     must(/const HUNT_KEY='ct2_hunt'/.test(inlineJs),'HUNT_KEY 必须写死为 ct2_hunt');
     must(/const HELP_KEY='ct2_help'/.test(inlineJs),'HELP_KEY 必须写死为 ct2_help');
     must(/const FARM_KEY='ct2_farm'/.test(inlineJs),'FARM_KEY 必须写死为 ct2_farm');
     must(/const VOTE_KEY='ct2_vote'/.test(inlineJs),'VOTE_KEY 必须写死为 ct2_vote');
     must(/const THEME_KEY='ct2_theme'/.test(inlineJs),'THEME_KEY 必须写死为 ct2_theme');
     must(/const ECHO_KEY='ct2_echo'/.test(inlineJs),'ECHO_KEY 必须写死为 ct2_echo');
-    must(!/localStorage\.(?:getItem|setItem)\((?!'ct2_visits'|HUNT_KEY|HELP_KEY|FARM_KEY|VOTE_KEY|THEME_KEY|ECHO_KEY)/.test(inlineJs),'存在动态拼接的存储键');
+    must(/const CODEX_KEY='ct2_codex'/.test(inlineJs),'CODEX_KEY 必须写死为 ct2_codex');
+    must(!/localStorage\.(?:getItem|setItem)\((?!'ct2_visits'|HUNT_KEY|HELP_KEY|FARM_KEY|VOTE_KEY|THEME_KEY|ECHO_KEY|CODEX_KEY)/.test(inlineJs),'存在动态拼接的存储键');
     // 顺序保证：先复制，后发送
     const iCopy = inlineJs.indexOf('copyToClipboard(text).then(');
     const iSend = inlineJs.indexOf('sendFeedback({');
@@ -347,6 +348,20 @@ test('建议回音：回执码本机生成、署名三档、采纳匹配与隐�
     must(/echo:\s+mkSlot\(\(\)=>localStorage\.getItem\(ECHO_KEY\)/.test(inlineJs),'store 缺 echo 槽');
     must(/id="echoMask"/.test(html) && /id="logCreditsBody"/.test(html) && /id="echoQuery"/.test(html),
         '专属信/回音墙/查状态入口缺一');
+});
+test('世界图鉴：声明式条目、本机解锁存档与判定挂点（Issue #23）', ()=>{
+    must(/const CODEX_KEY='ct2_codex'/.test(inlineJs),'CODEX_KEY 必须写死为 ct2_codex');
+    must(/const CODEX_DEFS\s*=\s*\[/.test(inlineJs),'缺少声明式图鉴条目 CODEX_DEFS');
+    must(/const CODEX_CATS\s*=\s*\[/.test(inlineJs),'缺少图鉴分类 CODEX_CATS');
+    must(/function setupCodex\(/.test(inlineJs),'缺少 setupCodex');
+    must(/function codexUnlock\(/.test(inlineJs),'缺少 codexUnlock');
+    must(/function codexCheck\(/.test(inlineJs),'缺少发现判定 codexCheck');
+    must(/codex:\s*mkSlot\(\(\)=>localStorage\.getItem\(CODEX_KEY\)/.test(inlineJs),'store 缺 codex 槽');
+    must(/id="codexBtn"/.test(html) && /id="codexMask"/.test(html) && /id="codexBody"/.test(html),
+        '图鉴入口/弹窗缺一');
+    // 条目数与六大类齐全（植物/作物/宝物/天气/地点/动物）
+    const defs = inlineJs.match(/cat:'(plant|crop|treasure|weather|place|animal)'/g) || [];
+    must(defs.length>=30,'图鉴条目过少：'+defs.length);
 });
 test('FB 回传必须显式带 Referer（FormSubmit 靠它判来源）', ()=>{
     // 线上曾因 <meta name="referrer" content="no-referrer"> 被抹掉 Referer，
