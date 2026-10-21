@@ -32,8 +32,8 @@ const dangers = {
     'innerHTML/outerHTML': /(inner|outer)HTML/,
     'eval': /\beval\s*\(/,
     'new Function': /new\s+Function\s*\(/,
-    // 只允许七个具名本地键：ct2_visits 字面量、寻宝的 HUNT_KEY、帮助的 HELP_KEY、种田的 FARM_KEY、投票的 VOTE_KEY、主题的 THEME_KEY 与小龙自定义的 DRAGON_KEY 常量（下方另有钉死检查）；其余一律不许
-    'localStorage（非授权键）': /localStorage\.(?:getItem|setItem)\((?!'ct2_visits'|HUNT_KEY|HELP_KEY|FARM_KEY|VOTE_KEY|THEME_KEY|DRAGON_KEY)/,
+    // 只允许九个具名本地键：ct2_visits 字面量、寻宝的 HUNT_KEY、帮助的 HELP_KEY、种田的 FARM_KEY、投票的 VOTE_KEY、主题的 THEME_KEY、回执的 ECHO_KEY、背包的 BAG_KEY 与小龙自定义的 DRAGON_KEY 常量（下方另有钉死检查）；其余一律不许
+    'localStorage（非授权键）': /localStorage\.(?:getItem|setItem)\((?!'ct2_visits'|HUNT_KEY|HELP_KEY|FARM_KEY|VOTE_KEY|THEME_KEY|ECHO_KEY|BAG_KEY|DRAGON_KEY)/,
     'sessionStorage': /sessionStorage/,
     'document.cookie': /document\.cookie/,
     'XMLHttpRequest': /XMLHttpRequest/,
@@ -62,6 +62,10 @@ check('投票存储键 VOTE_KEY 写死为 ct2_vote', /const VOTE_KEY='ct2_vote'/
 check('主题存储键 THEME_KEY 写死为 ct2_theme', /const THEME_KEY='ct2_theme'/.test(html));
 // 小龙自定义外观同理：只能经具名常量 DRAGON_KEY 使用，取值钉死
 check('小龙存储键 DRAGON_KEY 写死为 ct2_dragon', /const DRAGON_KEY='ct2_dragon'/.test(html));
+// 小龙背包与喂食计数同理：只能经具名常量 BAG_KEY 使用，取值钉死
+check('背包存储键 BAG_KEY 写死为 ct2_bag', /const BAG_KEY='ct2_bag'/.test(html));
+// 建议回音回执同理：只能经具名常量 ECHO_KEY 使用，取值钉死
+check('回执存储键 ECHO_KEY 写死为 ct2_echo', /const ECHO_KEY='ct2_echo'/.test(html));
 
 // fetch 是唯一例外：只允许恰好一处、且地址来自 fbEndpoint() 的白名单。
 {
