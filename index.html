@@ -78,6 +78,10 @@
         border-radius:14px;padding:16px 18px;box-shadow:0 18px 50px rgba(0,0,0,.55);font-size:13px}
     #fbBox h4{margin:0 0 4px;font-size:15px;color:#bfe8bf}
     #fbBox p.sub{margin:0 0 10px;font-size:11.5px;color:#93b093;line-height:1.5}
+    .fbCatRow{display:flex;align-items:center;gap:8px;margin:0 0 9px;font-size:12.5px;color:#cfe3cf}
+    #fbCat{flex:1;background:rgba(0,0,0,.35);color:#eaf7ea;border:1px solid rgba(140,220,140,.3);
+        border-radius:8px;padding:7px 9px;font-size:13px;font-family:inherit;cursor:pointer}
+    #fbCat:focus{outline:none;border-color:rgba(160,240,160,.75);box-shadow:0 0 0 2px rgba(120,220,120,.18)}
     #fbText{width:100%;min-height:110px;max-height:34vh;resize:vertical;box-sizing:border-box;
         background:rgba(0,0,0,.35);color:#eaf7ea;border:1px solid rgba(140,220,140,.3);
         border-radius:8px;padding:9px 10px;font-size:13px;font-family:inherit;line-height:1.55}
@@ -389,6 +393,12 @@
             <span>写下你的构思，和大家一起共建属于我们的世界。</span>
         </div>
         <p class="sub">想改什么、哪里不好看、希望加什么，随便写。<br>点「提交意见」会先复制一份、同时静默发给我；没有回传通道时也能粘到聊天里发我。</p>
+        <div class="fbCatRow"><label for="fbCat">分类</label><select id="fbCat">
+            <option value="画面" selected>画面</option>
+            <option value="玩法">玩法</option>
+            <option value="声音">声音</option>
+            <option value="其它">其它</option>
+        </select></div>
         <textarea id="fbText" maxlength="600" placeholder="例如：小屋屋顶想换成茅草；向日葵太少了；夜里太黑看不清路……"></textarea>
         <div id="fbCount">0 / 600</div>
         <div id="fbRow">
@@ -2389,10 +2399,17 @@ function fbEndpoint(){
 }
 function fbEl(id){ return document.getElementById(id); }
 function pad2(n){ return n<10?'0'+n:''+n; }
+const FB_CATS=['画面','玩法','声音','其它'];
+function feedbackCategory(){
+    const s=fbEl('fbCat');
+    const v=s?s.value:'';
+    return FB_CATS.indexOf(v)>=0?v:'其它';
+}
 function feedbackStamp(){
     const d=new Date();
     return '【优化意见】'+d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate())+' '+
         pad2(d.getHours())+':'+pad2(d.getMinutes())+
+        ' · 分类:'+feedbackCategory()+
         ' · 天气:'+(weatherLabels[weatherIndex]||'-')+
         ' · 画面:'+LAYOUT.w+'x'+LAYOUT.h+(ROT?'(横屏)':'');
 }
@@ -2436,6 +2453,7 @@ function sendFeedback(body){
         _captcha:'false',
         _template:'table',
         内容:text,
+        分类:meta.category||'其它',
         天气:meta.weather||'-',
         画面:meta.screen||'-',
         手机:meta.mobile?'是':'否',
@@ -2531,6 +2549,7 @@ function setupFeedback(){
             return sendFeedback({
                 text:text,
                 meta:{
+                    category:feedbackCategory(),
                     weather:(weatherLabels[weatherIndex]||''),
                     screen:LAYOUT.w+'x'+LAYOUT.h+(ROT?' 横屏':''),
                     mobile:IS_MOBILE,
@@ -2544,6 +2563,7 @@ function setupFeedback(){
                 setFbMsg('✅ 已复制到剪贴板 —— 这条链接没有回传通道，粘到聊天里发我即可。');
             }
             fbEl('fbText').value='';
+            fbEl('fbCat').value='画面';
             cnt.textContent='0 / '+FB_MAX;
         });
     });
