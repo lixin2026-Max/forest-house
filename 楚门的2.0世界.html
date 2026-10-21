@@ -3473,6 +3473,308 @@ const BIRD_DEF = {
         a.group.position.y = a.baseY + Math.max(0, Math.sin(a.hopPhase)) * 0.06;
     } } }
 };
+/* ---------- #50 野外小动物 AI：松鼠/小鸟行为居民 ----------
+   松鼠前 3 只、小鸟前 4 只是行为居民（走下面的 AI def），其余仍走氛围 def 不变。
+   决策低频：居民带 thinkT 节拍（约 0.25s 一拍）做天气/威胁/目标判断；位移逐帧走
+   AgentKit.groundStep（松鼠）或自有飞行公式（小鸟）。只读小龙的状态与位置
+   （睡觉/进食/龙角点位），不改小龙任何代码；不新增存储键。 */
+let sqAiLeft = 3, bdAiLeft = 4;
+let sqHornBird = null;            // 此刻停在龙角上的鸟（全局至多一只）
+let sqLastSnatchT = -999;         // 松鼠上次蹭食得手的时刻（全局冷却，防每喂必抢）
+const _hv1 = new THREE.Vector3(), _hv2 = new THREE.Vector3();
+
+function aiRaining(){ return weatherModes[weatherIndex] === 'rain'; }
+function aiNight(){ return GClock.phase() === 'night'; }
+/* 低频决策节拍：距上次思考够久才返回 true，间隔记在 a.thinkDt 上 */
+function aiThink(a, dt){
+    a.thinkAcc = (a.thinkAcc || 0) + dt;
+    if(a.thinkAcc < 0.25) return false;
+    a.thinkDt = a.thinkAcc; a.thinkAcc = 0;
+    return true;
+}
+/* 威胁判断：注视点或小龙在 maxD 内快速逼近（或已经贴脸）→ true */
+function aiThreat(a, maxD){
+    const p = a.group.position;
+    let hit = false;
+    const chk = (x, z, key) => {
+        const d = Math.hypot(x - p.x, z - p.z), prev = a[key];
+        a[key] = d;
+        if(prev !== undefined && d < maxD && (prev - d) / Math.max(a.thinkDt || 0.25, 0.05) > 1.0) hit = true;
+        if(d < 1.1) hit = true;
+    };
+    chk(controls.target.x, controls.target.z, '_pdT');
+    if(dragonAgent) chk(dragonAgent.group.position.x, dragonAgent.group.position.z, '_pdD');
+    return hit;
+}
+/* 松鼠的树下据点：绕树干试几个角度，找一块可行走的干地（算一次缓存） */
+function squirrelHomeSpot(a){
+    if(a.homeSpot) return a.homeSpot;
+    for(let i = 0; i < 8; i++){
+        const ang = a.groundAng + i * 0.8;
+        const x = a.tree.x + Math.cos(ang) * 0.9, z = a.tree.z + Math.sin(ang) * 0.9;
+        if(WalkMap.isWalkable(x, z)){ a.homeSpot = {x:x, y:terrainH(x, z), z:z}; return a.homeSpot; }
+    }
+    a.homeSpot = {x:a.tree.x + 1.2, y:terrainH(a.tree.x + 1.2, a.tree.z), z:a.tree.z};
+    return a.homeSpot;
+}
+/* 上/下树：位置在两点之间平滑爬行 */
+function aiStartClimb(a, to, dur, next){
+    a.climbFrom = {x:a.group.position.x, y:a.group.position.y, z:a.group.position.z};
+    a.climbTo = to; a.climbT = 0; a.climbDur = dur; a.climbNext = next;
+    AgentKit.setState(a, 'climb');
+}
+function aiClimbUpdate(a, dt){
+    a.climbT += dt / a.climbDur;
+    const k = Math.min(1, a.climbT), e = k * k * (3 - 2 * k);
+    a.group.position.set(
+        a.climbFrom.x + (a.climbTo.x - a.climbFrom.x) * e,
+        a.climbFrom.y + (a.climbTo.y - a.climbFrom.y) * e,
+        a.climbFrom.z + (a.climbTo.z - a.climbFrom.z) * e);
+    if(k >= 1) AgentKit.setState(a, a.climbNext);
+}
+
+const SQUIRREL_AI_DEF = {
+    name: 'squirrelAI', initial: 'perch',
+    states: {
+        perch: {        // 树上观望：夜里/雨天待着，天好且待够了就下树觅食
+            enter(a){ a.stateT = 2.5 + Math.random() * 4; a.group.rotation.x = 0; if(a.acorn) a.acorn.visible = false; },
+            update(a, dt){
+                a.phase += dt * 1.1;
+                a.group.position.y = a.perch.y + Math.sin(a.phase) * 0.1;
+                a.group.rotation.y = Math.sin(a.phase * 0.4) * 0.8;
+                a.stateT -= dt;
+                if(aiThink(a, dt) && a.stateT <= 0 && !aiNight() && !aiRaining())
+                    aiStartClimb(a, squirrelHomeSpot(a), 0.8, 'forage');
+            } },
+        climb: { update(a, dt){ aiClimbUpdate(a, dt); } },
+        forage: {       // 地面觅食：树周 5 内挑点溜达，间或停下扒地；喂龙时可能去蹭食
+            enter(a){ a.target = null; a.group.rotation.x = 0; a.boutT = 14 + Math.random() * 10; },
+            update(a, dt, t){
+                a.boutT -= dt;
+                if(aiThink(a, dt)){
+                    if(aiThreat(a, 3)){ AgentKit.setState(a, 'flee'); return; }
+                    if(aiNight() || aiRaining() || a.boutT <= 0){ AgentKit.setState(a, 'goHome'); return; }
+                    const da = dragonAgent;
+                    if(da && (da.state === 'eat' || da.state === 'eatGo') && da.foodPos &&
+                       t - sqLastSnatchT > 25 && Math.random() < 0.5 &&
+                       Math.hypot(da.group.position.x - a.group.position.x, da.group.position.z - a.group.position.z) < 13){
+                        a.crumbPos = {x:da.foodPos.x, z:da.foodPos.z};
+                        AgentKit.setState(a, 'sneak'); return;
+                    }
+                    if(!a.target){
+                        if(Math.random() < 0.3){ AgentKit.setState(a, 'dig'); return; }
+                        for(let i = 0; i < 6 && !a.target; i++){
+                            const ang = Math.random() * 6.28, r = 1.5 + Math.random() * 3.5;
+                            const x = a.tree.x + Math.cos(ang) * r, z = a.tree.z + Math.sin(ang) * r;
+                            if(WalkMap.isWalkable(x, z)) a.target = {x:x, z:z};
+                        }
+                    }
+                }
+                if(a.target){
+                    const d = Math.hypot(a.target.x - a.group.position.x, a.target.z - a.group.position.z);
+                    if(d < 0.25) a.target = null;
+                    else {
+                        AgentKit.groundStep(a, a.target.x, a.target.z, 1.7 * dt);
+                        a.group.position.y += Math.abs(Math.sin(t * 16 + a.phase)) * 0.045;   // 奔跑小颠
+                    }
+                }
+            } },
+        dig: {          // 扒拉地面找吃的
+            enter(a){ a.stateT = 1.1 + Math.random() * 0.9; },
+            update(a, dt, t){
+                a.group.rotation.x = Math.sin(t * 26) * 0.14;
+                a.stateT -= dt;
+                if(a.stateT <= 0){
+                    a.group.rotation.x = 0;
+                    AgentKit.setState(a, Math.random() < 0.45 ? 'holdEat' : 'forage');
+                }
+            } },
+        holdEat: {      // 抱着橡果啃（橡果 mesh 只在这时和叼碎屑时露面）
+            enter(a){ a.stateT = 3 + Math.random() * 1.5; a.groundY = a.group.position.y; if(a.acorn) a.acorn.visible = true; },
+            update(a, dt, t){
+                a.group.rotation.x = -0.3;
+                a.group.position.y = a.groundY + Math.abs(Math.sin(t * 17)) * 0.02;
+                a.stateT -= dt;
+                if(a.stateT <= 0){ if(a.acorn) a.acorn.visible = false; a.group.rotation.x = 0; AgentKit.setState(a, 'forage'); }
+            } },
+        goHome: { update(a, dt){     // 回树下再上树
+                const spot = squirrelHomeSpot(a);
+                const d = Math.hypot(spot.x - a.group.position.x, spot.z - a.group.position.z);
+                if(d < 0.3) aiStartClimb(a, a.perch, 0.8, 'perch');
+                else AgentKit.groundStep(a, spot.x, spot.z, 2.4 * dt);
+            } },
+        flee: { update(a, dt){       // 受惊：窜回树下上树
+                const spot = squirrelHomeSpot(a);
+                const d = Math.hypot(spot.x - a.group.position.x, spot.z - a.group.position.z);
+                if(d < 0.35) aiStartClimb(a, a.perch, 0.6, 'perch');
+                else AgentKit.groundStep(a, spot.x, spot.z, 4.3 * dt);
+            } },
+        sneak: {        // 喂食时凑近：停到食物 1.7 外探头探脑
+            enter(a){
+                const dx = a.group.position.x - a.crumbPos.x, dz = a.group.position.z - a.crumbPos.z;
+                const d = Math.hypot(dx, dz) || 1;
+                a.sneakPos = {x:a.crumbPos.x + dx / d * 1.7, z:a.crumbPos.z + dz / d * 1.7};
+            },
+            update(a, dt){
+                const d = Math.hypot(a.sneakPos.x - a.group.position.x, a.sneakPos.z - a.group.position.z);
+                if(d < 0.3){ a.stateT = 9; AgentKit.setState(a, 'peek'); }
+                else AgentKit.groundStep(a, a.sneakPos.x, a.sneakPos.z, 2.3 * dt);
+            } },
+        peek: {         // 盯着龙，等它吃完
+            update(a, dt){
+                if(dragonAgent) a.group.rotation.y = Math.atan2(dragonAgent.group.position.x - a.group.position.x, dragonAgent.group.position.z - a.group.position.z);
+                a.group.rotation.x = 0.12;
+                a.stateT -= dt;
+                if(aiThink(a, dt)){
+                    if(!dragonAgent || (dragonAgent.state !== 'eat' && dragonAgent.state !== 'eatGo')){
+                        a.group.rotation.x = 0; AgentKit.setState(a, 'snatch');
+                    } else if(a.stateT <= 0){ a.group.rotation.x = 0; AgentKit.setState(a, 'forage'); }
+                }
+            } },
+        snatch: {       // 龙吃完：叼一粒碎屑（橡果 mesh 代）就跑
+            update(a, dt, t){
+                if(a.snatchT === undefined){
+                    const d = Math.hypot(a.crumbPos.x - a.group.position.x, a.crumbPos.z - a.group.position.z);
+                    if(d < 0.35){ a.snatchT = 0.55; if(a.acorn) a.acorn.visible = true; sqLastSnatchT = t; }
+                    else AgentKit.groundStep(a, a.crumbPos.x, a.crumbPos.z, 4.3 * dt);
+                } else {
+                    a.snatchT -= dt;
+                    if(a.snatchT <= 0){ a.snatchT = undefined; AgentKit.setState(a, 'flee'); }
+                }
+            } }
+    }
+};
+
+/* 小鸟飞行：朝目标点飞（带弧线），到了切 a.flyNext */
+function aiBirdFly(a, target, next){
+    a.flyFrom = {x:a.group.position.x, y:a.group.position.y, z:a.group.position.z};
+    a.flyTo = target; a.flyNext = next;
+    a.flyDist = Math.max(0.01, Math.hypot(target.x - a.flyFrom.x, target.z - a.flyFrom.z));
+    a.flyT = 0;
+    a.flyDur = Math.max(0.4, Math.hypot(target.x - a.flyFrom.x, target.y - a.flyFrom.y, target.z - a.flyFrom.z) / 7);
+    AgentKit.setState(a, 'flyTo');
+}
+function aiBirdGroundSpot(a){
+    for(let i = 0; i < 6; i++){
+        const ang = Math.random() * 6.28, r = 2 + Math.random() * 3;
+        const x = a.tree.x + Math.cos(ang) * r, z = a.tree.z + Math.sin(ang) * r;
+        if(WalkMap.waterDry(x, z, 0.6) && WalkMap.hillDry(x, z, 0)) return {x:x, y:terrainH(x, z), z:z};
+    }
+    return null;
+}
+function aiBirdCircle(a){
+    a.circleC = {x:a.perch.x, z:a.perch.z};
+    a.circleR = 5 + Math.random() * 4;
+    a.circleY = a.perch.y + 1.5 + Math.random() * 2;
+    a.circleA = Math.atan2(a.group.position.z - a.circleC.z, a.group.position.x - a.circleC.x);
+    a.stateT = (6.28 * a.circleR / 4.5) * (1 + Math.random());
+    AgentKit.setState(a, 'circle');
+}
+/* 龙角尖的世界坐标（左右角取更高的一根）；龙或部件不在时返回 null */
+function aiHornTip(){
+    if(!dragonAgent || !dragonAgent.parts || !dragonAgent.parts.head) return null;
+    const head = dragonAgent.parts.head;
+    _hv1.set(-0.19, 0.50, -0.22); head.localToWorld(_hv1);
+    _hv2.set( 0.19, 0.50, -0.22); head.localToWorld(_hv2);
+    const s = _hv1.y > _hv2.y ? _hv1 : _hv2;
+    return {x:s.x, y:s.y, z:s.z};
+}
+function aiBirdFold(a, k){
+    a.wingL.rotation.z += (0.15 - a.wingL.rotation.z) * k;
+    a.wingR.rotation.z += (-0.15 - a.wingR.rotation.z) * k;
+}
+
+const BIRD_AI_DEF = {
+    name: 'birdAI', initial: 'perch',
+    states: {
+        perch: {        // 枝头栖息：雨天/夜里躲树冠不动；龙睡着时可能去停龙角
+            enter(a){ a.stateT = 3 + Math.random() * 6; },
+            update(a, dt, t){
+                a.hopPhase += dt * 2;
+                a.group.position.set(a.perch.x, a.perch.y + Math.max(0, Math.sin(a.hopPhase)) * 0.05, a.perch.z);
+                a.group.rotation.y = Math.sin(t * 0.3 + a.phase) * 0.6;
+                aiBirdFold(a, Math.min(1, dt * 6));
+                a.stateT -= dt;
+                if(aiThink(a, dt)){
+                    const da = dragonAgent;
+                    if(da && da.state === 'sleep' && !sqHornBird && t > (a.hornCd || 0) && Math.random() < 0.6){
+                        const tip = aiHornTip();
+                        if(tip){ sqHornBird = a; aiBirdFly(a, {x:tip.x, y:tip.y + 0.14, z:tip.z}, 'horn'); return; }
+                    }
+                    if(a.stateT <= 0 && !aiNight() && !aiRaining()){
+                        if(Math.random() < 0.5){
+                            const spot = aiBirdGroundSpot(a);
+                            if(spot){ aiBirdFly(a, spot, 'peck'); return; }
+                        }
+                        aiBirdCircle(a);
+                    }
+                }
+            } },
+        flyTo: { update(a, dt){
+                a.flyT += dt / a.flyDur;
+                const k = Math.min(1, a.flyT), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+                const px = a.group.position.x, pz = a.group.position.z;
+                a.group.position.set(
+                    a.flyFrom.x + (a.flyTo.x - a.flyFrom.x) * e,
+                    a.flyFrom.y + (a.flyTo.y - a.flyFrom.y) * e + Math.sin(k * Math.PI) * Math.min(2, a.flyDist * 0.22),
+                    a.flyFrom.z + (a.flyTo.z - a.flyFrom.z) * e);
+                const dx = a.group.position.x - px, dz = a.group.position.z - pz;
+                if(Math.abs(dx) + Math.abs(dz) > 1e-5) a.group.rotation.y = Math.atan2(dx, dz);
+                a.phase += dt * 22;
+                a.wingL.rotation.z = Math.sin(a.phase) * 0.95;
+                a.wingR.rotation.z = -Math.sin(a.phase) * 0.95;
+                if(k >= 1) AgentKit.setState(a, a.flyNext);
+            } },
+        circle: { update(a, dt){     // 绕树盘旋一两圈再落回去
+                a.circleA += dt * 4.5 / a.circleR;
+                a.group.position.set(
+                    a.circleC.x + Math.cos(a.circleA) * a.circleR,
+                    a.circleY + Math.sin(a.circleA * 3) * 0.2,
+                    a.circleC.z + Math.sin(a.circleA) * a.circleR);
+                a.group.rotation.y = Math.atan2(-Math.sin(a.circleA), Math.cos(a.circleA));
+                a.phase += dt * 13;
+                a.wingL.rotation.z = Math.sin(a.phase) * 0.65;
+                a.wingR.rotation.z = -Math.sin(a.phase) * 0.65;
+                a.stateT -= dt;
+                if(a.stateT <= 0) aiBirdFly(a, a.perch, 'perch');
+            } },
+        peck: {         // 地面啄食：小跳＋低头啄；受惊/下雨立刻回枝头
+            enter(a){ a.stateT = 6 + Math.random() * 6; a.peckPh = Math.random(); a.groundY = a.group.position.y; },
+            update(a, dt, t){
+                a.hopPhase += dt * 3;
+                a.group.position.y = a.groundY + Math.max(0, Math.sin(a.hopPhase)) * 0.05;
+                a.peckPh += dt;
+                const cyc = a.peckPh % 1.2;
+                a.group.rotation.x = cyc < 0.22 ? Math.sin(cyc / 0.22 * Math.PI) * 0.45 : 0;
+                aiBirdFold(a, Math.min(1, dt * 6));
+                a.stateT -= dt;
+                if(aiThink(a, dt)){
+                    if(aiThreat(a, 2.5) || aiRaining()){ aiBirdFly(a, a.perch, 'perch'); return; }
+                    if(aiNight()){ aiBirdFly(a, a.perch, 'perch'); return; }
+                    if(a.stateT <= 0){ if(Math.random() < 0.5) aiBirdCircle(a); else aiBirdFly(a, a.perch, 'perch'); }
+                }
+            } },
+        horn: {         // 名场面：停在睡龙的角上（每帧贴合角尖，龙醒/动身/待够了就飞走）
+            enter(a){ a.stateT = 18 + Math.random() * 8; },
+            update(a, dt, t){
+                const tip = aiHornTip();
+                if(tip) a.group.position.set(tip.x, tip.y + 0.13, tip.z);
+                if(dragonAgent) a.group.rotation.y = dragonAgent.group.rotation.y;
+                a.group.rotation.z = Math.sin(t * 0.8 + a.phase) * 0.07;
+                aiBirdFold(a, Math.min(1, dt * 8));
+                a.stateT -= dt;
+                if(aiThink(a, dt)){
+                    if(!dragonAgent || dragonAgent.state !== 'sleep' || a.stateT <= 0){
+                        if(sqHornBird === a) sqHornBird = null;
+                        a.hornCd = t + 45;
+                        a.group.rotation.z = 0;
+                        aiBirdFly(a, a.perch, 'perch');
+                    }
+                }
+            } }
+    }
+};
+
 const BUTTERFLY_DEF = {
     name: 'butterfly', initial: 'flutter',
     states: { flutter: { update(a, dt, t){
@@ -3551,8 +3853,17 @@ function attachSquirrel(rec){
     const wp=treeLocalToWorld(rec,0.55,3.2*rec.s,0.3);
     sq.position.set(wp.x,wp.y,wp.z);
     scene.add(sq);
-    squirrels.push(AgentKit.spawn(SQUIRREL_DEF, {group:sq, baseY:sq.position.y, baseX:sq.position.x,
-        phase:Math.random()*6.28, tree:rec}));
+    if(sqAiLeft > 0){   // #50 行为居民：多带一颗橡果（抱食/叼碎屑时才露面）
+        sqAiLeft--;
+        const acorn=new THREE.Mesh(new THREE.SphereGeometry(0.09,8,6), new THREE.MeshStandardMaterial({color:0x8a5a22,roughness:0.9}));
+        acorn.scale.set(1,1.15,1); acorn.position.set(0,0.02,0.40); acorn.visible=false; sq.add(acorn);
+        squirrels.push(AgentKit.spawn(SQUIRREL_AI_DEF, {group:sq, phase:Math.random()*6.28, tree:rec,
+            perch:{x:wp.x, y:wp.y, z:wp.z}, acorn:acorn, groundAng:Math.random()*6.28,
+            homeSpot:null, target:null, thinkAcc:Math.random()*0.2}));
+    } else {
+        squirrels.push(AgentKit.spawn(SQUIRREL_DEF, {group:sq, baseY:sq.position.y, baseX:sq.position.x,
+            phase:Math.random()*6.28, tree:rec}));
+    }
 }
 function attachBird(rec){
     const bird=new THREE.Group();
@@ -3575,8 +3886,16 @@ function attachBird(rec){
     const wp=treeLocalToWorld(rec,(Math.random()-0.5)*1.4,6.4,(Math.random()-0.5)*1.4);
     bird.position.set(wp.x,wp.y,wp.z);
     scene.add(bird);
-    birds.push(AgentKit.spawn(BIRD_DEF, {group:bird, wingL:wingL, wingR:wingR, phase:Math.random()*6.28,
-        hopPhase:Math.random()*6.28, baseY:bird.position.y}));
+    if(bdAiLeft > 0){   // #50 行为居民
+        bdAiLeft--;
+        birds.push(AgentKit.spawn(BIRD_AI_DEF, {group:bird, wingL:wingL, wingR:wingR, phase:Math.random()*6.28,
+            hopPhase:Math.random()*6.28, tree:rec,
+            perch:{x:bird.position.x, y:bird.position.y, z:bird.position.z},
+            thinkAcc:Math.random()*0.2, hornCd:0}));
+    } else {
+        birds.push(AgentKit.spawn(BIRD_DEF, {group:bird, wingL:wingL, wingR:wingR, phase:Math.random()*6.28,
+            hopPhase:Math.random()*6.28, baseY:bird.position.y}));
+    }
 }
 
 /* ==================== 昆虫 ==================== */
