@@ -364,6 +364,21 @@
     #fbCodename:focus{outline:none;border-color:var(--focus-line);box-shadow:0 0 0 2px var(--focus-ring)}
     #fbCodename:disabled{opacity:.45}
     .fbNameHint{font-size:11px;color:var(--note);margin-top:5px;line-height:1.55}
+    /* ===== 玩家立牌投稿（Issue #19：表单内的立牌子表单，分类切到「立牌投稿」才展开） ===== */
+    #sdForm{display:none;margin:0 0 9px;font-size:12.5px;color:var(--soft-txt)}
+    #sdForm.on{display:block}
+    #sdForm .sdNote{font-size:11.5px;color:var(--note);line-height:1.6;margin:0 0 8px;
+        padding:8px 10px;border-radius:9px;background:var(--creed-bg);border-left:3px solid var(--creed-line)}
+    #sdForm .sdRow{display:flex;align-items:center;gap:8px;margin:0 0 7px}
+    #sdForm .sdRow label{flex:none;width:58px}
+    #sdForm input[type="text"]{flex:1;min-width:0;box-sizing:border-box;
+        background:var(--field);color:var(--field-txt);border:1px solid var(--line-soft);
+        border-radius:8px;padding:7px 9px;font-size:12.5px;font-family:inherit}
+    #sdForm input[type="text"]:focus{outline:none;border-color:var(--focus-line);box-shadow:0 0 0 2px var(--focus-ring)}
+    #sdForm select{flex:1;min-width:0}
+    #sdForm .sdKind{display:flex;gap:14px}
+    #sdForm .sdKind label{width:auto;display:flex;gap:6px;align-items:center;cursor:pointer}
+    #sdForm .sdKind input{accent-color:var(--pri);width:15px;height:15px;cursor:pointer}
     #fbEcho{display:none;margin-top:9px;padding:9px 11px;border-radius:9px;font-size:12px;line-height:1.6;
         color:var(--soft-txt);background:var(--creed-bg);border-left:3px solid var(--creed-line)}
     #fbEcho.on{display:block}
@@ -508,6 +523,17 @@
         padding:7px 11px;border-radius:12px;font-size:12.5px;line-height:1.5;
         transform:translate(-50%,-130%);opacity:0;transition:opacity .6s;white-space:pre-wrap;word-break:break-all}
     #wishBubble.on{opacity:1}
+    /* ===== 玩家立牌气泡（Issue #19：点世界里的立牌弹出，投影定位跟随） ===== */
+    #sdBubble{position:absolute;z-index:126;pointer-events:none;max-width:250px;min-width:130px;
+        background:var(--bubble);color:var(--bubble-txt);border:1px solid var(--bubble-line);
+        padding:9px 30px 9px 12px;border-radius:12px;font-size:12.5px;line-height:1.55;
+        transform:translate(-50%,-118%);opacity:0;transition:opacity .3s;word-break:break-word;
+        box-shadow:var(--tip-shadow)}
+    #sdBubble.on{opacity:1}
+    #sdBubble .sdName{font-weight:700;font-size:13.5px;color:var(--bubble-txt)}
+    #sdBubble .sdBy{font-size:11px;opacity:.75;margin-top:2px}
+    #sdBubbleX{position:absolute;top:4px;right:6px;width:20px;height:20px;border:none;border-radius:50%;
+        background:transparent;color:inherit;font-size:12px;cursor:pointer;pointer-events:auto;line-height:1;padding:0}
     /* ===== 找一找（找到提示 / 集齐徽章） ===== */
     #huntToast{position:absolute;left:50%;top:18%;z-index:125;pointer-events:none;
         transform:translate(-50%,-8px);opacity:0;transition:opacity .35s,transform .35s;
@@ -826,8 +852,34 @@
             <option value="画面" selected>画面</option>
             <option value="玩法">玩法</option>
             <option value="声音">声音</option>
+            <option value="立牌投稿">立牌投稿</option>
             <option value="其它">其它</option>
         </select></div>
+        <div id="sdForm">
+            <p class="sdNote">🎪 <b>给世界添一位小伙伴：</b>填好下面的样子，投稿会先发给负责人<b>审核</b>，通过后你的小角色就会站在世界里，署名就是角色名。<br>先说清：<b>这里不支持上传图片</b>——小角色不长在照片上，而是由世界按你选的体型、主色和配饰，用程序现场捏出来的（和世界里的小龙同一种做法），所以请用下面的选项拼出你想要的样子。</p>
+            <div class="sdRow"><label for="sdName">角色名</label><input id="sdName" type="text" maxlength="12" placeholder="如：小满"></div>
+            <div class="sdRow"><label for="sdIntro">自我介绍</label><input id="sdIntro" type="text" maxlength="40" placeholder="一句话，如：爱在湖边发呆的旅行家"></div>
+            <div class="sdRow"><label>体型</label><span class="sdKind">
+                <label><input type="radio" name="sdKind" value="kid" checked><span>小人</span></label>
+                <label><input type="radio" name="sdKind" value="pet"><span>小动物</span></label>
+            </span></div>
+            <div class="sdRow"><label for="sdColor">主色</label><select id="sdColor">
+                <option value="#f6cd62">奶黄</option>
+                <option value="#86cf92">薄荷绿</option>
+                <option value="#82b8ec">天空蓝</option>
+                <option value="#f6a8bf">蜜桃粉</option>
+                <option value="#bda3e3">葡萄紫</option>
+                <option value="#f1e7d0">奶油白</option>
+                <option value="#f6a04d">橘子橙</option>
+            </select></div>
+            <div class="sdRow"><label for="sdAcc">配饰</label><select id="sdAcc">
+                <option value="none">无</option>
+                <option value="hat">小帽子</option>
+                <option value="scarf">围巾</option>
+                <option value="bow">蝴蝶结</option>
+                <option value="flower">头花</option>
+            </select></div>
+        </div>
         <div class="fbNameRow">
             <div class="fbNameLab">如果这条建议被采纳，你希望怎么署名？</div>
             <label class="fbNameOpt"><input type="radio" name="fbName" value="codename"><span>用我的代号公开鸣谢</span></label>
@@ -880,6 +932,7 @@
         <div class="hrow"><b>快照存图</b><span>顶栏「📸 快照存图」，把当前画面（连天气和昼夜）存成图片下载到本机</span></div>
         <div class="hrow"><b>投票选点子</b><span>顶栏「🗳️ 投票选点子」，给最想要的新点子投票，一台设备一票，票数定期公布</span></div>
         <div class="hrow"><b>放河灯</b><span>左下角「🏮 放河灯」，写一句愿望，让它在湖上漂一会儿</span></div>
+        <div class="hrow"><b>玩家立牌</b><span>世界里站着的小人/小动物是玩家投稿、负责人审核后放进来的访客，点一点能看它的名字和自我介绍；你也来投稿的话，在「💬 优化意见」里把分类选成「立牌投稿」</span></div>
         <div class="hrow"><b>界面隐藏</b><span>顶栏与底栏停手 3 秒会自动隐藏，点屏幕右缘的小圆钮可以唤回</span></div>
         <div class="hrow"><b>更多设置</b><span>右下角齿轮里有功能开关、预设视角、色调与声音</span></div>
         <div id="helpRow">
@@ -1009,6 +1062,7 @@
 </div>
 <div id="codexToast"></div>
 <div id="wishBubble"></div>
+<div id="sdBubble"><button type="button" id="sdBubbleX" aria-label="关闭">✕</button><div class="sdName"></div><div class="sdIntro"></div><div class="sdBy"></div></div>
 <div id="huntToast"></div>
 <div id="helpTip">👋 第一次来？点顶栏里的「❓ 操作帮助」，玩法都在里面</div>
 <button id="wakeBtn" type="button" title="显示操作界面" aria-label="显示操作界面">‹</button>
@@ -5895,6 +5949,7 @@ function animate(){
     updateDragonCam(dt);
     controls.update();
     Interior.update(dt, t);
+    updateStandees(t);
     renderer.render(scene,camera);
     fpsTick(dt);
 }
@@ -6010,7 +6065,7 @@ function fbEndpoint(){
 }
 function fbEl(id){ return document.getElementById(id); }
 function pad2(n){ return n<10?'0'+n:''+n; }
-const FB_CATS=['画面','玩法','声音','其它'];
+const FB_CATS=['画面','玩法','声音','立牌投稿','其它'];
 function feedbackCategory(){
     const s=fbEl('fbCat');
     const v=s?s.value:'';
@@ -6063,8 +6118,11 @@ function sendFeedback(body){
     // 建议回音（Issue #39）：普通留言若带 meta.echo，再多「回执码/署名」两字段——负责人凭回执码
     // 把采纳记录登记进站内 ECHO_ADOPTED，玩家下次打开凭本机码收到一对一回信（匹配只在本机做）。
     const isVote=meta.kind==='vote';
+    // 玩家立牌（Issue #19）：meta.kind==='standee' 时换标题并加「类型/角色名/自我介绍/外观」
+    // 字段，投稿随同一条通道发给负责人审核；未审内容不进公共场景（硬规矩）。
+    const isStandee=meta.kind==='standee';
     const payload=FB_RELAY?Object.assign({
-        _subject:isVote?'【楚门2.0】访客投票':'【楚门2.0】优化意见',
+        _subject:isVote?'【楚门2.0】访客投票':(isStandee?'【楚门2.0】立牌投稿':'【楚门2.0】优化意见'),
         _captcha:'false',
         _template:'table',
         内容:text,
@@ -6074,7 +6132,8 @@ function sendFeedback(body){
         手机:meta.mobile?'是':'否',
         浏览器:meta.ua||''
     },isVote?{ 类型:'访客投票', 投票选择:meta.choiceName||meta.choice||'' }
-            :(meta.echo?{ 回执码:meta.echo, 署名:meta.naming||'' }:{}) )
+            :(isStandee?{ 类型:'立牌投稿', 角色名:meta.sdName||'', 自我介绍:meta.sdIntro||'', 外观:meta.sdLook||'' }
+            :(meta.echo?{ 回执码:meta.echo, 署名:meta.naming||'' }:{}) ) )
     :{text:text,meta:meta};
     // 发法很关键：application/json 会触发 CORS 预检（多花 1 秒多），
     // 叠加 FormSubmit 自身 ~1.4 秒的响应，很容易撞上超时被判失败。
@@ -6154,6 +6213,8 @@ function setupFeedback(){
         if(feedbackTier()==='codename') fbEl('fbCodename').focus();
     }));
     fbEl('fbCopy').addEventListener('click',()=>{
+        // 立牌投稿走自己的校验与文案（角色名/介绍必填，正文框只是补充说明）
+        if(feedbackCategory()==='立牌投稿'){ submitStandeePost(); return; }
         if((ta.value||'').trim().length===0){
             setFbMsg('还没写内容呢，先写两句再提交。',true);
             ta.focus();
@@ -6616,6 +6677,274 @@ function echoArmLetterWatch(){
         clearInterval(timer);
         echoShowLetters(unseen.map(m=>m.entry));
     }, 600);
+}
+
+/* ==================== 玩家立牌（Issue #19） ====================
+   访客角：玩家自创一个小角色，审核通过后做成 Q 版小立牌站在世界里，署名投稿人。
+   审核制是硬规矩（Issue 原文钉死）：未审内容绝不进公共场景。所以本站没有站内
+   上传、没有后端——投稿走既有意见表单的「立牌投稿」类型（唯一 fetch 通道），
+   发给负责人审核；过审后负责人在下面 STANDEES 里登记一条，随下一版生效。
+   投稿不支持传图：小角色由世界按投稿选的体型/主色/配饰用程序现场捏出来
+   （与小龙同一套程序建模口径），表单里已把这条写清。
+   立牌是静态访客：站立 + 呼吸/轻摇即可，不进行为框架；走近或点它弹气泡看
+   名字与自我介绍。呈现全走声明式数据，不新增任何存储键。 */
+
+/* ---------- 已过审立牌（声明式数据，负责人发版时填） ----------
+   一条 = 一位玩家的立牌过审并上线。字段：
+     name  角色名（气泡标题；立牌的署名就是它，投稿人代号填 by）。
+     by    投稿人代号（可省）：气泡里以「投稿：」小字呈现。
+     intro 一句自我介绍（≤40 字），点立牌时气泡呈现。
+     look  外观（与投稿表单的选项一一对应）：
+             kind  'kid' 小人 / 'pet' 小动物；
+             color 主色，十六进制数（0xf6cd62）或字符串（'#f6cd62'）都收；
+             acc   配饰 'hat' 小帽子 / 'scarf' 围巾 / 'bow' 蝴蝶结 / 'flower' 头花 / 'none' 无。
+     at    落点 { x, z }：建议花带边、湖岸、屋前空地，先在世界里实地踩点再填，
+           别落在石板路、农田格和寻宝点上。
+     rot   朝向弧度（可省）：缺省面朝背离世界中心的方向，迎着走近的访客。
+   数量上限 STANDEE_MAX（每牌只占 1 次绘制，超出的不渲染）。清单为空是正常状态。 */
+const STANDEE_MAX=6;
+const STANDEES=[
+    /* 格式模板（不要取消注释，照着往下面加真实记录）：
+    { name:'小满', by:'种田小能手', intro:'爱在湖边发呆的旅行家。',
+      look:{ kind:'pet', color:'#82b8ec', acc:'scarf' },
+      at:{ x:14.5, z:-4.0 } },
+    */
+];
+
+let standeeGroup=null, standeeList=[];
+let standeeTapBound=false, standeeTapState=null;
+let standeeBubbleEntry=null, standeeBubbleMesh=null, standeeBubbleUntil=0;
+const SD_MAT=new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.9});
+const SD_CREAM=0xfff3d9, SD_DARK=0x3a2a1c, SD_SHOE=0x6e4a26, SD_BASE=0x8a6238, SD_ACCENT=0xef8f4d;
+
+function standeeColorNum(v){
+    if(typeof v==='number'&&v===v) return v;
+    if(typeof v==='string'){ const n=parseInt(v.replace('#',''),16); if(!isNaN(n)) return n; }
+    return 0xf6cd62;
+}
+/* 小件拼装口径与全场一致：几何先变换、再经 ModelKit.paint 刷顶点色，最后 mergePainted 合批 */
+function sdPart(list,geo,hex,x,y,z,sx,sy,sz,rx,ry,rz){
+    if(sx!==undefined&&sx!==null) geo.scale(sx,sy,sz);
+    if(rx) geo.rotateX(rx);
+    if(ry) geo.rotateY(ry);
+    if(rz) geo.rotateZ(rz);
+    geo.translate(x||0,y||0,z||0);
+    list.push(ModelKit.paint(geo,hex));
+}
+function sdAccessory(P,acc,anchor){
+    if(acc==='hat'){
+        sdPart(P,new THREE.CylinderGeometry(0.20,0.21,0.035,14),SD_ACCENT,0,anchor.hatY,anchor.z);
+        sdPart(P,new THREE.CylinderGeometry(0.125,0.135,0.17,14),SD_ACCENT,0,anchor.hatY+0.10,anchor.z);
+    }else if(acc==='scarf'){
+        sdPart(P,new THREE.TorusGeometry(0.155,0.052,8,16),SD_ACCENT,0,anchor.neckY,anchor.z,1,1,1,Math.PI/2,0,0);
+        sdPart(P,new THREE.BoxGeometry(0.075,0.17,0.035),SD_ACCENT,0.085,anchor.neckY-0.13,anchor.z+0.13,1,1,1,0,0,0.18);
+    }else if(acc==='bow'){
+        const bx=anchor.sideX, by=anchor.topY, bz=anchor.z+0.06, bc=0xe5567c;
+        sdPart(P,new THREE.ConeGeometry(0.058,0.13,8),bc,bx-0.055,by,bz,1,1,1,0,0,1.25);
+        sdPart(P,new THREE.ConeGeometry(0.058,0.13,8),bc,bx+0.055,by,bz,1,1,1,0,0,-1.25);
+        sdPart(P,new THREE.SphereGeometry(0.032,8,8),bc,bx,by,bz);
+    }else if(acc==='flower'){
+        const fx=-anchor.sideX, fy=anchor.topY-0.05, fz=anchor.z+0.08;
+        for(let i=0;i<5;i++){
+            const a=i/5*Math.PI*2;
+            sdPart(P,new THREE.SphereGeometry(0.036,8,8),0xff8fab,fx+Math.cos(a)*0.05,fy+Math.sin(a)*0.05,fz);
+        }
+        sdPart(P,new THREE.SphereGeometry(0.03,8,8),0xffd93b,fx,fy,fz+0.015);
+    }
+}
+function buildStandeeModel(e){
+    const look=(e&&e.look)||{};
+    const main=standeeColorNum(look.color);
+    const P=[];
+    // 立牌底座（木盘）：全牌统一，是「立牌」的读法，也让它在草地上站得稳
+    sdPart(P,new THREE.CylinderGeometry(0.36,0.41,0.07,18),SD_BASE,0,0.035,0);
+    if(look.kind==='pet'){
+        // 小动物：圆身子 + 前上方圆脑袋 + 耳 + 尾，通高约 0.95
+        sdPart(P,new THREE.SphereGeometry(0.30,16,12),main,0,0.40,0,1.08,0.92,0.95);
+        sdPart(P,new THREE.SphereGeometry(0.19,12,10),SD_CREAM,0,0.36,0.17,1,0.9,0.55);
+        sdPart(P,new THREE.SphereGeometry(0.08,10,8),SD_CREAM,-0.13,0.09,0.16,1,0.5,1.4);
+        sdPart(P,new THREE.SphereGeometry(0.08,10,8),SD_CREAM,0.13,0.09,0.16,1,0.5,1.4);
+        sdPart(P,new THREE.SphereGeometry(0.235,16,12),main,0,0.68,0.13);
+        sdPart(P,new THREE.SphereGeometry(0.11,10,8),SD_CREAM,0,0.62,0.32,1,0.75,0.8);
+        sdPart(P,new THREE.SphereGeometry(0.032,8,8),SD_DARK,0,0.66,0.415);
+        sdPart(P,new THREE.SphereGeometry(0.026,8,8),SD_DARK,-0.085,0.72,0.335);
+        sdPart(P,new THREE.SphereGeometry(0.026,8,8),SD_DARK,0.085,0.72,0.335);
+        sdPart(P,new THREE.ConeGeometry(0.085,0.20,10),main,-0.13,0.90,0.10,1,1,1,0,0,0.25);
+        sdPart(P,new THREE.ConeGeometry(0.085,0.20,10),main,0.13,0.90,0.10,1,1,1,0,0,-0.25);
+        sdPart(P,new THREE.SphereGeometry(0.09,10,8),main,0,0.48,-0.30,0.7,1.3,0.7,-0.5,0,0);
+        sdAccessory(P,look.acc,{hatY:0.93,z:0.13,neckY:0.53,sideX:0.17,topY:0.90});
+        return { mesh:new THREE.Mesh(ModelKit.mergePainted(P),SD_MAT), h:1.12 };
+    }
+    // 小人：圆身 + 奶油脸 + 主色发盖 + 小手小脚，通高约 1.32
+    sdPart(P,new THREE.SphereGeometry(0.085,10,8),SD_SHOE,-0.11,0.10,0.03,1,0.55,1.5);
+    sdPart(P,new THREE.SphereGeometry(0.085,10,8),SD_SHOE,0.11,0.10,0.03,1,0.55,1.5);
+    sdPart(P,new THREE.SphereGeometry(0.30,16,12),main,0,0.46,0,1,1.12,0.86);
+    sdPart(P,new THREE.SphereGeometry(0.20,12,10),SD_CREAM,0,0.44,0.155,1,1.15,0.5);
+    sdPart(P,new THREE.SphereGeometry(0.09,10,8),main,-0.305,0.48,0.02,0.7,1.5,0.7,0,0,0.5);
+    sdPart(P,new THREE.SphereGeometry(0.09,10,8),main,0.305,0.48,0.02,0.7,1.5,0.7,0,0,-0.5);
+    sdPart(P,new THREE.SphereGeometry(0.255,18,14),SD_CREAM,0,1.02,0);
+    sdPart(P,new THREE.SphereGeometry(0.268,18,14),main,0,1.10,-0.035,1,0.78,1);
+    sdPart(P,new THREE.SphereGeometry(0.028,8,8),SD_DARK,-0.09,1.04,0.235);
+    sdPart(P,new THREE.SphereGeometry(0.028,8,8),SD_DARK,0.09,1.04,0.235);
+    sdAccessory(P,look.acc,{hatY:1.26,z:0,neckY:0.80,sideX:0.17,topY:1.24});
+    return { mesh:new THREE.Mesh(ModelKit.mergePainted(P),SD_MAT), h:1.48 };
+}
+function buildStandees(){
+    if(standeeGroup) return;
+    if(typeof scene==='undefined'||!scene) return;
+    const defs=STANDEES.filter(e=>e&&e.name&&e.at&&typeof e.at.x==='number'&&typeof e.at.z==='number')
+        .slice(0,STANDEE_MAX);
+    if(!defs.length) return;   // 清单为空：一块立牌都不生成，零绘制、零开销
+    standeeGroup=new THREE.Group(); standeeGroup.name='standeeGroup';
+    scene.add(standeeGroup);
+    defs.forEach((e,i)=>{
+        const built=buildStandeeModel(e);
+        const m=built.mesh;
+        m.castShadow=true;
+        m.position.set(e.at.x,terrainH(e.at.x,e.at.z),e.at.z);
+        m.rotation.y=(typeof e.rot==='number')?e.rot:Math.atan2(e.at.x,e.at.z);
+        m.userData.sdEntry=e;
+        m.userData.sdHeight=built.h;
+        m.userData.sdPhase=i*1.7+0.6;
+        standeeGroup.add(m);
+        standeeList.push(m);
+    });
+}
+const _sdV=new THREE.Vector3();
+function positionStandeeBubble(){
+    const b=document.getElementById('sdBubble');
+    if(!b||!standeeBubbleMesh||!camera||!renderer) return;
+    _sdV.copy(standeeBubbleMesh.position);
+    _sdV.y+=(standeeBubbleMesh.userData.sdHeight||1.4);
+    _sdV.project(camera);
+    if(_sdV.z>1){ b.classList.remove('on'); return; }
+    const r=renderer.domElement.getBoundingClientRect();
+    b.style.left=((_sdV.x*0.5+0.5)*r.width)+'px';
+    b.style.top=((-_sdV.y*0.5+0.5)*r.height)+'px';
+    if(!b.classList.contains('on')) b.classList.add('on');
+}
+function showStandeeBubble(e,mesh){
+    const b=document.getElementById('sdBubble');
+    if(!b||!e) return;
+    standeeBubbleEntry=e; standeeBubbleMesh=mesh;
+    standeeBubbleUntil=performance.now()+9000;
+    b.querySelector('.sdName').textContent='🎪 '+(e.name||'小伙伴');
+    b.querySelector('.sdIntro').textContent=e.intro||'';
+    const by=b.querySelector('.sdBy');
+    if(e.by){ by.textContent='投稿：'+e.by; by.style.display=''; }
+    else by.style.display='none';
+    positionStandeeBubble();
+}
+function hideStandeeBubble(){
+    standeeBubbleEntry=null; standeeBubbleMesh=null;
+    const b=document.getElementById('sdBubble');
+    if(b) b.classList.remove('on');
+}
+function updateStandees(t){
+    if(standeeList.length){
+        for(const m of standeeList){
+            const ph=m.userData.sdPhase;
+            m.scale.y=1+Math.sin(t*1.7+ph)*0.018;    // 呼吸
+            m.rotation.z=Math.sin(t*0.8+ph)*0.02;    // 轻轻摇摆
+        }
+    }
+    if(standeeBubbleEntry){
+        if(performance.now()>standeeBubbleUntil){ hideStandeeBubble(); return; }
+        positionStandeeBubble();
+    }
+}
+function bindStandeeTap(){
+    if(standeeTapBound||!renderer) return;
+    standeeTapBound=true;
+    const el=renderer.domElement;
+    el.addEventListener('pointerdown',function(e){
+        standeeTapState={ x:e.clientX, y:e.clientY, t:performance.now() };
+    });
+    el.addEventListener('pointerup',function(e){
+        if(!standeeTapState) return;
+        const dx=e.clientX-standeeTapState.x, dy=e.clientY-standeeTapState.y;
+        const dur=performance.now()-standeeTapState.t;
+        standeeTapState=null;
+        if(dx*dx+dy*dy<36&&dur<500) onStandeeTap(e);
+    });
+    const x=document.getElementById('sdBubbleX');
+    if(x) x.addEventListener('click',hideStandeeBubble);
+}
+function onStandeeTap(ev){
+    if(!standeeList.length) return;
+    if(typeof Interior!=='undefined'&&Interior.active) return;          // 在屋里不响应室外立牌
+    if(typeof DragonCtl!=='undefined'&&DragonCtl.active) return;        // 操控小龙时点击归小龙移动
+    const r=renderer.domElement.getBoundingClientRect();
+    const nx=((ev.clientX-r.left)/Math.max(1,r.width))*2-1;
+    const ny=-((ev.clientY-r.top)/Math.max(1,r.height))*2+1;
+    const ray=new THREE.Raycaster();
+    ray.setFromCamera({x:nx,y:ny},camera);
+    const hits=ray.intersectObjects(standeeList,false);
+    if(hits.length&&hits[0].distance<48) showStandeeBubble(hits[0].object.userData.sdEntry,hits[0].object);
+    else if(standeeBubbleEntry) hideStandeeBubble();
+}
+
+/* ---------- 投稿表单：分类切到「立牌投稿」时展开子表单，提交走独立校验 ---------- */
+function sdClean(s,max){ return String(s||'').replace(/[<>\r\n]/g,'').trim().slice(0,max); }
+function standeeLookText(){
+    const colorSel=fbEl('sdColor'), accSel=fbEl('sdAcc');
+    const kind=(document.querySelector('input[name="sdKind"]:checked')||{}).value||'kid';
+    const colorTxt=colorSel?colorSel.options[colorSel.selectedIndex].text:'';
+    const accTxt=accSel?accSel.options[accSel.selectedIndex].text:'';
+    return (kind==='pet'?'小动物':'小人')+' · 主色 '+colorTxt+'('+(colorSel?colorSel.value:'')+') · 配饰 '+accTxt;
+}
+function setupStandeeForm(){
+    const sel=fbEl('fbCat'), ta=fbEl('fbText');
+    if(!sel||!ta) return;
+    const origPh=ta.getAttribute('placeholder')||'';
+    const sync=()=>{
+        const on=feedbackCategory()==='立牌投稿';
+        fbEl('sdForm').classList.toggle('on',on);
+        const nr=document.querySelector('.fbNameRow');
+        if(nr) nr.style.display=on?'none':'';   // 立牌署名就是角色名，不走建议的署名三档/回执
+        const cp=fbEl('fbCopy');
+        if(cp) cp.textContent=on?'提交立牌投稿':'提交意见';
+        ta.setAttribute('placeholder',on?'补充说明（可不填）：比如想站在湖边、想和谁做邻居……':origPh);
+        if(on) setFbMsg('');
+    };
+    sel.addEventListener('change',sync);
+    sync();
+}
+function submitStandeePost(){
+    const ta=fbEl('fbText'), cnt=fbEl('fbCount');
+    const name=sdClean(fbEl('sdName').value,12);
+    const intro=sdClean(fbEl('sdIntro').value,40);
+    if(!name){ setFbMsg('先给你的小角色起个名字吧。',true); fbEl('sdName').focus(); return; }
+    if(!intro){ setFbMsg('再写一句自我介绍吧，点它的人会看到这一句。',true); fbEl('sdIntro').focus(); return; }
+    const extra=(ta.value||'').trim();
+    const d=new Date();
+    let text='【立牌投稿】'+d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate())+' '+
+        pad2(d.getHours())+':'+pad2(d.getMinutes())+
+        '\n角色名：'+name+'\n自我介绍：'+intro+'\n外观：'+standeeLookText();
+    if(extra) text+='\n补充：'+extra;
+    // 与意见同一套路：① 先复制（不依赖网络，永不丢）② 再经唯一通道静默回传
+    copyToClipboard(text).then(()=>{
+        setFbMsg('已复制。正在发送…');
+    }).catch(()=>{
+        setFbMsg('这个浏览器不让自动复制——投稿内容已拼好，粘到聊天里发我审核也行。正在发送…',true);
+    }).then(()=>{
+        return sendFeedback({
+            text:text,
+            meta:{
+                category:'立牌投稿',
+                weather:(weatherLabels[weatherIndex]||''),
+                screen:LAYOUT.w+'x'+LAYOUT.h+(ROT?' 横屏':''),
+                mobile:IS_MOBILE,
+                ua:(typeof navigator!=='undefined'&&navigator.userAgent)?navigator.userAgent:'',
+                kind:'standee', sdName:name, sdIntro:intro, sdLook:standeeLookText()
+            }
+        });
+    }).then(ok=>{
+        if(ok) setFbMsg('✅ 投稿收到啦！先给负责人审核，通过后你的小角色就会出现在世界里。');
+        else setFbMsg('✅ 已复制到剪贴板——这条链接没有回传通道，粘到聊天里发我审核即可。');
+        fbEl('sdName').value=''; fbEl('sdIntro').value=''; ta.value='';
+        cnt.textContent='0 / '+FB_MAX;
+    });
 }
 
 /* ==================== 操作帮助（Issue #5） ====================
@@ -8113,6 +8442,7 @@ function init(){
     setupSliders();
     setupFeedback();
     setupEcho();
+    setupStandeeForm(); buildStandees(); bindStandeeTap();   // 立牌须赶在 createInterior 抓室外清单之前建好，进屋时自动隐藏
     setupHelp();
     setupSnapshot();
     setupVote();
