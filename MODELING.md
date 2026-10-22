@@ -178,6 +178,19 @@ three.min.js 一个，CSP 与安全审计口径不变。加载全程异步，渲
 永不发起加载，单文件永远走代码模型——这就是低模保底轨的定义，高模轨的任何
 故障都不许波及它。
 
+### 批次记录
+
+- **第一批「房子附近」（2026-10-22）**：主屋外壳 `house`、栅栏 `fence_seg`、核心区
+  松 `pine_a/pine_b`、阔叶 `broadleaf_a/broadleaf_b`，hi/lo 双档齐备（仓库
+  `assets/models/`，合计约 11.2MB；单件上限口径以环境包为准：hi ≤3MB、lo ≤800KB，
+  本批最大 house.hi 2.87MB）。主屋只换外壳（`__houseShell` 23 件），门/窗/门牌/
+  檐灯/烟等功能件保留代码版；生产侧 house 已改无门板版（门洞与代码门对齐），游戏内
+  继续用可开合的代码门。核心树干冠一体单材质，四季染色按「代码冠材当前色 ÷ 基线
+  色」比例同步；树干 IM 按 variant 沉降/整份隐藏与冠显隐联动。**glSafe 安全模式
+  设备一律不加载 GLB**（apply 闸门）。前置条件：带内嵌贴图的 GLB 依赖 CSP
+  `connect-src` 放行 `blob:`（GLTFLoader 以 ImageBitmapLoader fetch blob: 贴图），
+  index.html 与 serve.js 已同步放行，安全审计口径不变。
+
 ### Capacitor 适配约束（永久规则，管线与新模型代码必须遵守）
 
 1. 所有资源路径只用相对路径，禁止写死任何域名/GitHub 绝对路径（注册表 src、
