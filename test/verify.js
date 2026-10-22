@@ -609,6 +609,28 @@ test('v5.1 #96 自动隐藏补齐：操控条/进出屋条纳入 bars-off', ()=>
     must(/#app\.bars-off #appBar/.test(html), 'App 提示条未纳入 bars-off');
 });
 
+// ---------- v4.2 #67 龙蛋开局 ----------
+test('v4.2 #67 蛋状态存 ct2_dragon.egg（不新增键）＋新老存档归一', ()=>{
+    must(/c\.egg = \{hatched:false, laid:drgTodayStr\(\), born:null\}/.test(inlineJs), '全新存档未置未孵化');
+    must(/hatched:true, laid:null, born:null/.test(inlineJs), '老存档缺 egg 字段未归一为已孵化');
+    must(/function dragonHatched\(/.test(inlineJs), '缺 dragonHatched');
+    must(/const EGG_HINT =/.test(inlineJs), '缺蛋形态提示文案');
+});
+
+test('v4.2 #67 蛋模型/孵化演出/再孵一颗＋开局分流', ()=>{
+    must(/function createEgg\(/.test(inlineJs) && /function hatchEgg\(/.test(inlineJs)
+        && /function finishHatch\(/.test(inlineJs) && /function updateEgg\(/.test(inlineJs), '蛋系统四件不全');
+    must(/if\(dragonHatched\(\)\) createDragon\(\); else createEgg\(\);/.test(inlineJs), 'init 未按蛋状态分流建龙/建蛋');
+    must(/id="hatchBtn"/.test(html) && /id="reEggBtn"/.test(html) && /id="eggMask"/.test(html), '孵化钮/再孵钮/确认弹窗缺一');
+    must(/function eggResetToEgg\(/.test(inlineJs), '缺再孵重置流程');
+});
+
+test('v4.2 #67 × #100 适配：少女不走序章＋安全阀有限守望＋再孵重接管', ()=>{
+    must(/form === 'girl' && !dragonHatched\(\)/.test(inlineJs), 'chooseAvatar 未处理少女静默破壳');
+    must(/entryValveWaits/.test(inlineJs), '进入安全阀未给蛋序章有限守望');
+    must(/if\(enteredWorld\)\{[\s\S]{0,400}dragonTakeover\(\);/.test(inlineJs), 'finishHatch 未处理再孵重接管');
+});
+
 console.log('\n====================');
 console.log(`Results: ${passed} passed, ${failed} failed`);
 process.exit(failed>0 ? 1 : 0);
