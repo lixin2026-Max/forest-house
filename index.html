@@ -839,7 +839,7 @@
     #app.photo-on #fbMask,#app.photo-on #ltMask,#app.photo-on #helpMask,#app.photo-on #voteMask,
     #app.photo-on #logMask,#app.photo-on #dragonMask,#app.photo-on #avatarMask,#app.photo-on #viewMask,#app.photo-on #echoMask,#app.photo-on #codexMask,#app.photo-on #achMask,
     #app.photo-on #gbMask,#app.photo-on #chronMask,#app.photo-on #huntToast,#app.photo-on #helpTip,#app.photo-on #appBar,
-    #app.photo-on #wishBubble,#app.photo-on #sdBubble,#app.photo-on #codexToast,#app.photo-on #achToast,#app.photo-on #rotGuide{display:none !important}
+    #app.photo-on #wishBubble,#app.photo-on #sdBubble,#app.photo-on #codexToast,#app.photo-on #achToast,#app.photo-on #rotGuide,#app.photo-on #miniMap{display:none !important}
     #photoUI{display:none;position:absolute;inset:0;z-index:140;pointer-events:none}
     #photoGrid{position:absolute;inset:0;pointer-events:none;
         background:
@@ -12893,31 +12893,78 @@ function closeCodex(){
 })();
 
 /* ==================== 小地图（Issue #65 · v4.2） ====================
-   左下角 2D canvas 卡片：静态底图（离屏缓存）＋玩家/小龙两个动态点。
-   坐标口径（不另编一份数，全部读世界既有定义）：
-   - 世界范围 = 地面 createTerrain 的 PlaneGeometry(160,160)，即 x/z 各 ±80，
-     地图画布正好铺满这一范围，画布边缘即世界边缘；
-   - 映射方向：北上——画布上方 = 世界 -Z，右 = 世界 +X（worldToMap 里
-     mx 按 +X 向右、my 按 +Z 向下，-Z 自然落在上方）；
-   - 湖 LAKE_C/LAKE_RX/LAKE_RZ、河 riverCenter 采样（线宽取河宽量级）、
-     小屋 HOUSE_POS＋屋身 6.4×5.2（createHouse 的 BoxGeometry）经 houseLocal
-     转角点、农田 FARM_RECT 经 houseLocal 转角点、花带按 createFlowerBands
-     的屋前/两侧排线中线、树点读 CODEX_TREE_SPOTS（createTrees 回填的只读清单）。
-   动态点：白点描边 = 镜头 controls.target，橙点 = dragonAgent 位置（读不到不画）。
-   重绘节流：模块 update 里至多每 200ms 检查一次，位置没动不重画；
-   底图只在首次/主题切换/树点到位时重建。WebGL 绘制 +0、不新增存储键。 */
-const MAP_WORLD = 80;              // 世界半边长：地面 160×160（createTerrain）
+   「探索者的地图」：左下角 2D canvas 卡片，静态底图（离屏缓存）＋化身一个动态点。
+   定位口径（2026-10-22 冲突总原则：老设计与新设定冲突时以新的为准、老的优化适配）：
+   - #100 已取消上帝视角，半成品原稿的「镜头中心点」随之去掉——地图不再是
+     实时监控全图的上帝之眼，只标化身本人（位置＋朝向），其余都是纸地图信息；
+   - 地形、水系、土路、林地、世界边界全图可见（纸地图本就画得出），但区域
+     名牌与图标要玩家亲自抵达过才点亮，未抵达的只画虚线轮廓；抵达记录扩
+     ct2_codex 的 m 字段落盘（不新增键），与图鉴同居一键：图鉴记见过什么，
+     这里记去过哪里（后续「抵达解锁图鉴」可直接读这份记录）。
+   区域划分（全部读世界既有定义，不另编一份数）：小屋核心区以 HOUSE_POS 为心、
+   半径取核心保护圈 70；其余四区读 ZONE_PADS（麦田/果园/牧场/村舍群），
+   风车丘读 WINDMILL_HILL。
+   坐标口径：范围为可玩半径 WORLD_R 外扩 10，画布铺满；北上——画布上方为
+   世界 -Z、右为 +X。湖读 LAKE_C/LAKE_RX/LAKE_RZ，老河读 RIVER_PTS、延长河读
+   RIVER_EXT_PTS，土路读 EXP_ROADS，石桥读 window.__bridge，水车取延长河
+   沿程约 30 处采样点，农田 FARM_RECT 与小屋屋身经 houseLocal 转角点，
+   树点读 CODEX_TREE_SPOTS（建世界时回填的只读清单）。
+   重绘节流：模块 update 里至多每 200ms 检查一次，位置/朝向没变不重画；
+   底图只在素材（树点/土路/桥）到位、抵达集合变化或主题切换时重建。
+   绘制全走 2D canvas，WebGL 绘制 +0、不新增存储键。 */
+const MAP_EXT = 230;               // 画布覆盖的世界半边长：WORLD_R（220）外扩 10 留边
 const MAP_PX = 296;                // 画布内部像素（CSS 显示 148/108，内部固定 2 倍图）
-const MAP_S = MAP_PX / (MAP_WORLD * 2);
+const MAP_S = MAP_PX / (MAP_EXT * 2);
 let minimapUserClosed = false;     // 卡片 ✕ 单独关（与 FEAT 开关分开，开关复位它）
 let minimapShown = null;           // 当前 display 状态（null=未定）
 let minimapStatic = null;          // 离屏静态底图
-let minimapStaticTrees = false;    // 底图是否已含树点
+let minimapStaticKey = '';         // 底图素材签名，变了才重建
+let minimapSeen = null;            // 已抵达区域 id（内存缓存，源头在 ct2_codex.m）
 let minimapAcc = 1;                // 节流累加（初值给满，首帧就画）
 let minimapLastDraw = '';          // 上次动态点的量化位置签名，没变不重画
 
 function worldToMap(x, z){
-    return [ (x + MAP_WORLD) * MAP_S, (z + MAP_WORLD) * MAP_S ];
+    return [ (x + MAP_EXT) * MAP_S, (z + MAP_EXT) * MAP_S ];
+}
+function minimapZones(){
+    const zs = [{ id:'core', name:'小屋 · 湖畔', icon:'🏠', x:HOUSE_POS.x, z:HOUSE_POS.z, r:70 }];
+    if(typeof ZONE_PADS !== 'undefined' && ZONE_PADS){
+        const meta = [ ['wheat','麦田','🌾'], ['orchard','果园','🍎'], ['pasture','牧场','🐄'], ['village','村舍群','🏘'] ];
+        for(let i = 0; i < ZONE_PADS.length && i < meta.length; i++)
+            zs.push({ id:meta[i][0], name:meta[i][1], icon:meta[i][2],
+                      x:ZONE_PADS[i].x, z:ZONE_PADS[i].z, r:ZONE_PADS[i].r });
+    }
+    if(typeof WINDMILL_HILL !== 'undefined' && WINDMILL_HILL)
+        zs.push({ id:'windmill', name:'风车丘', icon:'🌀', x:WINDMILL_HILL.x, z:WINDMILL_HILL.z, r:32 });
+    return zs;
+}
+function minimapSeenLoad(){
+    if(minimapSeen) return minimapSeen;
+    let s = null;
+    try{ s = store.codex.json({ u:[] }); }catch(e){}
+    minimapSeen = (s && Array.isArray(s.m)) ? s.m.slice() : [];
+    if(minimapSeen.indexOf('core') < 0) minimapSeen.push('core');   // 出生地默认已抵达
+    return minimapSeen;
+}
+function minimapMarkSeen(id){
+    const seen = minimapSeenLoad();
+    if(seen.indexOf(id) >= 0) return;
+    seen.push(id);
+    try{
+        const s = store.codex.json({ u:[] });
+        s.m = seen.slice();            // 整对象回存，图鉴的 u 字段原样保留
+        store.codex.save(s);
+    }catch(e){}
+    minimapStatic = null;              // 底图名牌跟着点亮（下一帧按新签名重建）
+    minimapStaticKey = '';
+}
+function minimapZoneCheck(px, pz){
+    const seen = minimapSeenLoad();
+    const zs = minimapZones();
+    for(const z of zs){
+        if(seen.indexOf(z.id) >= 0) continue;
+        if(Math.hypot(px - z.x, pz - z.z) <= z.r) minimapMarkSeen(z.id);
+    }
 }
 function minimapShouldShow(){
     if(typeof FEAT === 'undefined' || !FEAT.minimap || !FEAT.minimap.on) return false;
@@ -12934,72 +12981,141 @@ function minimapRefreshVis(){
     el.style.display = show ? '' : 'none';
     if(show){ minimapAcc = 1; minimapLastDraw = ''; }   // 重新露脸时立刻补画一帧
 }
+function minimapStaticSig(){
+    let s = minimapSeenLoad().join(',');
+    s += '|t' + ((typeof CODEX_TREE_SPOTS !== 'undefined' && CODEX_TREE_SPOTS) ? CODEX_TREE_SPOTS.length : 0);
+    s += '|r' + ((typeof EXP_ROADS !== 'undefined' && EXP_ROADS) ? EXP_ROADS.length : 0);
+    s += '|b' + ((typeof window !== 'undefined' && window.__bridge) ? 1 : 0);
+    return s;
+}
 function minimapBuildStatic(){
     const cv = document.createElement('canvas');
     cv.width = MAP_PX; cv.height = MAP_PX;
     const g = cv.getContext('2d');
-    // 陆地（整幅即世界地面范围）
-    g.fillStyle = 'rgba(108,164,88,0.50)';
+    const seen = minimapSeenLoad();
+    const c0 = worldToMap(0, 0), rr = WORLD_R * MAP_S;
+    // 陆地（整幅）＋圈外谷缘压暗
+    g.fillStyle = 'rgba(104,158,84,0.55)';
     g.fillRect(0, 0, MAP_PX, MAP_PX);
-    // 树林团块：植树点清单（只读引用；建世界后才有，到了再补画一次）
+    g.beginPath();
+    g.rect(0, 0, MAP_PX, MAP_PX);
+    g.arc(c0[0], c0[1], rr, 0, 6.29);
+    g.fillStyle = 'rgba(40,52,36,0.35)';
+    g.fill('evenodd');
+    // 林地：植树点清单（只读引用；建世界后才有，到了再补画一次）
     const spots = (typeof CODEX_TREE_SPOTS !== 'undefined' && CODEX_TREE_SPOTS) || [];
-    minimapStaticTrees = spots.length > 0;
     for(const t of spots){
         const p = worldToMap(t.x, t.z);
-        g.fillStyle = t.isPine ? 'rgba(30,96,46,0.90)' : 'rgba(96,166,74,0.85)';
-        g.beginPath(); g.arc(p[0], p[1], 2.6, 0, 6.29); g.fill();
+        g.fillStyle = t.isPine ? 'rgba(30,96,46,0.85)' : 'rgba(96,166,74,0.80)';
+        g.beginPath(); g.arc(p[0], p[1], 1.3, 0, 6.29); g.fill();
     }
-    // 湖（椭圆）＋河（中心线采样描带）
+    // 湖（椭圆）
     g.fillStyle = 'rgba(80,150,210,0.90)';
     const lc = worldToMap(LAKE_C.x, LAKE_C.z);
     g.beginPath();
     g.ellipse(lc[0], lc[1], LAKE_RX * MAP_S, LAKE_RZ * MAP_S, 0, 0, 6.29);
     g.fill();
+    // 河：老河采样线＋延长河采样线＋河尾远潭
     g.strokeStyle = 'rgba(80,150,210,0.90)';
-    g.lineCap = 'round'; g.lineJoin = 'round';
-    g.beginPath();
-    for(let i = 0; i <= RIVER_N; i++){
-        const c = riverCenter(i / RIVER_N), p = worldToMap(c[0], c[1]);
-        if(i === 0) g.moveTo(p[0], p[1]); else g.lineTo(p[0], p[1]);
+    g.lineCap = 'round'; g.lineJoin = 'round'; g.lineWidth = 2.4;
+    if(typeof RIVER_PTS !== 'undefined' && RIVER_PTS && RIVER_PTS.length > 1){
+        g.beginPath();
+        RIVER_PTS.forEach(function(pt, i){
+            const p = worldToMap(pt.x, pt.z);
+            if(i === 0) g.moveTo(p[0], p[1]); else g.lineTo(p[0], p[1]);
+        });
+        g.stroke();
     }
-    g.lineWidth = 4; g.stroke();
+    let extPts = null;
+    try{ extPts = buildRiverExtPts(); }catch(e){}
+    if(extPts && extPts.length > 1){
+        g.beginPath();
+        extPts.forEach(function(pt, i){
+            const p = worldToMap(pt.x, pt.z);
+            if(i === 0) g.moveTo(p[0], p[1]); else g.lineTo(p[0], p[1]);
+        });
+        g.stroke();
+        const tail = extPts[extPts.length - 1], tp = worldToMap(tail.x, tail.z);
+        g.fillStyle = 'rgba(80,150,210,0.90)';
+        g.beginPath(); g.arc(tp[0], tp[1], 2.4, 0, 6.29); g.fill();
+        // 水车：延长河沿程约 30 处的采样点（纸地图标记，无名牌）
+        let wheel = extPts[0];
+        for(const pt of extPts) if(Math.abs(pt.s - 30) < Math.abs(wheel.s - 30)) wheel = pt;
+        const wp = worldToMap(wheel.x, wheel.z);
+        g.fillStyle = '#8a6a3c';
+        g.fillRect(wp[0] - 2, wp[1] - 2, 4, 4);
+    }
+    // 土路：分区折线（建世界后才有）
+    if(typeof EXP_ROADS !== 'undefined' && EXP_ROADS && EXP_ROADS.length){
+        g.strokeStyle = 'rgba(196,164,105,0.85)';
+        g.lineWidth = 1.6;
+        for(const line of EXP_ROADS){
+            if(!line || line.length < 2) continue;
+            g.beginPath();
+            line.forEach(function(pt, i){
+                const p = worldToMap(pt[0], pt[1]);
+                if(i === 0) g.moveTo(p[0], p[1]); else g.lineTo(p[0], p[1]);
+            });
+            g.stroke();
+        }
+    }
+    // 石桥：桥位由建造段写入 window.__bridge
+    if(typeof window !== 'undefined' && window.__bridge){
+        const bp = worldToMap(window.__bridge.cx, window.__bridge.cz);
+        g.fillStyle = '#9a7b52';
+        g.fillRect(bp[0] - 2.6, bp[1] - 1.8, 5.2, 3.6);
+    }
     // 农田：FARM_RECT 是小屋本地坐标，转成世界角点连多边形
     const fx1 = FARM_RECT.lx0, fx2 = FARM_RECT.lx0 + FARM_RECT.cols * FARM_RECT.cellW;
     const fz1 = FARM_RECT.lz0, fz2 = FARM_RECT.lz0 + FARM_RECT.rows * FARM_RECT.cellD;
-    g.fillStyle = 'rgba(198,156,92,0.80)';
+    g.fillStyle = 'rgba(198,156,92,0.85)';
     g.beginPath();
     [[fx1, fz1], [fx2, fz1], [fx2, fz2], [fx1, fz2]].forEach(function(c, i){
         const w = houseLocal(c[0], c[1]), p = worldToMap(w[0], w[1]);
         if(i === 0) g.moveTo(p[0], p[1]); else g.lineTo(p[0], p[1]);
     });
     g.closePath(); g.fill();
-    // 花带：按 createFlowerBands 的排线中线描带（屋前一排＋两侧各一排）
-    g.strokeStyle = 'rgba(242,128,172,0.95)';
-    g.lineWidth = 3.2;
-    const bandLine = function(a, b){
-        const wa = houseLocal(a[0], a[1]), wb = houseLocal(b[0], b[1]);
-        const pa = worldToMap(wa[0], wa[1]), pb = worldToMap(wb[0], wb[1]);
-        g.beginPath(); g.moveTo(pa[0], pa[1]); g.lineTo(pb[0], pb[1]); g.stroke();
-    };
-    bandLine([-4.7, 3.95], [4.7, 3.95]);        // 屋前两排的中线 lz≈3.95
-    bandLine([-4.24, -2.9], [-4.24, 2.9]);      // 左侧两排的中线 lx≈-4.24
-    bandLine([4.24, -2.9], [4.24, 2.9]);        // 右侧两排的中线 lx≈4.24
-    // 小屋：屋身 6.4×5.2（createHouse）经 houseLocal 转四角
+    // 小屋：屋身 6.4×5.2 经 houseLocal 转四角
     g.fillStyle = '#b5763a';
-    g.strokeStyle = 'rgba(70,42,18,0.85)'; g.lineWidth = 1.4;
+    g.strokeStyle = 'rgba(70,42,18,0.85)'; g.lineWidth = 1.2;
     g.beginPath();
     [[-3.2, -2.6], [3.2, -2.6], [3.2, 2.6], [-3.2, 2.6]].forEach(function(c, i){
         const w = houseLocal(c[0], c[1]), p = worldToMap(w[0], w[1]);
         if(i === 0) g.moveTo(p[0], p[1]); else g.lineTo(p[0], p[1]);
     });
     g.closePath(); g.fill(); g.stroke();
-    // 世界边缘（画布内沿）＋北向标记（字色跟随主题变量）
+    // 区域轮廓与名牌：未抵达只画虚线圈；抵达后点亮底色＋图标＋名字
+    const zs = minimapZones();
+    for(const z of zs){
+        const p = worldToMap(z.x, z.z), zr = Math.max(6, z.r * MAP_S);
+        const got = seen.indexOf(z.id) >= 0;
+        if(got){
+            g.fillStyle = 'rgba(255,255,255,0.10)';
+            g.beginPath(); g.arc(p[0], p[1], zr, 0, 6.29); g.fill();
+            g.strokeStyle = 'rgba(255,255,255,0.55)'; g.lineWidth = 1.2;
+            g.setLineDash([]);
+            g.beginPath(); g.arc(p[0], p[1], zr, 0, 6.29); g.stroke();
+            g.fillStyle = 'rgba(255,255,255,0.95)';
+            g.font = '11px sans-serif'; g.textAlign = 'center';
+            g.fillText(z.icon, p[0], p[1] - 1);
+            g.font = '8.5px sans-serif';
+            g.fillText(z.name, p[0], p[1] + 10);
+        } else {
+            g.strokeStyle = 'rgba(255,255,255,0.45)'; g.lineWidth = 1.1;
+            g.setLineDash([4, 3]);
+            g.beginPath(); g.arc(p[0], p[1], zr, 0, 6.29); g.stroke();
+            g.setLineDash([]);
+        }
+    }
+    // 世界边界＋北向标记（字色跟随主题变量）＋画布内沿
     let txtCol = '#fff';
-    try{ txtCol = getComputedStyle(document.documentElement).getPropertyValue('--panel-txt').trim() || '#fff'; }catch(e){}
+    try{ txtCol = window.getComputedStyle(document.documentElement).getPropertyValue('--panel-txt').trim() || '#fff'; }catch(e){}
+    g.strokeStyle = 'rgba(255,255,255,0.6)'; g.lineWidth = 1.6;
+    g.beginPath(); g.arc(c0[0], c0[1], rr, 0, 6.29); g.stroke();
     g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 2;
     g.strokeRect(1, 1, MAP_PX - 2, MAP_PX - 2);
-    g.fillStyle = txtCol; g.font = 'bold 13px sans-serif'; g.textAlign = 'center';
-    g.fillText('N', MAP_PX / 2, 15);
+    g.fillStyle = txtCol; g.font = 'bold 12px sans-serif'; g.textAlign = 'center';
+    g.fillText('N', MAP_PX / 2, 14);
     minimapStatic = cv;
 }
 function minimapDraw(){
@@ -13008,33 +13124,42 @@ function minimapDraw(){
     const g = cv.getContext('2d');
     g.clearRect(0, 0, MAP_PX, MAP_PX);
     g.drawImage(minimapStatic, 0, 0);
-    // 小龙（橙点）：读不到位置就不画
+    // 化身（唯一的动态点）：白芯圆点＋朝向小三角
     if(typeof dragonAgent !== 'undefined' && dragonAgent && dragonAgent.group){
         const dp = dragonAgent.group.position, p = worldToMap(dp.x, dp.z);
-        g.fillStyle = '#ff9f2e'; g.strokeStyle = 'rgba(90,45,0,0.9)'; g.lineWidth = 1.6;
-        g.beginPath(); g.arc(p[0], p[1], 5.4, 0, 6.29); g.fill(); g.stroke();
-    }
-    // 玩家（白点描边）：镜头 target
-    if(typeof controls !== 'undefined' && controls && controls.target){
-        const tp = controls.target, p = worldToMap(tp.x, tp.z);
-        g.fillStyle = '#fff'; g.strokeStyle = 'rgba(20,30,20,0.9)'; g.lineWidth = 1.8;
-        g.beginPath(); g.arc(p[0], p[1], 6, 0, 6.29); g.fill(); g.stroke();
+        const rot = dragonAgent.group.rotation.y || 0;
+        const fx = Math.sin(rot), fz = Math.cos(rot);       // 世界前向（代码库朝向约定）
+        const ang = Math.atan2(fx, -fz);                    // 换到画布角：北（-Z）朝上
+        g.save();
+        g.translate(p[0], p[1]); g.rotate(ang);
+        g.fillStyle = '#ffb03a'; g.strokeStyle = 'rgba(90,45,0,0.9)'; g.lineWidth = 1.1;
+        g.beginPath(); g.moveTo(0, -8.6); g.lineTo(3.4, 1.6); g.lineTo(-3.4, 1.6); g.closePath(); g.fill(); g.stroke();
+        g.restore();
+        g.fillStyle = '#fff'; g.strokeStyle = 'rgba(20,30,20,0.9)'; g.lineWidth = 1.6;
+        g.beginPath(); g.arc(p[0], p[1], 4.4, 0, 6.29); g.fill(); g.stroke();
     }
 }
 function minimapTick(dt){
     minimapRefreshVis();
     if(!minimapShown) return;
-    if(!minimapStatic || (!minimapStaticTrees && typeof CODEX_TREE_SPOTS !== 'undefined' && CODEX_TREE_SPOTS.length))
+    if(typeof dragonAgent !== 'undefined' && dragonAgent && dragonAgent.group){
+        const dp = dragonAgent.group.position;
+        minimapZoneCheck(dp.x, dp.z);
+    }
+    const sig0 = minimapStaticSig();
+    if(!minimapStatic || sig0 !== minimapStaticKey){
         minimapBuildStatic();
+        minimapStaticKey = sig0;
+        minimapLastDraw = '';
+    }
     minimapAcc += dt;
     if(minimapAcc < 0.2) return;             // 至多每 200ms 检查一次
     minimapAcc = 0;
     let sig = '';
-    if(typeof controls !== 'undefined' && controls && controls.target)
-        sig += Math.round(controls.target.x * 2) + ',' + Math.round(controls.target.z * 2);
     if(typeof dragonAgent !== 'undefined' && dragonAgent && dragonAgent.group)
-        sig += '|' + Math.round(dragonAgent.group.position.x * 2) + ',' + Math.round(dragonAgent.group.position.z * 2);
-    if(sig === minimapLastDraw) return;      // 位置没动就不重画
+        sig = Math.round(dragonAgent.group.position.x * 2) + ',' + Math.round(dragonAgent.group.position.z * 2)
+            + '|' + Math.round((dragonAgent.group.rotation.y || 0) * 4);
+    if(sig === minimapLastDraw) return;      // 位置/朝向没动就不重画
     minimapLastDraw = sig;
     minimapDraw();
 }
@@ -13042,8 +13167,8 @@ function minimapTick(dt){
     const x = document.getElementById('miniMapX');
     if(x) x.addEventListener('click', function(){ minimapUserClosed = true; minimapRefreshVis(); });
     // 主题切换（html 类名变化）后底图配色跟着刷新一次
-    if(typeof MutationObserver !== 'undefined'){
-        new MutationObserver(function(){ minimapStatic = null; minimapLastDraw = ''; })
+    if(typeof window !== 'undefined' && window.MutationObserver){
+        new window.MutationObserver(function(){ minimapStatic = null; minimapStaticKey = ''; minimapLastDraw = ''; })
             .observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     }
     minimapRefreshVis();
