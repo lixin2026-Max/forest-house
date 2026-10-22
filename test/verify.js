@@ -216,10 +216,32 @@ test('BGM 按天气换音阶，音频文件只许站内三首内置曲（主题�
     must(audioRefs.length > 0 && audioRefs.every(r => ALLOWED_AUDIO.includes(r)),
         '引用了三首内置曲之外的音频文件：' + audioRefs.join(', '));
 });
-test('音频有总静音开关，且默认静音（不打扰打开者）', ()=>{
+test('音频有总静音开关，默认开启、静音偏好存档说了算', ()=>{
     must(/id="muteBtn"/.test(html), '缺少静音按钮');
-    must(/let audioMuted=true/.test(inlineJs), '音频应默认静音');
+    // 2026-10-22 新规格（负责人定）：环境音随进世界自动起，没存过默认开，
+    // 存档 muted=true 才关；旧规格「默认静音、必须手点开关才有声」已废弃
+    must(/let audioMuted=false/.test(inlineJs), '音频应默认开启（静音偏好由存档决定）');
     must(/function setMute\(v\)/.test(inlineJs), '缺少 setMute()');
+    must(/pref\.muted === true\) audioMuted = true/.test(inlineJs), 'setupMusic 未读回静音偏好');
+    must(/muted: !!audioMuted/.test(inlineJs), 'musicSave 未把静音偏好写入 ct2_music');
+    must(/function audioEnterWorld\(\)/.test(inlineJs), '缺少 audioEnterWorld（进世界开声）');
+    must(/function audioPersistMute\(\)/.test(inlineJs), '缺少 audioPersistMute（静音偏好落盘）');
+});
+test('进世界起播状态机：请求只记账、首次交互补启、永不静音卡死', ()=>{
+    must(/const musicGate = \{ want: false, ok: false \}/.test(inlineJs), '缺少 musicGate 起播状态机');
+    must(!/let musicEntered/.test(inlineJs), '旧一次性标记 musicEntered 应已移除');
+    must(/function musicTryStart\(\)/.test(inlineJs), '缺少 musicTryStart');
+    must(/function soundGateArm\(\)/.test(inlineJs), '缺少 soundGateArm（首次交互补启布防）');
+    must(/function soundGateKick\(\)/.test(inlineJs), '缺少 soundGateKick');
+    must(/addEventListener\('pointerdown', soundGateKick, true\)/.test(inlineJs), '补启闸门未挂 pointerdown');
+    must(/addEventListener\('keydown', soundGateKick, true\)/.test(inlineJs), '补启闸门未挂 keydown');
+    // setupMusic 末尾补推：glSafe 推迟路径里请求先于元素到达，元素就位后必须补推一次
+    must(/soundGateKick\(\);/.test(inlineJs), 'setupMusic 末尾未补推 soundGateKick');
+    // 出生落点也汇入同一起播请求点
+    must(/musicEnterWorld === 'function'\) musicEnterWorld\(\)/.test(inlineJs), 'enterWorldNow 未汇入 musicEnterWorld');
+    // 内置曲地址永不作废 + 错误回落不静音到底
+    must(/t\.__err = true/.test(inlineJs), '内置曲错误未记账防死循环');
+    must(/回落恒在的主题曲/.test(inlineJs), '错误处理缺主题曲回落');
 });
 test('门与篝火可点击（门有名字，可被 raycast 命中）', ()=>{
     must(/door\.name='houseDoor'/.test(inlineJs), '门没有 name，点不到');
