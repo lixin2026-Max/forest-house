@@ -12708,12 +12708,12 @@ function achState(){
               codexN:0, codexTotal:(typeof CODEX_DEFS!=='undefined') ? CODEX_DEFS.length : 0,
               huntN:0, huntTotal:(typeof HUNT_DEFS!=='undefined') ? HUNT_DEFS.length : 0,
               musicN:0, custom:false, snow:false, fest:false };
-    /* 到访计数在现行版里由 visitsBook 维护（ct2_visits 已升级为 JSON {n, appBar}，
+    /* 到访计数在现行版里由 visitsBook 维护（ct2_visits 已升级为 JSON 格式，
        老格式纯数字兼容读）：优先读 visitsBook.n，没有再回落解析原始存档 */
     try{
-        if(typeof visitsBook!=='undefined' && visitsBook && isFinite(visitsBook.n)) s.visits=visitsBook.n;
+        if(typeof visitsBook!=='undefined' && visitsBook && typeof visitsBook.n==='number') s.visits=visitsBook.n;
         else { const raw=store.visits.get()||'';
-               s.visits=(raw.charAt(0)==='{') ? (parseInt((JSON.parse(raw)||{}).n,10)||0) : (parseInt(raw,10)||0); }
+               s.visits=(raw.charCodeAt(0)===123) ? (parseInt((JSON.parse(raw)||{}).n,10)||0) : (parseInt(raw,10)||0); }
     }catch(e){}
     try{
         const dc=(typeof dragonCfg!=='undefined') ? dragonCfg : null;
