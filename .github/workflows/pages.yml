@@ -1,13 +1,14 @@
 name: Deploy to GitHub Pages
 
-# 说明：本仓库的站点就是仓库根目录本身。
-# 这里先挑出「网站需要的文件」到 _site，再发布 —— 不把 test/、docs/ 一起挂到线上，
-# 也让 .git 不会被打进产物。
+# 说明：本站的唯一发布通道（仓库 Pages 的 Source 已设为 GitHub Actions，
+# 即 build_type=workflow；分支直发已关闭，不要再改回 Deploy from a branch）。
 #
-# configure-pages 不带 enablement：默认 GITHUB_TOKEN 没有「创建 Pages 站点」的权限，
-# 打开 Pages 必须由仓库管理员在 Settings 里点一次。这里把失败降级为「跳过」，
-# 这样即使你把 Pages 配成 "Deploy from a branch"（那就用不上本工作流），
-# 每次 push 也不会留下一个红叉。
+# 组装方式：整树同步 —— 仓库根目录原样进 _site，只排除 .git/.github/_site。
+# 不再维护「要带哪些文件」的枚举清单：v5.1 当晚查实，旧清单停留在「只发页面」
+# 时代，漏带 assets/app/download.html/version.json，产物生效时线上音乐/模型/
+# 安装包/下载页/版本指针全 404，还与分支直发互覆、谁后完成谁生效，造成线上
+# 时好时坏（见 CHANGELOG.md v5.1 维护侧）。整树同步后新增任何文件自动带上，
+# 此类事故不再复发。
 
 on:
   push:
@@ -21,7 +22,7 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -33,24 +34,20 @@ jobs:
       - name: 检出
         uses: actions/checkout@v4
 
-      - name: 组装站点
-        run: |
-          mkdir -p _site
-          cp -r index.html 楚门的2.0世界.html .nojekyll js _site/
-          ls -la _site
-
-      - name: 检查 Pages 是否已启用（未启用则跳过发布）
-        id: check
-        continue-on-error: true
+      - name: 配置 Pages
         uses: actions/configure-pages@v5
 
+      - name: 整树组装站点
+        run: |
+          mkdir -p _site
+          rsync -a --exclude='.git' --exclude='.github' --exclude='_site' ./ _site/
+          ls _site
+
       - name: 上传产物
-        if: steps.check.outcome == 'success'
         uses: actions/upload-pages-artifact@v3
         with:
           path: _site
 
       - name: 发布
-        if: steps.check.outcome == 'success'
         id: deployment
         uses: actions/deploy-pages@v4
