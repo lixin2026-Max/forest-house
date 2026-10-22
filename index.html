@@ -11,7 +11,7 @@
 /* 小版本不停机更新自检（发版纪律见 README「发版清单」）：本页构建号与站点 version.json 比对。
    线上更新时：未进世界→整页换新一次（带 _v 参数绕开页面缓存，资源照常走缓存）；
    已在世界→只给角落小字提示，绝不中途重载。指针拉不到就当作无更新，静默放行。 */
-window.__BUILD__ = '2026-1022-2030';
+window.__BUILD__ = '2026-1022-2047';
 (function(){
     const UPD_TRY_KEY='ct2_upd_try';
     let hintedBuild = '';
@@ -12426,6 +12426,7 @@ const FEAT = {
     codex:     { on:true, label:'世界图鉴' },
     minimap:   { on:true, label:'小地图' },
     achieve:   { on:true, label:'成就徽章' },
+    npc:       { on:true, label:'👥 村民作息' },
     atmoFog:   { on:true, label:'沉浸·分层雾' },
     atmoLight: { on:true, label:'沉浸·柔和天光' },
     atmoWind:  { on:true, label:'沉浸·微风植被' },
@@ -12523,6 +12524,13 @@ const MODULE_HOOKS = {
         teardown(){ closeAch();
             const b=document.getElementById('achBtn');
             if(b) b.style.display='none'; }
+    },
+    /* 活世界一期（Issue #112）：村民作息——实现全在 NPCSys 一节；
+       关掉时全体 NPC 回默认在家状态（回屋隐身）、窗灯灭 */
+    npc: {
+        setup(){ NPCSys.build(); NPCSys.snap(); },
+        teardown(){ NPCSys.allHome(); },
+        update(dt, t){ NPCSys.update(dt, t); }
     },
     /* 沉浸氛围五件（Issue #81）：实现全在 AtmoSys 一节，钩子只转发开关，
        各件互不调用——关掉哪件只有哪件停摆/复原，详见 AtmoSys 头注的开关清单 */
@@ -15277,6 +15285,259 @@ function makeGrazer(kind, x, z, tint){
     return AgentKit.spawn(GRAZER_DEF, {group:grp, head:headGrp, home:{x:x, z:z},
         speed:kind==='cow'?0.5:0.66, phase:Math.random()*7, t:Math.random()*4, target:null});
 }
+/* ==================== 活世界一期：NPC 村民作息（Issue #112） ====================
+   盘点结论：村舍群三栋小屋原本没有居民（敲门互动是玩家自家小屋的门），
+   本期播种首批三位村民（一栋一位）并给他们接上作息引擎。全声明式：
+   - NPC_ROSTER 名册：名字/身份/住所/配色/帽型/劳作点/个人作息表集中一处，
+     日后世界观设计直接改表，不用碰引擎；
+   - 作息表键 = 当前生效天气模式（与现行昼夜系统同一时间源——
+     weatherModes[weatherIndex]，自动轮转与玩家手动选定都汇到这一处），
+     值 = 该时段去向：'home' 回屋（隐身）/ 'door' 家门口 / 'work' 劳作点。
+   窗灯与作息同开关（不另起一套）：在家醒着亮、回屋睡下灭，由 NPCSys.glowOn
+   从作息状态统一推导。移动是散步速度走锚点路线，位移复用
+   AgentKit.groundStep（落点问 WalkMap），不引新框架；玩家不在附近
+   （> NPC_CFG.nearR）时状态切换直接瞬移到位省性能，在附近则走过去。
+   作息纯运行时从当前模式推导，不落盘、零新增存档键。 */
+const NPC_CFG = { speed: 1.15, nearR: 26, think: 0.25 };
+const NPC_HOMES = [   // 与 buildExpansion 里 cottageGeos 三栋一一对应（位姿照抄建造口径）
+    { x:-63, z:129, yaw: 0.55, s:1.00 },
+    { x:-43, z:147, yaw:-0.35, s:1.14 },
+    { x:-59, z:153, yaw: 0.95, s:0.88 }
+];
+const NPC_WORKS = {   // 村内既有劳作点：look 是劳作对象，干活时面朝它
+    well:    { x:-50.2, z:134.6, look:{x:-52, z:132} },   // 井台打水
+    wood:    { x:-43.6, z:140.2, look:{x:-45, z:141} },   // 柴堆劈柴
+    clothes: { x:-59.0, z:145.4, look:{x:-59, z:143} }    // 晾衣绳浣洗
+};
+const NPC_ROUTES = {  // door↔work 的中间路点（避开自家屋身；点位经测试逐点校验）
+    '0-well':    [],
+    '1-wood':    [{ x:-45.38, z:153.5 }, { x:-35.6, z:149.0 }],
+    '2-clothes': [{ x:-54.9, z:155.9 }, { x:-53.5, z:150.5 }]
+};
+const NPC_ROSTER = [
+    { id:'ahe',   name:'阿禾', role:'菜农',   home:0, work:'well',    hat:'straw',
+      shirt:0x7fae56, pants:0x5d4a33, skin:0xf2c89b, hair:0x4a3826,
+      day:{ mist:'door', sunny:'work', golden:'door', night:'home', rain:'door' } },
+    { id:'ashan', name:'阿山', role:'樵夫',   home:1, work:'wood',    hat:'cap',
+      shirt:0xb0653f, pants:0x4a4238, skin:0xe8b98a, hair:0x2e241c,
+      day:{ mist:'work', sunny:'work', golden:'door', night:'home', rain:'door' } },
+    { id:'ayun',  name:'阿云', role:'浣衣女', home:2, work:'clothes', hat:'bun',
+      shirt:0x7a9cc4, pants:0x6b5a7a, skin:0xf6d3ac, hair:0x3a2c22,
+      day:{ mist:'door', sunny:'work', golden:'work', night:'home', rain:'home' } }
+];
+function npcDoorAnchor(home){   // 门口锚点：门面（局部 z=1.92·s）再往外 1.55
+    const d = 1.92 * home.s + 1.55;
+    return { x: home.x + Math.sin(home.yaw) * d, z: home.z + Math.cos(home.yaw) * d };
+}
+function buildVillager(cfg){   // 低面 Q 版村民：刷色合并件＋可动四肢/头（走路与劳作摆动用）
+    const g = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.95 });
+    const mk = (geos) => { const m = new THREE.Mesh(mergePaintedGeos(geos), mat); m.castShadow = true; return m; };
+    const legGeo = () => { const c = new THREE.CylinderGeometry(0.085, 0.105, 0.58, 6); c.translate(0, -0.29, 0); return paintGeo(c, cfg.pants); };
+    const legL = new THREE.Group(); legL.position.set(-0.11, 0.58, 0); legL.add(mk([legGeo()]));
+    const legR = new THREE.Group(); legR.position.set( 0.11, 0.58, 0); legR.add(mk([legGeo()]));
+    g.add(legL); g.add(legR);
+    const rig = new THREE.Group(); rig.position.y = 0.58; g.add(rig);   // 上身（俯身劳作绕它转）
+    const torso = new THREE.BoxGeometry(0.52, 0.60, 0.30); torso.translate(0, 0.32, 0);
+    const hem = new THREE.CylinderGeometry(0.30, 0.37, 0.20, 8); hem.translate(0, 0.04, 0);
+    rig.add(mk([paintGeo(torso, cfg.shirt), paintGeo(hem, cfg.pants)]));
+    const armGeo = () => { const c = new THREE.CylinderGeometry(0.065, 0.078, 0.54, 6); c.translate(0, -0.27, 0); return paintGeo(c, cfg.shirt); };
+    const armL = new THREE.Group(); armL.position.set(-0.34, 0.54, 0); armL.add(mk([armGeo()]));
+    const armR = new THREE.Group(); armR.position.set( 0.34, 0.54, 0); armR.add(mk([armGeo()]));
+    rig.add(armL); rig.add(armR);
+    const head = new THREE.Group(); head.position.set(0, 0.64, 0); rig.add(head);
+    const hp = [];
+    const skull = new THREE.SphereGeometry(0.21, 10, 8); skull.translate(0, 0.15, 0); hp.push(paintGeo(skull, cfg.skin));
+    if(cfg.hat === 'straw'){
+        const brim = new THREE.CylinderGeometry(0.37, 0.37, 0.035, 10); brim.translate(0, 0.26, 0); hp.push(paintGeo(brim, 0xd9b45c));
+        const top = new THREE.ConeGeometry(0.23, 0.15, 10); top.translate(0, 0.35, 0); hp.push(paintGeo(top, 0xd9b45c));
+    } else if(cfg.hat === 'cap'){
+        const capTop = new THREE.SphereGeometry(0.225, 10, 5, 0, Math.PI * 2, 0, Math.PI * 0.55);
+        capTop.scale(1, 0.8, 1); capTop.translate(0, 0.17, 0); hp.push(paintGeo(capTop, cfg.hair));
+        const brim = new THREE.BoxGeometry(0.26, 0.03, 0.17); brim.translate(0, 0.24, 0.25); hp.push(paintGeo(brim, cfg.hair));
+    } else {   // bun 发髻
+        const capTop = new THREE.SphereGeometry(0.222, 10, 5, 0, Math.PI * 2, 0, Math.PI * 0.6);
+        capTop.scale(1, 0.85, 1); capTop.translate(0, 0.16, 0); hp.push(paintGeo(capTop, cfg.hair));
+        const bun = new THREE.SphereGeometry(0.095, 8, 6); bun.translate(0, 0.33, -0.12); hp.push(paintGeo(bun, cfg.hair));
+    }
+    head.add(mk(hp));
+    return { group:g, rig:rig, head:head, armL:armL, armR:armR, legL:legL, legR:legR };
+}
+function npcBuildGlow(home){   // 每栋村舍的窗灯：两扇前窗的暖光面，与该户作息同开关
+    const g = new THREE.Group();
+    g.position.set(home.x, outerGroundY(home.x, home.z), home.z);
+    g.rotation.y = home.yaw; g.scale.setScalar(home.s);
+    const mat = new THREE.MeshBasicMaterial({ color:0xffb85c, transparent:true, opacity:0, depthWrite:false });
+    [-1.35, 1.35].forEach(lx => {
+        const p = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.8), mat);
+        p.position.set(lx, 1.65, 1.975);   // 贴在窗玻璃（局部 z=1.92）外 1cm
+        g.add(p);
+    });
+    const side = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.8), mat);   // 侧窗（局部 x=2.32）也亮，哪个角度都看得见灯火
+    side.position.set(2.375, 1.65, 0);
+    side.rotation.y = Math.PI / 2;
+    g.add(side);
+    g.visible = false;
+    scene.add(g);
+    return { group:g, mat:mat, f:0 };
+}
+const NPCSys = {
+    built:false, list:[], glows:[], thinkT:0,
+    modeNow(){ return (typeof weatherModes !== 'undefined') ? weatherModes[weatherIndex] : 'sunny'; },
+    build(){
+        if(this.built) return; this.built = true;
+        NPC_ROSTER.forEach((cfg, i) => {
+            const v = buildVillager(cfg);
+            v.group.visible = false;
+            scene.add(v.group);
+            if(!this.glows[cfg.home]) this.glows[cfg.home] = npcBuildGlow(NPC_HOMES[cfg.home]);
+            this.list.push(Object.assign({ cfg:cfg, at:null, dest:null, path:null, pi:0,
+                stuck:0, walkPh:0, seed:i * 2.39 + 1 }, v));
+        });
+    },
+    anchorFor(n, at){
+        if(at === 'work'){
+            const w = NPC_WORKS[n.cfg.work];
+            return { x:w.x, z:w.z, face:Math.atan2(w.look.x - w.x, w.look.z - w.z) };
+        }
+        const home = NPC_HOMES[n.cfg.home], d = npcDoorAnchor(home);
+        return { x:d.x, z:d.z, face:home.yaw };   // 'home' 与 'door' 同锚点，区别只在隐身
+    },
+    placeAt(n, at){
+        const a = this.anchorFor(n, at);
+        n.group.position.set(a.x, terrainH(a.x, a.z), a.z);
+        n.group.rotation.y = a.face;
+        n.at = at; n.dest = at; n.path = null; n.pi = 0; n.stuck = 0;
+        n.group.visible = at !== 'home';
+        n.legL.rotation.x = 0; n.legR.rotation.x = 0;
+        n.armL.rotation.x = 0; n.armR.rotation.x = 0; n.armL.rotation.z = 0; n.armR.rotation.z = 0;
+        n.rig.rotation.x = 0; n.rig.position.y = 0.58; n.head.rotation.y = 0;
+    },
+    playerFar(n){
+        if(typeof dragonAgent === 'undefined' || !dragonAgent || !dragonAgent.group) return true;
+        const p = dragonAgent.group.position;
+        return Math.hypot(p.x - n.group.position.x, p.z - n.group.position.z) > NPC_CFG.nearR;
+    },
+    setGoal(n, want){
+        const cur = n.dest || n.at || 'home';
+        if(want === cur) return;
+        if(this.playerFar(n)){ this.placeAt(n, want); return; }   // 玩家不在附近：瞬移到位
+        if(cur === 'home') this.placeAt(n, 'door');              // 出门：先现身门口
+        const fromStop = (cur === 'home') ? 'door' : cur;
+        const toStop = (want === 'home') ? 'door' : want;
+        const pts = [];
+        if(fromStop !== toStop){
+            const mid = (NPC_ROUTES[n.cfg.home + '-' + n.cfg.work] || []).slice();
+            if(fromStop === 'work') mid.reverse();
+            mid.forEach(p => pts.push({ x:p.x, z:p.z }));
+            pts.push(this.anchorFor(n, toStop));
+        }
+        n.dest = want; n.path = pts; n.pi = 0; n.stuck = 0;
+        if(!pts.length) this.placeAt(n, want);
+    },
+    snap(){   // 开关打开/初始化：按当前时段直接落位，不走路
+        const mode = this.modeNow();
+        for(const n of this.list) this.placeAt(n, n.cfg.day[mode] || 'door');
+    },
+    allHome(){   // 开关关闭：全体回默认在家状态、窗灯即灭
+        for(const n of this.list){ this.placeAt(n, 'home'); }
+        for(const gl of this.glows){ if(gl){ gl.f = 0; gl.mat.opacity = 0; gl.group.visible = false; } }
+    },
+    glowOn(n, mode){   // 在家门口＝醒着亮灯；回屋时只有夜里是睡下熄灯；外出＝无人不亮
+        const at = n.dest || n.at;
+        if(at === 'door') return true;
+        if(at === 'home') return mode !== 'night';
+        return false;
+    },
+    update(dt, t){
+        if(!this.built) return;
+        this.thinkT -= dt;
+        const mode = this.modeNow();
+        const doThink = this.thinkT <= 0;
+        if(doThink) this.thinkT = NPC_CFG.think;
+        for(const n of this.list){
+            if(doThink){
+                const want = n.cfg.day[mode] || 'door';
+                if(want !== (n.dest || n.at)) this.setGoal(n, want);
+            }
+            this.stepNpc(n, dt, t);
+        }
+        for(let i = 0; i < this.glows.length; i++){
+            const gl = this.glows[i]; if(!gl) continue;
+            const n = this.list.find(v => v.cfg.home === i);
+            const on = !!(n && this.glowOn(n, mode));
+            gl.f += ((on ? 1 : 0) - gl.f) * Math.min(1, dt * 2.2);
+            gl.mat.opacity = gl.f * 0.88;
+            gl.group.visible = gl.f > 0.02;
+        }
+    },
+    stepNpc(n, dt, t){
+        if(n.path && n.pi < n.path.length){
+            const tgt = n.path[n.pi];
+            const d = Math.hypot(tgt.x - n.group.position.x, tgt.z - n.group.position.z);
+            if(d < 0.12){
+                n.pi++;
+                if(n.pi >= n.path.length) this.placeAt(n, n.dest || 'door');
+                return;
+            }
+            const ok = AgentKit.groundStep(n, tgt.x, tgt.z, NPC_CFG.speed * dt);
+            if(!ok){   // 被地形挡住：僵持 2 秒就跳过这个路点，防原地卡死
+                n.stuck += dt;
+                if(n.stuck > 2){ n.stuck = 0; n.pi++; if(n.pi >= n.path.length) this.placeAt(n, n.dest || 'door'); }
+            } else n.stuck = 0;
+            n.walkPh += dt * 7.5;
+            this.poseWalk(n);
+        }
+        else if(n.at === 'work') this.poseWork(n, t);
+        else if(n.at === 'door') this.poseIdle(n, t);
+    },
+    poseWalk(n){
+        const s = Math.sin(n.walkPh);
+        n.legL.rotation.x = s * 0.55; n.legR.rotation.x = -s * 0.55;
+        n.armL.rotation.x = -s * 0.38; n.armR.rotation.x = s * 0.38;
+        n.armL.rotation.z = 0; n.armR.rotation.z = 0;
+        n.rig.position.y = 0.58 + Math.abs(Math.cos(n.walkPh)) * 0.035;
+        n.rig.rotation.x = 0.06;
+        n.head.rotation.y *= 0.8;
+    },
+    poseIdle(n, t){   // 门口待机：呼吸微晃、张望
+        const b = Math.sin(t * 1.4 + n.seed * 3);
+        n.legL.rotation.x *= 0.8; n.legR.rotation.x *= 0.8;
+        n.armL.rotation.x = b * 0.05; n.armR.rotation.x = -b * 0.05;
+        n.armL.rotation.z = 0.06; n.armR.rotation.z = -0.06;
+        n.rig.position.y = 0.58 + b * 0.008;
+        n.rig.rotation.x *= 0.8;
+        n.head.rotation.y = Math.sin(t * 0.23 + n.seed * 5) * 0.45;
+    },
+    poseWork(n, t){   // 劳作小动作（按劳作点分三种，不引动画框架，全是正弦摆）
+        const w = n.cfg.work, tt = t + n.seed * 7;
+        n.legL.rotation.x *= 0.85; n.legR.rotation.x *= 0.85;
+        n.armL.rotation.z = 0; n.armR.rotation.z = 0;
+        if(w === 'well'){          // 打水：俯身舀水—直起
+            const p = (tt % 3.2) / 3.2, bend = Math.sin(Math.min(1, p * 1.4) * Math.PI);
+            n.rig.rotation.x = bend * 0.5;
+            n.armL.rotation.x = -0.5 - bend * 0.7; n.armR.rotation.x = -0.5 - bend * 0.7;
+        } else if(w === 'wood'){   // 劈柴：缓举—劈下
+            const p = (tt % 1.6) / 1.6;
+            const raise = p < 0.62 ? (p / 0.62) : 1 - (p - 0.62) / 0.38, e = raise * raise;
+            n.armR.rotation.x = -0.3 - e * 1.9; n.armL.rotation.x = -0.3 - e * 1.2;
+            n.rig.rotation.x = (p >= 0.62 ? (1 - (p - 0.62) / 0.38) : 0) * 0.22;
+        } else {                   // clothes：双臂交替抬举晾晒
+            const s = Math.sin(tt * 1.5);
+            n.armL.rotation.x = -1.5 + s * 0.75; n.armR.rotation.x = -1.5 - s * 0.75;
+            n.rig.rotation.x = 0.1 + Math.sin(tt * 3) * 0.03;
+        }
+        n.head.rotation.y *= 0.85;
+    },
+    snapshot(){   // 无头验收读数：每位 NPC 的去向/位置/可见性＋自家窗灯
+        return this.list.map(n => ({ id:n.cfg.id, at:n.at, dest:n.dest || n.at,
+            moving:!!(n.path && n.pi < n.path.length), visible:n.group.visible,
+            x:+n.group.position.x.toFixed(2), z:+n.group.position.z.toFixed(2),
+            glow:this.glows[n.cfg.home] ? +this.glows[n.cfg.home].f.toFixed(2) : 0 }));
+    }
+};
+window.__npc = NPCSys;   // 验收钩子（与 __glProbeStats / __fpsTune 同例）
+
 /* ---------------- 村舍小屋（合并进静态件） ---------------- */
 function cottageGeos(list, x, z, yaw, s, bodyCol, roofCol){
     const baseY=outerGroundY(x,z);
