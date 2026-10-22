@@ -236,7 +236,7 @@ test('自动漫游是可选彩蛋（默认关，移动输入即让位）', ()=>{
 });
 test('自适应分辨率（掉帧降像素比、流畅再升回）', ()=>{
     must(/function perfTick\(dt\)/.test(inlineJs), '缺少 perfTick()');
-    must(/fps < 38 && dprCur > 1/.test(inlineJs), '缺少掉帧降档');
+    must(/fps < 25/.test(inlineJs) && /dprCur > 1/.test(inlineJs), '缺少掉帧降档');   // 阈值已按聪明自适应新规格改 25（5 秒窗，见 v5.1 聪明自适应断言组）
     must(/renderer\.setPixelRatio\(dprCur\)/.test(inlineJs), '未用 dprCur 统一像素比');
     must(!/setPixelRatio\(Math\.min\(window\.devicePixelRatio/.test(inlineJs), '仍有写死的像素比，会与自适应冲突');
     must(/perfTick\(dt\);/.test(inlineJs), 'updateModules 未调用 perfTick()');
@@ -580,6 +580,43 @@ test('v5.1 致命层：下载 App 主按钮＋刷新重试，无 Chrome 主推',
     must(/刷新重试/.test(inlineJs), '致命层缺刷新重试按钮');
     must(!/建议用 Chrome/.test(inlineJs), '仍残留「建议用 Chrome」主推文案');
     must(/#error \.fbtns/.test(html), '缺致命层按钮区样式');
+});
+
+// ---------- v5.1 聪明自适应（探针卫生＋档位记成绩＋帧率微调＋App 内分流） ----------
+test('v5.1 聪明自适应 探针卫生：显式释放＋硬上限＋创建/释放计数', ()=>{
+    must(/function glReleaseCtx\(/.test(inlineJs), '缺 glReleaseCtx 显式释放');
+    must(/WEBGL_lose_context/.test(inlineJs), '未用 WEBGL_lose_context 释放探针 context');
+    must(/MAX_ATTEMPTS = 10/.test(inlineJs), '探针缺硬上限（10 次）');
+    must(/__glProbeStats/.test(inlineJs) && /stats\.created\+\+/.test(inlineJs), '缺探针创建/释放计数钩子');
+    must(/glReleaseCtx\(probe\.ctx\)/.test(inlineJs), '交接失败未先释放探针 context 再走阶梯');
+    must(/pagehide/.test(inlineJs) && /forceContextLoss/.test(inlineJs), '页面隐藏未主动释放渲染器 context');
+});
+
+test('v5.1 聪明自适应 档位记成绩：可信档＋嫌疑累计＋试升＋手动优先（同键扩字段）', ()=>{
+    must(/const GL_TIER/.test(inlineJs), '缺档位状态机 GL_TIER');
+    must(/gt: GL_TIER\.trust/.test(inlineJs) && /gm: GL_TIER\.manual/.test(inlineJs), '档位字段未随 ct2_scene 落盘（gt/gm）');
+    must(/glNoteFailure/.test(inlineJs) && /glNoteStable/.test(inlineJs), '缺档位记账 glNoteFailure/glNoteStable');
+    must(/GL_TIER\.fails\[tier\] >= 2/.test(inlineJs), '可信档下调未以同档累计 2 次失败为门槛');
+    must(/180000/.test(inlineJs), '缺「稳定满 3 分钟」记账时长');
+    must(/GL_TIER\.trial = tgt/.test(inlineJs) && /GL_TIER\.tries\[tgt\]/.test(inlineJs), '缺试升一档与试升计数');
+    must(/GL_TIER\.manual = \(mode !== 'auto'\)/.test(inlineJs), '手动选档未接管自适应（manual 标记）');
+    must(/clearGlSuspicion/.test(inlineJs), '缺致命层重试用的清嫌疑入口');
+});
+
+test('v5.1 聪明自适应 帧率微调：5 秒窗＋25/50 阈值＋10 秒宽限＋4 秒冷却＋钩子', ()=>{
+    must(/window\.__fpsTune/.test(inlineJs), '缺 FPS 微调断言钩子 __fpsTune');
+    must(/T\.win < 5/.test(inlineJs), 'FPS 窗口不是 5 秒');
+    must(/fps < 25/.test(inlineJs) && /fps > 50/.test(inlineJs), 'FPS 降/升阈值不是 25/50');
+    must(/T\.enteredAt < 10/.test(inlineJs), '缺进世界 10 秒宽限');
+    must(/T\.lastAt < 4/.test(inlineJs), '缺 ≥4 秒调节冷却');
+});
+
+test('v5.1 聪明自适应 App 内分流：单一判定源（UA 优先）＋致命层不给下载按钮', ()=>{
+    must(/function chumenInAppUA\(/.test(inlineJs) && /function chumenInApp\(/.test(inlineJs), '缺单一判定源 chumenInAppUA/chumenInApp');
+    must(/ChumenApp\//.test(inlineJs) && /__CHUMEN_APP__/.test(inlineJs), '判定源未含壳 UA 后缀与 JS 标记');
+    must(/重试进入/.test(inlineJs), 'App 内致命层缺「重试进入」主按钮');
+    must(/const inAppShell = .*chumenInAppUA/.test(inlineJs), '#appBar 显隐未改用 UA 路径判定源');
+    must(/return \(typeof chumenInAppUA/.test(inlineJs), '#96 沉浸判定未改用 UA 路径判定源');
 });
 
 // ---------- v5.1 #100 视角体系改版 ----------

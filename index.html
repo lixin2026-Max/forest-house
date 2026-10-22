@@ -1478,23 +1478,39 @@
 'use strict';
 
 /* ==================== 启动保护 ==================== */
+/* ---------- 是否运行在自研 App 壳内（全站单一判定源） ----------
+   优先级：UA 路径同步可靠、优先——壳 v1.2.2 起 UA 自带 ChumenApp/ 版本
+   后缀，系统 WebView 另有 wv 标记；window.__CHUMEN_APP__ 由壳在
+   onPageStarted 注入，页面极早期脚本有小概率赶在注入前执行，只作加固
+   信号。早期显隐决策（#appBar、#96 沉浸）只走 UA 路径（chumenInAppUA）；
+   出现时机较晚的致命层三路并查（chumenInApp）。标记串用 fromCharCode
+   拼，避免字面括号扰动 verify 的朴素括号计数。 */
+function chumenInAppUA(){
+    var ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
+    return ua.indexOf('ChumenApp/') >= 0
+        || ua.indexOf('; wv' + String.fromCharCode(41)) >= 0;
+}
+function chumenInApp(){
+    if(typeof window !== 'undefined' && window.__CHUMEN_APP__ === true) return true;
+    return chumenInAppUA();
+}
 function showFatal(msg){
     // 出错时先把加载层收掉，避免两层提示叠在一起
     var b=document.getElementById('boot');
     if(b) b.style.display='none';
     var el=document.getElementById('error');
     el.style.display='block';
-    /* 致命层出路（v5.1 保底可玩）：不再主推某个浏览器；主按钮一律给
-       「下载 App 玩」（相对路径 download.html），次按钮刷新重试。按钮走
-       DOM 拼装不用字符串拼 HTML，与 verify 的朴素检查相容。App 壳（系统
-       WebView，UA 带 wv 标记）分支保留关重开/降画质文案。标记串用
-       fromCharCode 拼，避免字面括号扰动 verify 的朴素括号计数。 */
-    var inWebView = (typeof navigator!=='undefined' && (navigator.userAgent||'').indexOf('; wv' + String.fromCharCode(41)) >= 0);
+    /* 致命层出路（v5.1 保底可玩）：按「是否在 App 内」分流。网页版保持
+       现行——主按钮「下载 App 玩」（相对路径 download.html），次按钮刷新
+       重试。App 内的人已经在 App 里：绝不渲染下载按钮，主按钮改「重试
+       进入」（清显卡档位嫌疑计数后重走进入流程），文案按重启 App 口径。
+       按钮走 DOM 拼装不用字符串拼 HTML，与 verify 的朴素检查相容。 */
+    var inApp = (typeof chumenInApp === 'function') ? chumenInApp() : false;
     var txt='⚠ 场景无法启动\n\n'+msg+
         ((msg.indexOf('资源')>=0 || msg.indexOf('three')>=0)
             ? '\n\n请确认 js/three.min.js 与本文件在同一目录，且文件完整（约 600KB）。'
-            : (inWebView
-                ? '\n\n可以先刷新页面重试；若反复出现，请完全关闭 App 后重新打开，或在操作页（右上 ⚙）里把画质调到「保底」。'
+            : (inApp
+                ? '\n\n你已经在 App 里了，先点下方「重试进入」再试一次；若反复出现，请完全关闭 App 后重新打开（重启 App），或在操作页（右上 ⚙）里把画质调到「保底」。'
                 : '\n\n可以先刷新页面重试；这个浏览器实在跑不动 3D 的话，下载 App 玩最稳。'));
     el.textContent='';
     var tx=document.createElement('div');
@@ -1502,15 +1518,26 @@ function showFatal(msg){
     el.appendChild(tx);
     var btns=document.createElement('div');
     btns.className='fbtns';
-    var dl=document.createElement('a');
-    dl.href='download.html';
-    dl.textContent='⬇ 下载 App 玩';
-    btns.appendChild(dl);
-    var rf=document.createElement('button');
-    rf.type='button';
-    rf.textContent='↻ 刷新重试';
-    rf.addEventListener('click', function(){ location.reload(); });
-    btns.appendChild(rf);
+    if(inApp){
+        var rt=document.createElement('button');
+        rt.type='button';
+        rt.textContent='↻ 重试进入';
+        rt.addEventListener('click', function(){
+            try{ if(typeof SceneHub !== 'undefined' && SceneHub.clearGlSuspicion) SceneHub.clearGlSuspicion(); }catch(e){}
+            location.reload();
+        });
+        btns.appendChild(rt);
+    } else {
+        var dl=document.createElement('a');
+        dl.href='download.html';
+        dl.textContent='⬇ 下载 App 玩';
+        btns.appendChild(dl);
+        var rf=document.createElement('button');
+        rf.type='button';
+        rf.textContent='↻ 刷新重试';
+        rf.addEventListener('click', function(){ location.reload(); });
+        btns.appendChild(rf);
+    }
     el.appendChild(btns);
     document.getElementById('status').textContent='启动失败';
 }
@@ -2187,6 +2214,25 @@ applyUiTheme(store.theme.get() === 'light' ? 'light' : 'dark', false);
    字段）→ 画质总档驱动四套 tier → 滑杆实时写回中枢并调用各系统既有
    入口（__windSway.setCloud / WATER_U / GrassSys / AtmoSys 读的都是
    中枢同一对象）。本层不自建任何渲染逻辑。 */
+/* ---------- 显卡档位状态机（聪明自适应，2026-10-22） ----------
+   旧口径「只降不升、一次失败永久保命」会把旗舰机冤枉锁死，改成
+   「记最好成绩」：trust＝连续稳定运行满 3 分钟证明过的最佳档位；
+   启动从 trust 起步；运行中失败只记「嫌疑」（fails[档]＋1），同一档
+   跨会话累计失败 2 次才下调 trust；上次在 trust 档跑稳过（stable）
+   时，本次可试升一档（trial），试升失败立即回落、同一档试升上限
+   2 次。玩家手动选过画质（manual）后不再自动试升。全部字段扩在
+   ct2_scene 同一键内（gt/gf/ga/gm/gs），不新增存储键。 */
+const GL_TIER = { trust: 0, fails: {}, tries: {}, manual: false, stable: false, trial: -1 };
+function __tierCounts(o){
+    const out = {};
+    if(o && typeof o === 'object'){
+        [0, 1].forEach(function(k){
+            const v = parseInt(o[k], 10);
+            if(isFinite(v) && v > 0) out[k] = Math.min(9, v);
+        });
+    }
+    return out;
+}
 const SceneHub = {
     _built: false,
     _clamp(v, a, b, d){ v = parseFloat(v); return (isFinite(v)) ? Math.max(a, Math.min(b, v)) : d; },
@@ -2209,6 +2255,38 @@ const SceneHub = {
             const a = sv.a || {};
             SCENE.atmo.fogBankMax = this._clamp(a.fogBankMax, 0, 0.8, SCENE.atmo.fogBankMax);
         }
+        /* 档位状态机读档＋本次启动定档（定档结果写 SCENE.glSafe，后续
+           init/建造点读到的就是定档后的档位）。老存档只有 glSafe 没有
+           gt 时，可信档先按 glSafe 迁入，保证老玩家行为不突变。 */
+        if(sv && typeof sv === 'object'){
+            const gtv = parseInt(sv.gt, 10);
+            GL_TIER.trust = (gtv === 0 || gtv === 1 || gtv === 2) ? gtv
+                : ((SCENE.glSafe === 1 || SCENE.glSafe === 2) ? SCENE.glSafe : 0);
+            GL_TIER.fails = __tierCounts(sv.gf);
+            GL_TIER.tries = __tierCounts(sv.ga);
+            GL_TIER.manual = !!sv.gm;
+            GL_TIER.stable = !!sv.gs;
+            GL_TIER.trial = -1;
+            let bootTier;
+            if(GL_TIER.manual){
+                bootTier = (SCENE.glSafe === 1 || SCENE.glSafe === 2) ? SCENE.glSafe : 0;
+            } else {
+                bootTier = GL_TIER.trust;
+                if(GL_TIER.stable && GL_TIER.trust > 0){
+                    const tgt = GL_TIER.trust - 1;
+                    if((GL_TIER.tries[tgt] || 0) < 2 && (GL_TIER.fails[tgt] || 0) < 2){
+                        GL_TIER.trial = tgt;
+                        GL_TIER.tries[tgt] = (GL_TIER.tries[tgt] || 0) + 1;
+                        GL_TIER.stable = false;   // 试升机会就此消费，跑稳后重新记
+                        bootTier = tgt;
+                    }
+                }
+            }
+            SCENE.glSafe = bootTier;
+            window.__glBootTier = bootTier;
+            window.__glTrialTier = GL_TIER.trial;
+            if(GL_TIER.trial >= 0) this.save();   // 试升计数已增，先落盘防崩溃丢账
+        }
         // 注：本函数在脚本执行期就跑（早于 ATMO_U/GrassSys 定义）——云影值
         // 已写进中枢、ATMO_U 建时自会从中枢读到；GrassSys.userDensity 与
         // 水面反光的运行时同步在 buildPanel（init 期）补齐。
@@ -2217,6 +2295,8 @@ const SceneHub = {
         store.scene.save({
             q: SCENE.quality.mode,
             glSafe: (SCENE.glSafe === 2) ? 2 : (SCENE.glSafe ? 1 : 0),
+            gt: GL_TIER.trust, gf: GL_TIER.fails, ga: GL_TIER.tries,
+            gm: GL_TIER.manual ? 1 : 0, gs: GL_TIER.stable ? 1 : 0,
             r: { grassDensity: SCENE.render.grassDensity, grassHeightK: SCENE.render.grassHeightK,
                  bgBrightness: SCENE.render.bgBrightness },
             c: { drift: SCENE.grass.cloud.drift, strength: SCENE.grass.cloud.strength },
@@ -2224,12 +2304,42 @@ const SceneHub = {
             a: { fogBankMax: SCENE.atmo.fogBankMax }
         });
     },
+    /* 档位记账：某档位失败一次（建 context 失败／运行中丢失）。只记嫌疑，
+       同一档累计 2 次才下调可信档；2 档是地板，不再记账（致命层兜底）。 */
+    glNoteFailure(tier){
+        if(tier !== 0 && tier !== 1) return;
+        GL_TIER.fails[tier] = (GL_TIER.fails[tier] || 0) + 1;
+        if(GL_TIER.fails[tier] >= 2 && GL_TIER.trust <= tier)
+            GL_TIER.trust = Math.min(2, tier + 1);
+        GL_TIER.stable = false;
+        this.save();
+    },
+    /* 档位记账：某档位连续稳定运行满 3 分钟——洗清该档嫌疑；若这正是
+       试升档，可信档跟上（试升成功），试升计数清零。 */
+    glNoteStable(tier){
+        GL_TIER.stable = true;
+        if(tier < GL_TIER.trust) GL_TIER.trust = tier;
+        if(tier === 0 || tier === 1) GL_TIER.fails[tier] = 0;
+        if(GL_TIER.trial === tier){ GL_TIER.trial = -1; GL_TIER.tries[tier] = 0; }
+        this.save();
+    },
+    /* 致命层「重试进入」专用：清掉嫌疑与试升计数，给当前配置再一次机会
+       （档位与可信档本身不动，启动路径会重新定档）。 */
+    clearGlSuspicion(){
+        GL_TIER.fails = {};
+        GL_TIER.tries = {};
+        GL_TIER.trial = -1;
+        this.save();
+    },
     /* 画质总档：一处切换同时驱动 grass/sky/water/model 四套 tier 与既有
        低画质逻辑。auto = 回到各系统设备自动判定（默认）；手动档优先，
        选择落盘 ct2_scene，下次进页仍按手动档（面板可随时切回自动）。 */
     setQuality(mode, save){
         if(mode !== 'full' && mode !== 'lite') mode = 'auto';
         SCENE.quality.mode = mode;
+        /* 手动选档优先于自适应：选拉满/保底即接管，之后不再自动试升；
+           选回「自动」则把档位自适应重新打开。 */
+        GL_TIER.manual = (mode !== 'auto');
         if(mode === 'lite'){ lowQuality = true; applyLowQuality(); }
         else if(mode === 'full'){ lowQuality = false; applyLowQuality(); }
         else { lowQuality = false; applyLowQuality(); }
@@ -2327,7 +2437,7 @@ const SceneHub = {
         if(gr && !gr.children.length){
             const gb = document.createElement('button');
             gb.type = 'button'; gb.textContent = '🛡 已进显卡安全模式（低配）· 点此恢复默认画质';
-            gb.addEventListener('click', ()=>{ SCENE.glSafe = 0; this.save(); location.reload(); });
+            gb.addEventListener('click', ()=>{ SCENE.glSafe = 0; GL_TIER.manual = true; GL_TIER.trial = -1; this.save(); location.reload(); });
             gr.appendChild(gb);
         }
         const av = document.getElementById('sceneAvatarBtn');
@@ -12374,9 +12484,24 @@ function glProbeRendererString(gl){
     }catch(e){}
     return '';
 }
+/* 探针卫生：用完的 context 必须显式释放。WebView 的 GPU 进程对同时存活的
+   WebGL context 有配额（约 8–16 个），不释放的僵尸 context 会把配额吃光，
+   之后真正的渲染器反而建不出来（2026-10-22 录屏实证的致命层路径之一）。 */
+function glReleaseCtx(gl){
+    if(!gl) return false;
+    try{
+        var ext = gl.getExtension('WEBGL_lose_context');
+        if(ext){ ext.loseContext(); return true; }
+    }catch(e){}
+    return false;
+}
 function probeGL(){
     var result = { ok:false, type:'', rung:-1, canvas:null, ctx:null, attrs:null, rendererStr:'', software:false, weak:true };
     window.__glProbe = result;
+    /* 创建/释放计数：验收断言读它核对「探针后存活 context 回到基线」
+       （成功交接后 created-released 应恰为 1，即渲染器那一个）。 */
+    var stats = { created:0, released:0, attempts:0 };
+    window.__glProbeStats = stats;
     if(window.__probeForceFail) return result;   // 验收钩子：模拟探针全灭
     var types = ['webgl2', 'webgl', 'experimental-webgl'];
     var rungs = [
@@ -12388,18 +12513,27 @@ function probeGL(){
         {}
     ];
     var startRung = glSafeLv() ? 2 : 0;   // 安全模式起步跳过激进档，与既有语义一致
+    var MAX_ATTEMPTS = 10;   // 探针硬上限：全阶梯最坏 18 格，封顶 10 次，防弱内核上反复折腾
+    probeDone:
     for(var ti=0; ti<types.length && !result.ok; ti++){
         for(var ri=startRung; ri<rungs.length; ri++){
+            if(stats.attempts >= MAX_ATTEMPTS) break probeDone;
+            stats.attempts++;
             var cv=null, gl=null;
             try{
                 cv = document.createElement('canvas');
                 gl = cv.getContext(types[ti], rungs[ri]);
             }catch(e){ gl = null; }
             if(gl){
+                stats.created++;
                 result.ok = true; result.type = types[ti]; result.rung = ri;
                 result.canvas = cv; result.ctx = gl; result.attrs = rungs[ri];
                 break;
             }
+            /* 失败格 gl 为 null（无 context 诞生，无需释放）；个别内核会先建
+               context 再以异常形式失败，那种情况 gl 非空但未被采用——上面
+               的 catch 已把引用丢掉，故只在拿到非空却不用时才需要释放，
+               本阶梯不存在该分支（拿到即采用），释放义务落在交接失败处。 */
         }
     }
     if(result.ok){
@@ -14706,25 +14840,51 @@ function updateModules(dt, t){
    旧版是轨道镜头自己环游（上帝视角），已取消；现在是化身沿同一条
    环屋路线自己散步，玩家任意移动操作即接管（见 stopAvatarRoam）。 */
 
-/* ---------- 自适应分辨率：掉帧就降像素比，流畅久了再慢慢升回来 ---------- */
+/* ---------- 运行时帧率微调（聪明自适应）：5 秒滚动窗看帧率 ----------
+   进世界前 10 秒不调；持续 <25fps 在当前档内逐级降 DPR（下限 1.0），
+   降无可降再关 Bloom；持续 >50fps 先恢复被微调关掉的 Bloom、再逐级
+   回升 DPR（不越 DPR_LIM 本档上限）。每 ≥4 秒最多调一次。只动
+   DPR/Bloom，不动 glSafe 档位与模型。状态挂 window.__fpsTune 供
+   perf 测试断言（fps/win 各字段＋steps 调节次数）。 */
+const __fpsTuneState = { fps: 0, win: 0, frames: 0, uptime: 0, enteredAt: -1, lastAt: -1e9, bloomOff: false, bloomPrev: -1, steps: 0 };
+window.__fpsTune = __fpsTuneState;
 function perfTick(dt){
     if(!renderer || !renderer.setPixelRatio) return;
-    perfAcc += dt; perfFrames++;
-    if(perfAcc < 2) return;
-    const fps = perfFrames / perfAcc;
-    perfAcc = 0; perfFrames = 0;
-    if(fps < 38 && dprCur > 1){
-        dprCur = Math.max(1, dprCur - 0.25);
-        renderer.setPixelRatio(dprCur);
-        perfHold = 0;
-    }else if(fps > 56 && dprCur < DPR_LIM){
-        perfHold++;
-        if(perfHold >= 3){
-            dprCur = Math.min(DPR_LIM, dprCur + 0.25);
+    const T = __fpsTuneState;
+    T.uptime += dt;
+    if(window.__worldEntered96 && T.enteredAt < 0) T.enteredAt = T.uptime;
+    if(T.enteredAt < 0) return;   // 还没进世界：不测也不调
+    if(T.uptime - T.enteredAt < 10){ T.win = 0; T.frames = 0; return; }   // 进世界 10 秒宽限
+    if(window.__glCtxLost){ T.win = 0; T.frames = 0; return; }   // 丢 context 期间数据不作数
+    T.win += dt; T.frames++;
+    if(T.win < 5) return;
+    const fps = T.frames / T.win;
+    T.fps = fps; T.win = 0; T.frames = 0;
+    if(T.uptime - T.lastAt < 4) return;   // 调节冷却：≥4 秒最多一次
+    if(fps < 25){
+        if(dprCur > 1){
+            dprCur = Math.max(1, Math.round((dprCur - 0.25) * 100) / 100);
             renderer.setPixelRatio(dprCur);
-            perfHold = 0;
+            T.lastAt = T.uptime; T.steps++;
+        } else if(typeof AtmoSys !== 'undefined' && AtmoSys.bloomTier > 0 && !T.bloomOff){
+            T.bloomPrev = AtmoSys.bloomTier;
+            AtmoSys.bloomTier = 0;   // 直改字段不动 _tierAuto：这是自动微调，不是玩家手动档
+            if(AtmoSys.refreshBloomUI) AtmoSys.refreshBloomUI();
+            T.bloomOff = true;
+            T.lastAt = T.uptime; T.steps++;
         }
-    }else perfHold = 0;
+    } else if(fps > 50){
+        if(T.bloomOff && typeof AtmoSys !== 'undefined'){
+            AtmoSys.bloomTier = (T.bloomPrev > 0) ? T.bloomPrev : 2;
+            if(AtmoSys.refreshBloomUI) AtmoSys.refreshBloomUI();
+            T.bloomOff = false;
+            T.lastAt = T.uptime; T.steps++;
+        } else if(dprCur < DPR_LIM){
+            dprCur = Math.min(DPR_LIM, Math.round((dprCur + 0.25) * 100) / 100);
+            renderer.setPixelRatio(dprCur);
+            T.lastAt = T.uptime; T.steps++;
+        }
+    }
 }
 
 
@@ -15478,8 +15638,9 @@ function init(){
            访问以低配起步（有存档不覆盖）。探针全灭或引擎交接失败才回落到
            下面的老配置阶梯，双保险不比旧行为差。 */
         var probe = probeGL();
+        var trialBoot = (typeof GL_TIER !== 'undefined' && GL_TIER.trial >= 0);   // 本次是试升启动：探针结论让位于试升（见下）
         if(probe.ok){
-            if(probe.weak && glSafeLv() < 2){
+            if(probe.weak && glSafeLv() < 2 && !trialBoot){
                 SCENE.glSafe = 2;   // 保命全套在建场景时读 SCENE.glSafe，自动生效
                 window.__glSafeLevel = 2;
                 if(dprCur > 1.25) dprCur = 1.25;
@@ -15498,6 +15659,12 @@ function init(){
                     powerPreference: probe.attrs.powerPreference || 'default'
                 });
             }catch(pe){ renderer = null; }
+            if(!renderer && probe.ctx){
+                /* 交接失败：走老阶梯重试前，先把探针的活 context 显式释放，
+                   免得僵尸 context 占着 WebView 配额把后续尝试也挤死。 */
+                if(glReleaseCtx(probe.ctx) && window.__glProbeStats) window.__glProbeStats.released++;
+                probe.ctx = null; probe.canvas = null;
+            }
         }
         if(!renderer){
             var glErr=null, glCfgs = glSafeBoot
@@ -15510,6 +15677,20 @@ function init(){
                   ];
             for(var gi=0; gi<glCfgs.length && !renderer; gi++){
                 try{ renderer=new THREE.WebGLRenderer(glCfgs[gi]); }catch(ge){ glErr=ge; renderer=null; }
+            }
+            if(!renderer && trialBoot){
+                /* 试升失败立即回落：给试升档记一次失败，本会话改按可信档
+                   以最稳参数再试一次，而不是直接交致命层。 */
+                var trialTier = GL_TIER.trial;
+                try{ SceneHub.glNoteFailure(trialTier); }catch(ne){}
+                GL_TIER.trial = -1; window.__glTrialTier = -1;
+                SCENE.glSafe = GL_TIER.trust;
+                window.__glSafeLevel = GL_TIER.trust;
+                if(dprCur > 1.25) dprCur = 1.25;
+                var fbCfgs = [ {antialias:false,powerPreference:'default'}, {} ];
+                for(var fi=0; fi<fbCfgs.length && !renderer; fi++){
+                    try{ renderer=new THREE.WebGLRenderer(fbCfgs[fi]); }catch(fe){ glErr=fe; renderer=null; }
+                }
             }
             if(!renderer) throw glErr||new Error('Error creating WebGL context.');
         }
@@ -15525,6 +15706,19 @@ function init(){
     }catch(e){
         showFatal('WebGL 初始化失败：'+e.message);return;
     }
+
+    /* 稳定性记账：本档位连续稳定运行满 3 分钟（期间没丢过 context），
+       向 SceneHub 报一次「跑稳了」——试升成功/嫌疑洗清都靠它。 */
+    (function(){
+        var t0 = performance.now();
+        var iv = setInterval(function(){
+            if(window.__glCtxLost){ t0 = performance.now(); return; }
+            if(performance.now() - t0 >= 180000){
+                clearInterval(iv);
+                try{ if(typeof SceneHub !== 'undefined' && SceneHub.glNoteStable) SceneHub.glNoteStable(window.__glSafeLevel || 0); }catch(e){}
+            }
+        }, 5000);
+    })();
 
     clock=new THREE.Clock();
     camera=new THREE.PerspectiveCamera(fitFov(),LAYOUT.w/LAYOUT.h,0.1,700);
@@ -16410,6 +16604,12 @@ function setupGlobal(){
        草地/天空的自定义 shader、风摆与云影，贴图封顶 512，渲染器推迟到
        点「开始游玩」后才建）；已按保命启动仍丢，不再升档（防循环），
        交致命层。 */
+    /* 页面隐藏/卸载时主动释放渲染器 context：安全模式靠整页重载恢复，
+       WebView 的 GPU 进程若没收到释放，旧 context 会占着配额，新页面的
+       探针与渲染器更容易建不出来——与探针卫生同一条线。 */
+    window.addEventListener('pagehide', function(){
+        try{ if(renderer && renderer.forceContextLoss) renderer.forceContextLoss(); }catch(e){}
+    });
     if(renderer && renderer.domElement){
         var glLostTimer=null, glLastRestoreAt=0, glSafeEntered=false;
         function enterGlSafeMode(){
@@ -16422,9 +16622,13 @@ function setupGlobal(){
                     showFatal('显卡上下文丢失（已按保命模式启动，仍无法稳定，常见于显存不足）。');
                 return;
             }
+            /* 记账（聪明自适应）：本档位先记一次失败嫌疑——可信档要同一档
+               跨会话累计 2 次失败才下调，不再一次失败永久降档。本会话仍
+               立即降一档重进止损；若本次是试升，降一档恰好回落可信档。 */
             var nextLv = bootLv + 1;
             if(typeof SCENE !== 'undefined'){
                 SCENE.glSafe = nextLv;
+                try{ if(typeof SceneHub !== 'undefined' && SceneHub.glNoteFailure) SceneHub.glNoteFailure(bootLv); }catch(e){}
                 if(typeof SceneHub !== 'undefined') SceneHub.save();
             }
             DPR_LIM=Math.min(DPR_LIM, 1.25);
@@ -16474,8 +16678,9 @@ function setupGlobal(){
 function setupAppBar(){
     const bar = document.getElementById('appBar');
     if(!bar) return;
-    const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
-    const inAppShell = ua.indexOf('; wv' + String.fromCharCode(41)) >= 0;
+    /* 显隐是早期决策：按契约只走 UA 路径的单一判定源（壳 UA 后缀/wv 标记），
+       不依赖可能还没注入的 JS 标记，见 chumenInAppUA。 */
+    const inAppShell = (typeof chumenInAppUA === 'function') ? chumenInAppUA() : false;
     if(inAppShell || visitsBook.appBarOff) return;
     bar.style.display = 'flex';
     const dismiss = function(){
@@ -16629,8 +16834,9 @@ function setupPanelGroups(){
    全屏或锁屏失败绝不打断进入流程。App 壳内本来就全屏横屏，整段跳过。 */
 var __worldEntered96 = false, __rotGuideOff96 = false;
 function __inAppShell96(){
-    var ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
-    return ua.indexOf('; wv' + String.fromCharCode(41)) >= 0;
+    /* 与 showFatal 共用单一判定源；本函数服务于进入早期的显隐/沉浸决策，
+       按契约只走 UA 路径（JS 注入标记可能还没到），见 chumenInAppUA。 */
+    return (typeof chumenInAppUA === 'function') ? chumenInAppUA() : false;
 }
 function __refreshRotGuide(){
     var g = document.getElementById('rotGuide');
