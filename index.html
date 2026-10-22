@@ -1135,8 +1135,8 @@ window.__BUILD__ = '2026-1022-2012';
     <div class="mpViews" id="atmoBloomBtns"></div>
     <div class="mpSep"></div>
     <div class="mpSound">
-        <button type="button" id="muteBtn" class="mpMute">🔇 声音已关闭</button>
-        <span class="mpTip">浏览器要求先点一下才能出声</span>
+        <button type="button" id="muteBtn" class="mpMute">🔊 声音已开启</button>
+        <span class="mpTip">声音随进入世界自动开启；关掉会记住，下次仍保持关闭</span>
     </div>
     <div class="mpSep"></div>
     <div class="mpSub">音乐（内置主题曲 ＋ 我的音乐）</div>
@@ -9582,6 +9582,7 @@ let enteredWorld = false;
 function enterWorldNow(){
     if(enteredWorld) return;
     enteredWorld = true;
+    if(typeof musicEnterWorld === 'function') musicEnterWorld();   // 出生落点是殊途同归的进世界点：声音请求也从这里汇入（起播状态机自带防重，重复调用无副作用）
     const sp = avatarSpawnPoint();
     if(dragonAgent){
         dragonAgent.group.position.set(sp.x, terrainH(sp.x, sp.z), sp.z);
@@ -12583,7 +12584,10 @@ const AUTO_SEQ = CONFIG.daySeq;   // 昼夜轮转序列已收进配置区（CONF
 
 let actx=null, aMaster=null, aBgm=null, aAmb=null;
 let ambWind=null, ambRain=null, ambFire=null, audioTimer=null;
-let audioMuted=true, bgmNext=0, bgmStep=0, chirpNext=0, fireBurstNext=0;
+/* 声音总开关默认开：静音偏好存 ct2_music.muted（只扩字段不新增键），
+   setupMusic 读回——存档说关才关，没存过默认开，进世界借进入手势自动起。
+   旧口径是默认 true 全程静音、必须手点面板开关才有声，已废弃。 */
+let audioMuted=false, bgmNext=0, bgmStep=0, chirpNext=0, fireBurstNext=0;
 
 let ambPts=null, ambSeeds=null, modulesLastWeather=-1;
 
@@ -12818,18 +12822,44 @@ function audioTick(){
         fireBurstNext = now + 0.10 + Math.random()*0.45;
     }
 }
-function setMute(v){
-    audioMuted = !!v;
-    audioEnsure();
-    if(actx){
-        if(actx.state === 'suspended') actx.resume();
-        aMaster.gain.setTargetAtTime(audioMuted ? 0.0001 : 0.85, actx.currentTime, 0.25);
-    }
+function audioSyncMuteBtn(){
     const b = document.getElementById('muteBtn');
     if(b){
         b.textContent = audioMuted ? '🔇 声音已关闭' : '🔊 声音已开启';
         b.classList.toggle('on', !audioMuted);
     }
+}
+function audioApplyMaster(){
+    if(!actx || !aMaster) return;
+    if(actx.state === 'suspended'){
+        try{ const p = actx.resume(); if(p && p.catch) p.catch(function(){}); }catch(e){}
+    }
+    aMaster.gain.setTargetAtTime(audioMuted ? 0.0001 : 0.85, actx.currentTime, 0.25);
+}
+function audioPersistMute(){
+    // 读-改-写整存 ct2_music：只动 muted 字段，vol/loop/names/tags/wxLock 原样带回
+    try{
+        const p = store.music.json({});
+        p.muted = !!audioMuted;
+        store.music.save(p);
+    }catch(e){}
+}
+function setMute(v){
+    audioMuted = !!v;
+    audioEnsure();
+    audioApplyMaster();
+    audioPersistMute();
+    audioSyncMuteBtn();
+}
+/* 进世界开声（与主题曲共用同一个「进世界」请求点）：建图、续跑可能被
+   挂起的上下文、主增益按静音偏好就位、环境增益按当前天气同步。若被
+   自动播放策略挂着不放行也不报错——补启闸门 soundGateArm 会在玩家
+   进世界后首次点屏/按键时再调本函数放行。 */
+function audioEnterWorld(){
+    audioEnsure();
+    if(!actx) return;
+    audioApplyMaster();
+    audioWeatherSync();
 }
 
 /* ==================== 自定义音乐（Issue #18） ====================
@@ -12937,7 +12967,7 @@ function musicSave(){
     musicState.tracks.forEach(function(t){
         if(!t.builtin && t.tag && t.tag !== 'any') tags[t.name] = t.tag;
     });
-    store.music.save({ vol: musicState.vol, loop: musicState.loop,
+    store.music.save({ vol: musicState.vol, loop: musicState.loop, muted: !!audioMuted,
         names: musicState.tracks.filter(function(t){ return !t.builtin; })
             .map(function(t){ return t.name; }),
         tags: tags, wxLock: musicState.wxLock });
@@ -13041,7 +13071,7 @@ function musicPlay(){
     if(!el){ musicHint('这台设备不支持音频播放'); return; }
     const curT = musicState.tracks[musicState.cur];
     if(!curT || !curT.url){
-        const first = musicState.tracks.findIndex(function(t){ return !!t.url; });
+        const first = musicState.tracks.findIndex(function(t){ return !!t.url && !t.__err; });
         if(first < 0){
             musicHint(musicState.tracks.length ? '这些歌都还没重新选入文件，先点上面选歌' : '先点上面选几首本地音乐吧');
             return;
@@ -13049,7 +13079,22 @@ function musicPlay(){
         musicLoad(first);
     }
     const p = el.play();
-    if(p && p.catch) p.catch(function(){ musicHint('浏览器拦下了，点一下「播放」再试'); });
+    if(p && p.then){
+        p.then(function(){
+            musicGate.ok = true;   // 确认在播：起播状态机记账，补启闸门可退场
+            soundGateMaybeDisarm();
+        }, function(){
+            musicGate.ok = false;
+            if(musicGate.want){
+                // 进世界起播被自动播放策略拦下：不刷屏，布防首次交互补启，
+                // 玩家进世界后第一次点屏/按键主题曲就会响（soundGateKick）
+                soundGateArm();
+                musicHint('点一下屏幕，音乐就会响起来');
+            } else {
+                musicHint('浏览器拦下了，点一下「播放」再试');
+            }
+        });
+    }
     musicRender();
 }
 function musicPause(){
@@ -13073,7 +13118,7 @@ function musicStep(d){
             for(let k = 1; k <= n; k++){
                 const i = (((musicState.cur + k) % n) + n) % n;
                 const t = musicState.tracks[i];
-                if(t.url && (pass === 1 || musicInPool(t))){ musicLoad(i); musicPlay(); return; }
+                if(t.url && !t.__err && (pass === 1 || musicInPool(t))){ musicLoad(i); musicPlay(); return; }
             }
         }
         musicHint('列表里的歌都还没选入文件，先点上面选歌');
@@ -13081,7 +13126,7 @@ function musicStep(d){
     }
     for(let k = 1; k <= n; k++){
         const i = (((musicState.cur + d * k) % n) + n) % n;
-        if(musicState.tracks[i].url){ musicLoad(i); musicPlay(); return; }
+        if(musicState.tracks[i].url && !musicState.tracks[i].__err){ musicLoad(i); musicPlay(); return; }
     }
     musicHint('列表里的歌都还没选入文件，先点上面选歌');
 }
@@ -13128,6 +13173,8 @@ function setupMusic(){
     if(typeof pref.vol === 'number' && pref.vol === pref.vol) musicState.vol = Math.min(1, Math.max(0.1, pref.vol));   // 旧存档里若有 0 也抬回下限 0.1
     if(pref.loop === 'one' || pref.loop === 'list') musicState.loop = pref.loop;
     if(pref.wxLock === true) musicState.wxLock = true;   // #68 锁定歌单开关
+    if(pref.muted === true) audioMuted = true; else if(pref.muted === false) audioMuted = false;   // 声音总开关偏好：存档说关才关，没存过保持默认开
+    audioSyncMuteBtn();
     const savedTags = (pref.tags && typeof pref.tags === 'object' && !Array.isArray(pref.tags)) ? pref.tags : {};   // #68 歌名→天气标签
     const savedNames = Array.isArray(pref.names)
         ? pref.names.filter(function(n){ return typeof n === 'string' && !!n; }) : [];
@@ -13144,17 +13191,36 @@ function setupMusic(){
             else musicStep(1);
         });
         el.addEventListener('play', musicRender);
+        el.addEventListener('play', function(){
+            musicGate.ok = true;   // 真的出声了：起播状态机记账并清掉当前曲的错误账
+            const t = musicState.tracks[musicState.cur];
+            if(t) t.__err = false;
+            soundGateMaybeDisarm();
+        });
         el.addEventListener('pause', musicRender);
         el.addEventListener('timeupdate', musicRenderTime);
         el.addEventListener('error', function(){
             const t = musicState.tracks[musicState.cur];
-            if(!t || !t.url) return;
-            try{ URL.revokeObjectURL(t.url); }catch(e){}
-            t.url = null;
+            if(!t) return;
+            if(t.builtin){
+                // 内置曲地址是站内常量：读不出多半是瞬时故障，地址永不作废，
+                // 只记一次账防「全灭时无限轮播」；自选曲（blob）失效才是真作废
+                if(t.__err){ musicHint('这首读不出来（文件可能已移动或损坏）'); return; }
+                t.__err = true;
+            } else {
+                if(!t.url) return;
+                try{ URL.revokeObjectURL(t.url); }catch(e){}
+                t.url = null;
+            }
             musicRender();
-            if(musicState.tracks.some(function(x){ return !!x.url; })){
+            if(musicState.tracks.some(function(x){ return !!x.url && !x.__err && x !== t; })){
                 musicHint('这首读不出来，跳到下一首');
                 musicStep(1);
+            } else if(!t.builtin){
+                // 没有别的可播了：回落恒在的主题曲，永不静音到底
+                const ti = musicState.tracks.findIndex(function(x){ return !!x.builtin && !!x.url && !x.__err; });
+                if(ti >= 0 && musicLoad(ti)) musicPlay();
+                else musicHint('这首读不出来（文件可能已移动或损坏）');
             } else musicHint('这首读不出来（文件可能已移动或损坏）');
         });
     }
@@ -13201,22 +13267,64 @@ function setupMusic(){
     }
     musicApplyVol();
     musicRender();
+    soundGateKick();   // 若进世界请求先于本次 setup 到达（如 glSafe 推迟路径），元素就位后在此补推起播——仍在同一次点击手势链内
 }
 
-/* 进世界起播（由更新日志面板关闭处调用，只认第一次关）：每次进世界
+/* 进世界起播（统一请求点：更新日志关闭 closeLog、glSafe 推迟路径
+   __startInit、出生落点 enterWorldNow 三处都汇到这里）：每次进世界
    主题曲都自动响起，借玩家点「开始游玩」那次点击的手势起播并原生
    循环，音量取保存值。哪怕本机存过自选歌单，开场也先响主题曲——
    玩家点播自选歌曲是换内容、不算关 BGM，歌单与偏好不受影响；
-   玩家在本次游玩里换过歌，这条也不会再抢回去。 */
-let musicEntered = false;
+   玩家在本次游玩里换过歌，这条也不会再抢回去。
+   2026-10-22 改起播状态机（修「进世界没声音」）：旧实现是一次性标记，
+   glSafe 推迟路径在 setupMusic 之前调用本函数——标记先被烧掉、音频
+   元素还没建，整场再无起播机会；且播放被自动播放策略拒绝后没有
+   任何补救。现在请求只记账（want）不烧标记，起播统一走 musicTryStart：
+   元素没就位就等 setupMusic 末尾的 soundGateKick 补推；被策略拒绝则
+   布防首次交互补启闸门，玩家进世界后第一次点屏/按键即放行主题曲与
+   环境音；确认在播（ok）后绝不重复起播、不叠播。环境音（WebAudio）
+   也由本请求点顺带唤起，共用同一条手势链与补启闸门。 */
+const musicGate = { want: false, ok: false };
+let soundGateArmed = false;
 function musicEnterWorld(){
-    if(musicEntered) return;
-    musicEntered = true;
-    if(!musicState.el) return;
-    const ti = musicState.tracks.findIndex(function(t){ return !!t.builtin; });
+    musicGate.want = true;
+    audioEnterWorld();
+    musicTryStart();
+    if(!musicGate.ok) soundGateArm();
+}
+function musicTryStart(){
+    if(!musicGate.want || musicGate.ok) return;
+    if(!musicState.el) return;   // 元素还没建（setupMusic 未跑）：不烧账，等补推
+    // 首选没出过错的内置曲（主题曲优先）；它坏了就落到任何一首没出过错的可播曲，永不死守坏源
+    let ti = musicState.tracks.findIndex(function(t){ return !!t.builtin && !!t.url && !t.__err; });
+    if(ti < 0) ti = musicState.tracks.findIndex(function(t){ return !!t.url && !t.__err; });
     if(ti < 0) return;
     if(musicState.cur !== ti && !musicLoad(ti)) return;
     musicPlay();
+}
+function soundGateArm(){
+    if(soundGateArmed) return;
+    soundGateArmed = true;
+    document.addEventListener('pointerdown', soundGateKick, true);
+    document.addEventListener('keydown', soundGateKick, true);
+}
+function soundGateDisarm(){
+    if(!soundGateArmed) return;
+    soundGateArmed = false;
+    document.removeEventListener('pointerdown', soundGateKick, true);
+    document.removeEventListener('keydown', soundGateKick, true);
+}
+function soundGateDone(){
+    const musicDone = !musicGate.want || musicGate.ok;
+    const ambDone = !musicGate.want || audioMuted || !actx || actx.state === 'running';
+    return musicDone && ambDone;
+}
+function soundGateMaybeDisarm(){ if(soundGateDone()) soundGateDisarm(); }
+function soundGateKick(){
+    if(!musicGate.want) return;
+    audioEnterWorld();   // 上下文还挂着的话，借这次真实手势 resume
+    musicTryStart();
+    soundGateMaybeDisarm();
 }
 
 /* ---------- 氛围粒子 ---------- */
