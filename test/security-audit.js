@@ -34,7 +34,8 @@ const dangers = {
     'new Function': /new\s+Function\s*\(/,
     // 只允许十四个具名本地键：ct2_visits 字面量、寻宝的 HUNT_KEY、帮助的 HELP_KEY、种田的 FARM_KEY、投票的 VOTE_KEY、主题的 THEME_KEY、回执的 ECHO_KEY、背包的 BAG_KEY、小龙自定义的 DRAGON_KEY、图鉴的 CODEX_KEY、留言副本的 GUEST_KEY 、音乐偏好的 MUSIC_KEY、场景中枢偏好的 SCENE_KEY 与成就徽章的 ACH_KEY 常量（下方另有钉死检查）；其余一律不许
     'localStorage（非授权键）': /localStorage\.(?:getItem|setItem)\((?!'ct2_visits'|HUNT_KEY|HELP_KEY|FARM_KEY|VOTE_KEY|THEME_KEY|ECHO_KEY|BAG_KEY|DRAGON_KEY|CODEX_KEY|GUEST_KEY|MUSIC_KEY|SCENE_KEY|ACH_KEY)/,
-    'sessionStorage': /sessionStorage/,
+    // sessionStorage 只许更新自检防循环一件事：调用点后必须是具名常量 UPD_TRY_KEY（取值下方另有钉死检查），其余形态一律不许
+    'sessionStorage（非授权键）': /sessionStorage\.(?:getItem|setItem|removeItem)\((?!UPD_TRY_KEY)/,
     'document.cookie': /document\.cookie/,
     'XMLHttpRequest': /XMLHttpRequest/,
     'WebSocket': /new\s+WebSocket/,
@@ -77,11 +78,21 @@ check('图鉴存储键 CODEX_KEY 写死为 ct2_codex', /const CODEX_KEY='ct2_cod
 check('场景中枢存储键 SCENE_KEY 写死为 ct2_scene', /const SCENE_KEY='ct2_scene'/.test(html));
 // 成就徽章解锁同理：只能经具名常量 ACH_KEY 使用，取值钉死
 check('成就存储键 ACH_KEY 写死为 ct2_ach', /const ACH_KEY='ct2_ach'/.test(html));
+// 更新自检防循环标记同理：只能经具名常量 UPD_TRY_KEY 使用，取值钉死；且全文 sessionStorage 只许这两处授权调用
+check('更新防循环键 UPD_TRY_KEY 写死为 ct2_upd_try', /const UPD_TRY_KEY='ct2_upd_try'/.test(html));
+{
+    const toks = html.match(/sessionStorage/g) || [];
+    const okCalls = html.match(/sessionStorage\.(?:getItem|setItem)\(UPD_TRY_KEY(?=[,)])/g) || [];
+    check('sessionStorage 仅用于更新防循环键', toks.length > 0 && toks.length === okCalls.length,
+        '共 ' + toks.length + ' 处提及、授权调用 ' + okCalls.length + ' 处');
+}
 
-// fetch 是唯一例外：只允许恰好一处、且地址来自 fbEndpoint() 的白名单。
+// fetch 只有两个例外：意见回传（地址来自 fbEndpoint() 白名单）＋版本指针自检（同源 version.json，写法钉死）。
 {
     const calls = html.match(/\bfetch\s*\(/g) || [];
-    check('fetch 恰好一处（仅意见回传）', calls.length === 1, '实际 ' + calls.length + ' 处');
+    check('fetch 恰好两处（意见回传＋版本指针自检）', calls.length === 2, '实际 ' + calls.length + ' 处');
+    check('版本指针 fetch 钉死为同源 version.json（no-store）',
+        /fetch\('version\.json\?ts='\+Date\.now\(\),\{cache:'no-store'\}\)/.test(html));
     const relay = html.match(/const FB_RELAY='([^']*)'/);
     check('回传地址在白名单内',
         /return fetch\(url,/.test(html) && !!relay &&

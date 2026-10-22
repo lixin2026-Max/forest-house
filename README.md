@@ -76,6 +76,14 @@ node test/subpath-check.js  # GitHub Pages 子路径下会不会白屏
 cp test/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
 ```
 
+## 发版清单（小版本不停机更新）
+
+页面带版本自检：玩家手里的旧页面会在下次打开时自动换新（在世界里只给小字提示、不中途重载）。发版必须三步同做，漏一步测试就红：
+
+1. 改功能；
+2. 同步 bump 两处同值：根目录 `version.json` 的 `build`（格式 `YYYY-MMDD-HHMM`，同时把 `note` 改成本次内容一句话）＋ `index.html` 里 `window.__BUILD__`；
+3. 跑 `node test/all.js`——verify 有一致性断言守着第 2 步，两处不一致不许提交。
+
 ## 目录
 
 ```

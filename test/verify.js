@@ -98,7 +98,7 @@ test('AC6 所有被调用的函数都有定义', ()=>{
         .replace(/'[^'\n]*'/g,"''")
         .replace(/"[^"\n]*"/g,'""');
     // Promise 的 resolve/reject 是回调参数，不作为「未定义函数」处理
-    const builtin = /^(if|for|while|switch|return|typeof|new|function|catch|try|do|else|Error|Number|String|Boolean|Array|Object|Set|Map|JSON|Math|Date|Promise|Float32Array|Float64Array|Int32Array|Uint8Array|requestAnimationFrame|cancelAnimationFrame|setTimeout|clearTimeout|setInterval|clearInterval|console|THREE|parseInt|parseFloat|isNaN|localStorage|resolve|reject|fetch|AbortController|URLSearchParams|FormData|Event|CustomEvent|performance|location|navigator)$/;
+    const builtin = /^(if|for|while|switch|return|typeof|new|function|catch|try|do|else|Error|Number|String|Boolean|Array|Object|Set|Map|JSON|Math|Date|Promise|Float32Array|Float64Array|Int32Array|Uint8Array|requestAnimationFrame|cancelAnimationFrame|setTimeout|clearTimeout|setInterval|clearInterval|console|THREE|parseInt|parseFloat|isNaN|localStorage|resolve|reject|fetch|AbortController|URL|URLSearchParams|FormData|Event|CustomEvent|performance|location|navigator)$/;
     const calls = [...stripped.matchAll(/(?:^|[^\w$.])([a-zA-Z_$][\w$]*)\s*\(/g)].map(m=>m[1]);
     const missing = [...new Set(calls)].filter(n=>!defined.has(n) && !builtin.test(n));
     must(missing.length===0, 'undefined function calls: '+missing.join(', '));
@@ -309,9 +309,10 @@ test('FB 弹窗可开关（点击按钮/关闭/Esc/点遮罩）', ()=>{
 test('FB 提交：先复制兜底，再只回传到白名单地址', ()=>{    must(/function copyToClipboard\(/.test(inlineJs),'缺少复制实现');
     must(/navigator\.clipboard[^;]*writeText/.test(inlineJs),'未使用 Clipboard API');
     must(/execCommand\('copy'\)/.test(inlineJs),'缺少 execCommand 降级');
-    // 网络调用必须恰好一处
+    // 网络调用必须恰好两处：意见回传 fbEndpoint()＋版本指针自检（地址钉死，同源相对路径）
     const fetchCalls = inlineJs.match(/\bfetch\s*\(/g) || [];
-    must(fetchCalls.length===1,'应恰好一处 fetch，实际 '+fetchCalls.length);
+    must(fetchCalls.length===2,'应恰好两处 fetch，实际 '+fetchCalls.length);
+    must(/fetch\('version\.json\?ts='\+Date\.now\(\),\{cache:'no-store'\}\)/.test(inlineJs),'第二处 fetch 必须是版本指针自检（no-store 钉死写法）');
     // 地址只能来自 fbEndpoint()，且候选项只有两个：FormSubmit 或本站相对路径
     must(/function fbEndpoint\(/.test(inlineJs),'缺少 fbEndpoint()');
     must(/return fetch\(url,/.test(inlineJs),'fetch 未使用 fbEndpoint() 的结果');
@@ -328,7 +329,12 @@ test('FB 提交：先复制兜底，再只回传到白名单地址', ()=>{    mu
     must(outside.length===0,'出现白名单外的绝对 URL：'+outside.join(', '));
     must(!/XMLHttpRequest|sendBeacon|WebSocket/.test(inlineJs),'出现其他网络通道');
     // 全页只允许十四个具名本地键：ct2_visits（访问计数）、ct2_hunt（寻宝进度）、ct2_help（帮助已提示标记）、ct2_farm（种田存档）、ct2_vote（投票已投标记）、ct2_theme（界面深浅主题偏好）、ct2_echo（建议回音回执）、ct2_bag（小龙背包与喂食计数）、ct2_dragon（小龙自定义外观与个性）、ct2_codex（图鉴解锁集合）、ct2_guest（留言上墙本机副本）、ct2_music（自定义音乐偏好与歌名）、ct2_scene（场景中枢画质总档与渲染参数偏好）与 ct2_ach（成就徽章解锁集合与日期），都不上传
-    must(!/sessionStorage|document\.cookie/.test(inlineJs),'出现未授权的存储');
+    must(!/document\.cookie/.test(inlineJs),'出现未授权的存储');
+    // sessionStorage 只许一件事：更新自检防循环（键 UPD_TRY_KEY 取值写死，不存任何玩家数据）
+    must(/const UPD_TRY_KEY='ct2_upd_try'/.test(inlineJs),'UPD_TRY_KEY 必须写死为 ct2_upd_try');
+    const ssToks = inlineJs.match(/sessionStorage/g) || [];
+    const ssOk = inlineJs.match(/sessionStorage\.(?:getItem|setItem)\(UPD_TRY_KEY(?=[,)])/g) || [];
+    must(ssToks.length>0 && ssToks.length===ssOk.length,'sessionStorage 出现未授权用法（'+ssToks.length+' 处提及/'+ssOk.length+' 处授权调用）');
     const lsKeys = [...inlineJs.matchAll(/localStorage\.(?:getItem|setItem)\('([^']+)'/g)].map(m=>m[1]);
     const badKeys = lsKeys.filter(k => k !== 'ct2_visits' && k !== 'ct2_hunt' && k !== 'ct2_help' && k !== 'ct2_farm' && k !== 'ct2_vote' && k !== 'ct2_theme' && k !== 'ct2_echo' && k !== 'ct2_bag' && k !== 'ct2_dragon' && k !== 'ct2_codex' && k !== 'ct2_guest' && k !== 'ct2_music' && k !== 'ct2_scene' && k !== 'ct2_ach');
     must(badKeys.length===0,'出现未授权的本地存储键：'+badKeys.join(', '));
@@ -703,6 +709,41 @@ test('v5.1 #96 自动隐藏补齐：操控条/进出屋条纳入 bars-off', ()=>
     must(/#app\.bars-off #appBar/.test(html), 'App 提示条未纳入 bars-off');
 });
 
+test('HUD 重构：左上常驻条退场＋天气快切搬进面板环境组', ()=>{
+    must(/ui\.style\.display = 'none'/.test(inlineJs), '顶栏空壳未隐藏');
+    must(/wxBox\.id = 'mpWxBtns'/.test(inlineJs), '天气排未搬进面板');
+    must(/wx:'mpWxBtns'/.test(inlineJs), '天气小节未登记分组锚点');
+    must(/put\(envG, \['quality', 'sliders', 'wx',/.test(inlineJs), '天气小节未归入环境组');
+});
+
+test('HUD 重构：右下圆形键簇（互动主钮＋两小圆钮、定制撤出操控条）', ()=>{
+    must(/#dragonBar\{[^}]*right:calc\(14px/.test(html), '操控条未改右下键簇');
+    must(/#dragonBar #actBtn\{[^}]*width:68px/.test(html), '互动主钮未放大为 68px');
+    const barStart = html.indexOf('<div id="dragonBar">');
+    const bar = html.slice(barStart, html.indexOf('</div>', barStart));
+    must(/id="dragonBtn"/.test(bar) && /id="viewBtn"/.test(bar) && /id="actBtn"/.test(bar), '键簇三钮不全');
+    must(!/dragonCustomBtn/.test(bar), '定制钮仍在操控条里');
+    must(/id="dragonCustomBtn" style="display:none"/.test(html), '定制钮未保留隐藏锚点');
+    must(/function setCbText\(/.test(inlineJs), '缺键簇文案拆分 helper');
+});
+
+test('HUD 重构：小地图左上＋摇杆动态原点（手势区/参数表/平滑）', ()=>{
+    must(/#miniMap\{[^}]*top:15px/.test(html), '小地图未移到左上');
+    must(/id="joyZone"/.test(html), '缺摇杆手势区元素');
+    must(/#joyZone\{[^}]*top:172px/.test(html), '手势区上沿未避让左上小地图');
+    must(/mr\.bottom \+ 70/.test(inlineJs), '摇杆原点未按小地图实际底边动态避让');
+    must(/const JOY_CFG = \{ dead:/.test(inlineJs), '缺摇杆参数表 JOY_CFG');
+    must(/joyZone\.addEventListener\('pointerdown'/.test(inlineJs), '手势区未接管触摸');
+    must(/function joyHud\(/.test(inlineJs), '缺 joyHud 开关');
+    must(/#app\.photo-on #joyZone/.test(html), 'joyZone 未进 photo-on 名单');
+});
+
+test('HUD 重构：河灯小圆钮归队键簇上方＋优化意见搬进面板', ()=>{
+    must(/#lanternBtn\{[^}]*right:calc\(96px/.test(html), '河灯钮未移到键簇上方');
+    must(/echoBox\.insertBefore\(fbBtn/.test(inlineJs), '优化意见钮未搬进面板回音区');
+    must(/#modPanel #fbBtn\{[^}]*position:static/.test(html), '面板内意见钮未退回静态形态');
+});
+
 // ---------- v4.2 #67 龙蛋开局 ----------
 test('v4.2 #67 蛋状态存 ct2_dragon.egg（不新增键）＋新老存档归一', ()=>{
     must(/c\.egg = \{hatched:false, laid:drgTodayStr\(\), born:null\}/.test(inlineJs), '全新存档未置未孵化');
@@ -723,6 +764,25 @@ test('v4.2 #67 × #100 适配：少女不走序章＋安全阀有限守望＋再
     must(/form === 'girl' && !dragonHatched\(\)/.test(inlineJs), 'chooseAvatar 未处理少女静默破壳');
     must(/entryValveWaits/.test(inlineJs), '进入安全阀未给蛋序章有限守望');
     must(/if\(enteredWorld\)\{[\s\S]{0,400}dragonTakeover\(\);/.test(inlineJs), 'finishHatch 未处理再孵重接管');
+});
+
+// ---------- v5.1 小版本不停机更新 ----------
+test('v5.1 版本指针 version.json 与页面 __BUILD__ 一致（发版纪律）', ()=>{
+    const vjPath = path.join(root,'version.json');
+    must(fs.existsSync(vjPath), '根目录缺 version.json');
+    const vj = JSON.parse(fs.readFileSync(vjPath,'utf8'));
+    must(typeof vj.build==='string' && /^\d{4}-\d{4}-\d{4}$/.test(vj.build), 'version.json 的 build 格式应为 YYYY-MMDD-HHMM');
+    const mb = inlineJs.match(/window\.__BUILD__\s*=\s*'([^']+)'/);
+    must(mb, 'index.html 缺 window.__BUILD__');
+    must(mb[1]===vj.build, '__BUILD__('+mb[1]+') 与 version.json('+vj.build+') 不一致——发版必须两处同改');
+});
+test('v5.1 更新自检：no-store 拉指针＋_v 换页＋双重防循环＋在世界只提示不重载', ()=>{
+    must(/fetch\('version\.json\?ts='\+Date\.now\(\),\{cache:'no-store'\}\)/.test(inlineJs), '指针拉取未按 no-store 钉死写法');
+    must(/searchParams\.set\('_v', b\)/.test(inlineJs) && /location\.replace\(/.test(inlineJs), '缺 _v 整页换新');
+    must(/searchParams\.get\('_v'\) === b/.test(inlineJs), '缺 URL _v 自检兜底防循环');
+    must(/sessionStorage\.getItem\(UPD_TRY_KEY\)/.test(inlineJs) && /sessionStorage\.setItem\(UPD_TRY_KEY, b\)/.test(inlineJs), '缺 sessionStorage 防循环记账');
+    must(/addEventListener\('visibilitychange'/.test(inlineJs), '缺回前台自检');
+    must(/function updShowHint\(\)/.test(inlineJs) && inlineJs.includes('有新版本，下次打开就是新的'), '缺新版小字提示');
 });
 
 console.log('\n====================');
