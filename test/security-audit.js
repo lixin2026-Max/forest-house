@@ -68,8 +68,8 @@ check('背包存储键 BAG_KEY 写死为 ct2_bag', /const BAG_KEY='ct2_bag'/.tes
 check('回执存储键 ECHO_KEY 写死为 ct2_echo', /const ECHO_KEY='ct2_echo'/.test(html));
 // 自定义音乐偏好同理：只能经具名常量 MUSIC_KEY 使用，取值钉死（只存偏好与歌名，不存文件）
 check('音乐存储键 MUSIC_KEY 写死为 ct2_music', /const MUSIC_KEY='ct2_music'/.test(html));
-// 媒体口径：只放行页面自造的 blob:（玩家本机选的文件），不许任何网络/data 媒体
-check('CSP media-src 只放行 blob:', /media-src blob:;/.test(html) && !/media-src[^;]*(https?|data:|\*|'self')/.test(html));
+// 媒体口径：放行页面自造的 blob:（玩家本机选的文件）与同源 'self'（站内内置主题曲一份），不许任何外网/data 媒体
+check('CSP media-src 只放行同源与 blob:', /media-src 'self' blob:;/.test(html) && !/media-src[^;]*(https?|data:|\*)/.test(html));
 // 留言上墙本机副本同理：只能经具名常量 GUEST_KEY 使用，取值钉死
 check('留言存储键 GUEST_KEY 写死为 ct2_guest', /const GUEST_KEY='ct2_guest'/.test(html));
 // 世界图鉴解锁同理：只能经具名常量 CODEX_KEY 使用，取值钉死

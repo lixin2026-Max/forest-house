@@ -204,11 +204,14 @@ test('模块有统一挂载/更新钩子', ()=>{
     must(/setupModules\(\);/.test(inlineJs), 'init() 未调用 setupModules()');
     must(/updateModules\(dt, ?t\);/.test(inlineJs), 'animate() 未调用 updateModules()');
 });
-test('BGM 按天气换音阶，且不加载任何音频文件', ()=>{
+test('BGM 按天气换音阶，音频文件只许站内内置主题曲一份', ()=>{
     must(/BGM_SCALE\s*=\s*\{/.test(inlineJs), '缺少按天气的音阶表');
     ['sunny','golden','mist','night','rain'].forEach(m =>
         must(new RegExp(m + '\\s*:\\s*\\[').test(inlineJs), '音阶表缺少 ' + m));
-    must(!/\.(mp3|ogg|wav|m4a)(\?|"|')/i.test(html), '不应引用音频文件');
+    // 程序化 BGM 本体仍不加载文件；全页只许引用内置主题曲这一份同源音频
+    const audioRefs = html.match(/[\w./-]+\.(?:mp3|ogg|wav|m4a)/gi) || [];
+    must(audioRefs.length > 0 && audioRefs.every(r => r === 'assets/audio/chumen-theme.mp3'),
+        '引用了主题曲之外的音频文件：' + audioRefs.join(', '));
 });
 test('音频有总静音开关，且默认静音（不打扰打开者）', ()=>{
     must(/id="muteBtn"/.test(html), '缺少静音按钮');
@@ -441,7 +444,7 @@ test('自定义音乐：本地文件 BGM、独立通道、偏好只存歌名（I
     must(/id="musList"/.test(html),'缺播放列表容器');
     // 文件只在本机内存里播：对象 URL 播放，偏好只存音量/循环/歌名
     must(/URL\.createObjectURL/.test(inlineJs),'未用对象 URL 本机播放');
-    must(/media-src blob:;/.test(html),'CSP 未给 blob 媒体开本机口子');
+    must(/media-src 'self' blob:;/.test(html),'CSP 未给同源主题曲与 blob 媒体开口子');
     must(/store\.music\.save\(\{\s*vol:/.test(inlineJs) && /names:/.test(inlineJs),'偏好未按 vol/loop/names 存');
     // 自选音乐在播时程序化 BGM 必须让行（不叠音打架）
     must(/FEAT\.bgm\.on && !musicCustomActive\(\)/.test(inlineJs),'audioTick 未给自选音乐让行');
