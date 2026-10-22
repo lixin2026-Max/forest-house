@@ -127,6 +127,10 @@
     .row b{color:var(--accent);min-width:42px;text-align:right}
     #status{position:absolute;top:15px;right:15px;background:var(--panel);color:var(--soft-txt);padding:10px 14px;border-radius:8px;font-size:12px;z-index:100;line-height:1.7;min-width:180px;max-width:calc(100vw - 30px)}
     #error{display:none;position:fixed;inset:0;background:rgba(20,0,0,.94);color:#ffb4b4;z-index:999;padding:40px;font-size:15px;line-height:1.8;white-space:pre-wrap;overflow:auto}
+    /* 致命层按钮区（v5.1）：保持红底警示语义，只给实心主按钮＋描边次按钮 */
+    #error .fbtns{margin-top:26px;display:flex;gap:14px;flex-wrap:wrap;white-space:normal}
+    #error .fbtns a{display:inline-block;background:#ffb4b4;color:#30000a;font-weight:bold;font-size:16px;line-height:1.4;padding:12px 22px;border-radius:10px;text-decoration:none}
+    #error .fbtns button{background:transparent;color:#ffb4b4;border:2px solid #ffb4b4;font-weight:bold;font-size:16px;line-height:1.4;padding:12px 22px;border-radius:10px;cursor:pointer}
 
     /* ---------- 移动端 / 窄屏适配 ---------- */
     #app{position:fixed;inset:0;overflow:hidden}
@@ -1332,16 +1336,34 @@ function showFatal(msg){
     if(b) b.style.display='none';
     var el=document.getElementById('error');
     el.style.display='block';
-    /* App 壳（系统 WebView，UA 带 wv 标记）里没有「换个浏览器」的退路，
-       文案改为关重开/降画质；普通浏览器环境保持 Chrome 建议。标记串用
+    /* 致命层出路（v5.1 保底可玩）：不再主推某个浏览器；主按钮一律给
+       「下载 App 玩」（相对路径 download.html），次按钮刷新重试。按钮走
+       DOM 拼装不用字符串拼 HTML，与 verify 的朴素检查相容。App 壳（系统
+       WebView，UA 带 wv 标记）分支保留关重开/降画质文案。标记串用
        fromCharCode 拼，避免字面括号扰动 verify 的朴素括号计数。 */
     var inWebView = (typeof navigator!=='undefined' && (navigator.userAgent||'').indexOf('; wv' + String.fromCharCode(41)) >= 0);
-    el.textContent='⚠ 场景无法启动\n\n'+msg+
+    var txt='⚠ 场景无法启动\n\n'+msg+
         ((msg.indexOf('资源')>=0 || msg.indexOf('three')>=0)
             ? '\n\n请确认 js/three.min.js 与本文件在同一目录，且文件完整（约 600KB）。'
             : (inWebView
                 ? '\n\n可以先刷新页面重试；若反复出现，请完全关闭 App 后重新打开，或在操作页（右上 ⚙）里把画质调到「保底」。'
-                : '\n\n可以先刷新页面重试；若反复出现，建议用 Chrome 浏览器打开本页面。'));
+                : '\n\n可以先刷新页面重试；这个浏览器实在跑不动 3D 的话，下载 App 玩最稳。'));
+    el.textContent='';
+    var tx=document.createElement('div');
+    tx.textContent=txt;
+    el.appendChild(tx);
+    var btns=document.createElement('div');
+    btns.className='fbtns';
+    var dl=document.createElement('a');
+    dl.href='download.html';
+    dl.textContent='⬇ 下载 App 玩';
+    btns.appendChild(dl);
+    var rf=document.createElement('button');
+    rf.type='button';
+    rf.textContent='↻ 刷新重试';
+    rf.addEventListener('click', function(){ location.reload(); });
+    btns.appendChild(rf);
+    el.appendChild(btns);
     document.getElementById('status').textContent='启动失败';
 }
 if(typeof THREE==='undefined'){
@@ -2017,6 +2039,7 @@ const SceneHub = {
     _clamp(v, a, b, d){ v = parseFloat(v); return (isFinite(v)) ? Math.max(a, Math.min(b, v)) : d; },
     load(){
         const sv = store.scene.json({});
+        window.__hadSceneSave = !!(sv && ('glSafe' in sv || 'q' in sv || 'r' in sv));   // v5.1 保底可玩：无存档首次访问才允许按环境保守定档
         if(sv && typeof sv === 'object'){
             if(sv.q === 'full' || sv.q === 'lite' || sv.q === 'auto') SCENE.quality.mode = sv.q;
             const gv = (sv.glSafe === true) ? 1 : (parseInt(sv.glSafe, 10) || 0); if(gv === 1 || gv === 2) SCENE.glSafe = gv;   // WebGL 安全模式档位（同键扩字段：1 低配 / 2 保命）
@@ -11653,6 +11676,64 @@ const DPR_CAP = IS_MOBILE ? 1.5 : 2;
 /* WebGL 安全模式档位读取（0 关 / 1 低配 / 2 保命）：各建造点都在 init 期
    执行，此时 SceneHub.load 已跑完、SCENE.glSafe 即最终档位。 */
 function glSafeLv(){ return (typeof SCENE !== 'undefined' && SCENE.glSafe === 2) ? 2 : ((typeof SCENE !== 'undefined' && SCENE.glSafe) ? 1 : 0); }
+/* ---------- 网页版保底可玩：裸探针（v5.1） ----------
+   不先让 THREE 自己撞参数：用原生 canvas 逐格试出「本浏览器任何能用的
+   WebGL 组合」，把活 context 交给引擎。类型阶梯 webgl2 → webgl →
+   experimental-webgl，每种类型内属性从全配一路剥到裸 {}；每一格必须用
+   全新 canvas——同一 canvas 换属性重试在部分内核必失败。全程走标准
+   getContext 路径，不依赖任何浏览器独占 API。 */
+function glProbeRendererString(gl){
+    try{
+        var ext = gl.getExtension('WEBGL_debug_renderer_info');
+        if(ext) return String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || '');
+    }catch(e){}
+    return '';
+}
+function probeGL(){
+    var result = { ok:false, type:'', rung:-1, canvas:null, ctx:null, attrs:null, rendererStr:'', software:false, weak:true };
+    window.__glProbe = result;
+    if(window.__probeForceFail) return result;   // 验收钩子：模拟探针全灭
+    var types = ['webgl2', 'webgl', 'experimental-webgl'];
+    var rungs = [
+        {antialias:true, alpha:true, depth:true, stencil:false, powerPreference:'high-performance', failIfMajorPerformanceCaveat:false},
+        {antialias:true, alpha:true, depth:true, stencil:false, powerPreference:'default'},
+        {antialias:false, alpha:true, depth:true, stencil:false},
+        {antialias:false, alpha:false, depth:true, stencil:false},
+        {antialias:false, alpha:false, depth:false, stencil:false, preserveDrawingBuffer:true},
+        {}
+    ];
+    var startRung = glSafeLv() ? 2 : 0;   // 安全模式起步跳过激进档，与既有语义一致
+    for(var ti=0; ti<types.length && !result.ok; ti++){
+        for(var ri=startRung; ri<rungs.length; ri++){
+            var cv=null, gl=null;
+            try{
+                cv = document.createElement('canvas');
+                gl = cv.getContext(types[ti], rungs[ri]);
+            }catch(e){ gl = null; }
+            if(gl){
+                result.ok = true; result.type = types[ti]; result.rung = ri;
+                result.canvas = cv; result.ctx = gl; result.attrs = rungs[ri];
+                break;
+            }
+        }
+    }
+    if(result.ok){
+        var rs = glProbeRendererString(result.ctx);
+        if(typeof window.__probeFakeRenderer === 'string') rs = window.__probeFakeRenderer;   // 验收钩子：模拟软件渲染器字符串
+        result.rendererStr = rs;
+        var rsl = (rs || '').toLowerCase();
+        // ANGLE 的 Google 软件路径用 fromCharCode 拼左括号，避免字面括号扰动 verify 的朴素括号计数
+        result.software = /swiftshader|llvmpipe|softpipe|software|basic render/i.test(rsl)
+            || rsl.indexOf('angle ' + String.fromCharCode(40) + 'google') >= 0;
+        result.weak = result.software || result.rung >= 4;   // 0 基第 4 格起已剥到很素，也按弱环境待
+    }
+    return result;
+}
+/* 弱 WebView 环境识别：只用于「无存档首次访问」的保守起步，有存档一律不覆盖。 */
+function weakWebUA(){
+    var ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
+    return IS_MOBILE && /MicroMessenger|MQQBrowser|QQBrowser|TBS|Qzone|UCBrowser/i.test(ua);
+}
 /* 实际生效的像素比上限 DPR_LIM：常态等于 DPR_CAP（桌面 2、移动 1.5——K70 Ultra
    这类 3.25 倍密度屏按全 DPR 渲染会把 WebGL 上下文挤掉，移动端故有 1.5 封顶）；
    WebGL 安全模式（ct2_scene.glSafe）读档时压到 1.25，运行时进安全模式也当场
@@ -14147,18 +14228,47 @@ function init(){
         var glSafeBoot = (typeof SCENE !== 'undefined' && !!SCENE.glSafe);
         window.__glSafeBoot = glSafeBoot;   // 上下文丢失处理据此判断本次启动的安全档位
         window.__glSafeLevel = glSafeBoot ? ((SCENE.glSafe === 2) ? 2 : 1) : 0;   // 三轮：丢失时按本次档位逐级升档（0→1 低配 → 2 保命）
-        var glErr=null, glCfgs = glSafeBoot
-            ? [ {antialias:false,powerPreference:'default'}, {} ]
-            : [
-                {antialias:true,powerPreference:'high-performance'},
-                {antialias:true,powerPreference:'default'},
-                {antialias:false,powerPreference:'default'},
-                {}
-              ];
-        for(var gi=0; gi<glCfgs.length && !renderer; gi++){
-            try{ renderer=new THREE.WebGLRenderer(glCfgs[gi]); }catch(ge){ glErr=ge; renderer=null; }
+        /* v5.1 网页版保底可玩：先裸探针找出本浏览器任何能用的组合，把活 context
+           交给引擎；探针判定弱环境（软件渲染／只剩最素属性可用）时在建场景前
+           直接定档起步，不再先按正常档撞墙再自救；无存档的弱 WebView 首次
+           访问以低配起步（有存档不覆盖）。探针全灭或引擎交接失败才回落到
+           下面的老配置阶梯，双保险不比旧行为差。 */
+        var probe = probeGL();
+        if(probe.ok){
+            if(probe.weak && glSafeLv() < 2){
+                SCENE.glSafe = 2;   // 保命全套在建场景时读 SCENE.glSafe，自动生效
+                window.__glSafeLevel = 2;
+                if(dprCur > 1.25) dprCur = 1.25;
+                SceneHub.save();   // 与上下文丢失升档同一落盘语义，下次直接保命起步
+            } else if(!window.__hadSceneSave && weakWebUA() && glSafeLv() < 1){
+                SCENE.glSafe = 1;
+                window.__glSafeLevel = 1;
+                if(dprCur > 1.25) dprCur = 1.25;
+                SceneHub.save();
+            }
+            try{
+                renderer = new THREE.WebGLRenderer({
+                    canvas: probe.canvas,
+                    context: probe.ctx,
+                    antialias: probe.attrs.antialias === true,
+                    powerPreference: probe.attrs.powerPreference || 'default'
+                });
+            }catch(pe){ renderer = null; }
         }
-        if(!renderer) throw glErr||new Error('Error creating WebGL context.');
+        if(!renderer){
+            var glErr=null, glCfgs = glSafeBoot
+                ? [ {antialias:false,powerPreference:'default'}, {} ]
+                : [
+                    {antialias:true,powerPreference:'high-performance'},
+                    {antialias:true,powerPreference:'default'},
+                    {antialias:false,powerPreference:'default'},
+                    {}
+                  ];
+            for(var gi=0; gi<glCfgs.length && !renderer; gi++){
+                try{ renderer=new THREE.WebGLRenderer(glCfgs[gi]); }catch(ge){ glErr=ge; renderer=null; }
+            }
+            if(!renderer) throw glErr||new Error('Error creating WebGL context.');
+        }
         updateOrientation();
         renderer.setSize(LAYOUT.w,LAYOUT.h);
         renderer.setPixelRatio(dprCur);
