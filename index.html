@@ -791,9 +791,9 @@
     #app.photo-on #joy,#app.photo-on #roomBar,#app.photo-on #modBtn,#app.photo-on #modPanel,
     #app.photo-on #fbBtn,#app.photo-on #lanternBtn,#app.photo-on #wakeBtn,#app.photo-on #echoHomeBtn,
     #app.photo-on #fbMask,#app.photo-on #ltMask,#app.photo-on #helpMask,#app.photo-on #voteMask,
-    #app.photo-on #logMask,#app.photo-on #dragonMask,#app.photo-on #avatarMask,#app.photo-on #echoMask,#app.photo-on #codexMask,
+    #app.photo-on #logMask,#app.photo-on #dragonMask,#app.photo-on #avatarMask,#app.photo-on #echoMask,#app.photo-on #codexMask,#app.photo-on #achMask,
     #app.photo-on #gbMask,#app.photo-on #chronMask,#app.photo-on #huntToast,#app.photo-on #helpTip,#app.photo-on #appBar,
-    #app.photo-on #wishBubble,#app.photo-on #sdBubble,#app.photo-on #codexToast{display:none !important}
+    #app.photo-on #wishBubble,#app.photo-on #sdBubble,#app.photo-on #codexToast,#app.photo-on #achToast{display:none !important}
     #photoUI{display:none;position:absolute;inset:0;z-index:140;pointer-events:none}
     #photoGrid{position:absolute;inset:0;pointer-events:none;
         background:
@@ -12708,7 +12708,13 @@ function achState(){
               codexN:0, codexTotal:(typeof CODEX_DEFS!=='undefined') ? CODEX_DEFS.length : 0,
               huntN:0, huntTotal:(typeof HUNT_DEFS!=='undefined') ? HUNT_DEFS.length : 0,
               musicN:0, custom:false, snow:false, fest:false };
-    try{ s.visits=parseInt(store.visits.get()||'0',10)||0; }catch(e){}
+    /* 到访计数在现行版里由 visitsBook 维护（ct2_visits 已升级为 JSON {n, appBar}，
+       老格式纯数字兼容读）：优先读 visitsBook.n，没有再回落解析原始存档 */
+    try{
+        if(typeof visitsBook!=='undefined' && visitsBook && isFinite(visitsBook.n)) s.visits=visitsBook.n;
+        else { const raw=store.visits.get()||'';
+               s.visits=(raw.charAt(0)==='{') ? (parseInt((JSON.parse(raw)||{}).n,10)||0) : (parseInt(raw,10)||0); }
+    }catch(e){}
     try{
         const dc=(typeof dragonCfg!=='undefined') ? dragonCfg : null;
         if(dc){
@@ -15498,7 +15504,7 @@ function setupPanelConsolidation(){
         for(let i = 0; i < rows.length; i++) envBox.appendChild(rows[i]);
     }
     if(entBox){
-        const order = ['codexBtn', 'voteBtn', 'photoBtn', 'snapBtn', 'helpBtn'];
+        const order = ['codexBtn', 'achBtn', 'voteBtn', 'photoBtn', 'snapBtn', 'helpBtn'];
         order.forEach(function(id){
             const b = document.getElementById(id);
             if(b) entBox.appendChild(b);
@@ -15506,7 +15512,7 @@ function setupPanelConsolidation(){
         const uiBtns = ui.querySelector('.uiBtns');
         if(uiBtns && !uiBtns.children.length) uiBtns.style.display = 'none';
         // 从面板里打开弹窗/拍照模式时顺手收起面板，别两层叠着（与 openLog 的处理一致）
-        ['codexBtn', 'voteBtn', 'helpBtn', 'photoBtn'].forEach(function(id){
+        ['codexBtn', 'achBtn', 'voteBtn', 'helpBtn', 'photoBtn'].forEach(function(id){
             const b = document.getElementById(id);
             if(b) b.addEventListener('click', function(){ panel.classList.remove('on'); });
         });
