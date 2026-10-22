@@ -652,8 +652,8 @@
     .mpEntries button:active{transform:scale(.985)}
     #mpEnvRows .row{display:grid;grid-template-columns:64px 1fr 34px;gap:6px;align-items:center;
       margin:5px 0;font-size:11.5px;color:var(--btn-txt)}
-    #mpEnvRows .row input[type=range]{accent-color:#4aa457;height:14px;min-width:0;width:100%}
-    #mpEnvRows .row input[type=checkbox]{width:16px;height:16px;accent-color:#4aa457}
+    #mpEnvRows .row input[type=range]{accent-color:#4aa457;height:26px;min-width:0;width:100%}
+    #mpEnvRows .row #autoRotV{display:none}
     #mpEnvRows .row b{font-weight:600;text-align:right}
     .mpStat{font-size:11px;opacity:.62;margin:0 0 4px;line-height:1.6}
     .mpVer{font-size:11px;line-height:1.75;opacity:.82;margin-bottom:8px}
@@ -661,6 +661,39 @@
     .mpDisclaimer{font-size:10.5px;line-height:1.7;opacity:.55;
       border-left:2px solid var(--disc-line);padding-left:8px}
     .mpTip{font-size:10.5px;color:var(--mp-tip)}
+    /* ===== #96 面板分组与控件升级：可折叠分组标签 / 大号 Toggle / 滑块大触控区 / 功能分层 ===== */
+    .mpGroup{border:1px solid var(--line-soft);border-radius:10px;margin:10px 0;overflow:hidden}
+    .mpGrpHead{display:flex;align-items:center;gap:7px;width:100%;font-family:inherit;font-size:13px;font-weight:700;
+        padding:11px 12px;background:var(--chip);color:var(--btn-txt);border:0;cursor:pointer;text-align:left;
+        -webkit-tap-highlight-color:transparent}
+    .mpGrpHead .mpGrpArrow{margin-left:auto;font-size:11px;opacity:.75;transition:transform .25s ease}
+    .mpGroup.open .mpGrpHead .mpGrpArrow{transform:rotate(180deg)}
+    .mpGrpBody{display:none;padding:6px 10px 10px}
+    .mpGroup.open .mpGrpBody{display:block}
+    .mpHideAll{font-family:inherit;font-size:11.5px;padding:6px 10px;border-radius:8px;cursor:pointer;
+        border:1px solid var(--line-soft);background:var(--chip);color:var(--btn-txt);-webkit-tap-highlight-color:transparent}
+    #modPanel input[type=checkbox]{appearance:none;-webkit-appearance:none;flex:none;width:46px;height:26px;border-radius:999px;
+        background:var(--chip);border:1px solid var(--line-soft);position:relative;cursor:pointer;margin:0;
+        transition:background .2s ease;-webkit-tap-highlight-color:transparent}
+    #modPanel input[type=checkbox]::after{content:'';position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;
+        background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.35);transition:left .2s ease}
+    #modPanel input[type=checkbox]:checked{background:#4aa457;border-color:#4aa457}
+    #modPanel input[type=checkbox]:checked::after{left:22px}
+    #modPanel input[type=range]{height:26px;cursor:pointer}
+    #modPanel input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:22px;height:22px;border-radius:50%;
+        background:#4aa457;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35);cursor:pointer}
+    #modPanel input[type=range]::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:#4aa457;
+        border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35);cursor:pointer}
+    #modPanel #sceneAvatarBtn{font-size:13.5px;font-weight:700;padding:12px 8px;
+        background:var(--warm-pri);border-color:var(--warm-pri-line);color:#fff}
+    #mpEntries #photoBtn,#mpEntries #snapBtn{opacity:.7;font-size:11px;padding:5px 8px}
+    /* ===== #96 旋转引导层：竖屏触屏设备进入世界后的兜底（横过来或点一下即消失） ===== */
+    #rotGuide{position:absolute;inset:0;z-index:135;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+        background:rgba(10,26,16,.88);color:#eaf5ec;text-align:center;padding:24px}
+    #rotGuide .rotPhone{font-size:56px;line-height:1;animation:rotTilt 1.6s ease-in-out infinite}
+    #rotGuide .rotTxt{font-size:19px;font-weight:700;letter-spacing:.06em}
+    #rotGuide .rotSub{font-size:12.5px;opacity:.75}
+    @keyframes rotTilt{0%,25%{transform:rotate(0deg)}55%,100%{transform:rotate(-90deg)}}
     /* ===== 我的音乐（Issue #18：本地文件 BGM，独立 Audio 通道） ===== */
     .mpMusic{display:grid;gap:7px}
     .mpNow{display:flex;align-items:center;gap:7px;font-size:11.5px;min-height:16px}
@@ -754,6 +787,9 @@
     #fbBtn{transition:opacity .35s ease,transform .35s ease,background .15s ease}
     #app.bars-off #ui,#app.bars-off #status{opacity:0;pointer-events:none;transform:translateY(-12px)}
     #app.bars-off #fbBtn,#app.bars-off #lanternBtn,#app.bars-off #modBtn{opacity:0;pointer-events:none;transform:translateY(12px)}
+    /* #96 补齐：底部操控条 / 进出屋条 / 提示条 / 回程钮 / 小龙菜单也纳入自动隐藏（只淡出，不动各自的位移动画与显隐逻辑） */
+    #dragonBar,#roomBar,#appBar,#echoHomeBtn,#dragonMenu{transition:opacity .35s ease}
+    #app.bars-off #dragonBar,#app.bars-off #roomBar,#app.bars-off #appBar,#app.bars-off #echoHomeBtn,#app.bars-off #dragonMenu{opacity:0;pointer-events:none}
     #wakeBtn{position:absolute;right:10px;top:50%;z-index:119;width:34px;height:34px;border-radius:50%;
         transform:translateY(-50%);display:flex;align-items:center;justify-content:center;
         background:var(--wake-bg);color:var(--wake-txt);border:1px solid var(--ghost-line);
@@ -788,7 +824,7 @@
     #app.photo-on #fbMask,#app.photo-on #ltMask,#app.photo-on #helpMask,#app.photo-on #voteMask,
     #app.photo-on #logMask,#app.photo-on #dragonMask,#app.photo-on #avatarMask,#app.photo-on #viewMask,#app.photo-on #echoMask,#app.photo-on #codexMask,#app.photo-on #achMask,
     #app.photo-on #gbMask,#app.photo-on #chronMask,#app.photo-on #huntToast,#app.photo-on #helpTip,#app.photo-on #appBar,
-    #app.photo-on #wishBubble,#app.photo-on #sdBubble,#app.photo-on #codexToast,#app.photo-on #achToast{display:none !important}
+    #app.photo-on #wishBubble,#app.photo-on #sdBubble,#app.photo-on #codexToast,#app.photo-on #achToast,#app.photo-on #rotGuide{display:none !important}
     #photoUI{display:none;position:absolute;inset:0;z-index:140;pointer-events:none}
     #photoGrid{position:absolute;inset:0;pointer-events:none;
         background:
@@ -1364,6 +1400,11 @@
 <div id="helpTip">👋 第一次来？点顶栏里的「❓ 操作帮助」，玩法都在里面</div>
 <button id="wakeBtn" type="button" title="显示操作界面" aria-label="显示操作界面">‹</button>
 <button id="echoHomeBtn" type="button" title="回到小屋门口">🏠 回到小屋</button>
+<div id="rotGuide" style="display:none">
+    <div class="rotPhone">📱</div>
+    <div class="rotTxt">请旋转设备，横屏游玩</div>
+    <div class="rotSub">横过来画面更大、操作更顺手（点一下也可先关掉）</div>
+</div>
 </div><!-- /#app -->
 <div id="error"></div>
 
@@ -15435,6 +15476,7 @@ function closeLog(){
     logOpen = false;
     document.getElementById('logMask').classList.remove('on');
     musicEnterWorld();   // 关掉日志＝进世界：默认歌单时主题曲借这次手势起播（只认第一次）
+    if(typeof enterImmersive === 'function') enterImmersive();   // #96：同一次手势里请求全屏＋锁横屏（失败静默）
 }
 function setupChangelog(){
     const mask = document.getElementById('logMask');
@@ -15707,7 +15749,158 @@ function setupPanelConsolidation(){
             if(b) b.addEventListener('click', function(){ panel.classList.remove('on'); });
         });
     }
+    setupPanelGroups();   // #96：搬家完成后接着把面板小节归入三分组（可折叠）
 }
+
+/* ==================== #96 面板三分组（可折叠） ====================
+   在集中化搬家之后运行：把面板现有小节按 🌤 环境设置 / 🎮 视角控制 /
+   🧩 游玩功能 三组重新归置。只挪节点本体，小节内部结构与已绑事件一概
+   不碰；折叠状态只记在会话里，不落盘、不新增存储键。 */
+function setupPanelGroups(){
+    var panel = document.getElementById('modPanel');
+    if(!panel || panel.getAttribute('data-grouped')) return;
+    panel.setAttribute('data-grouped', '1');
+    // 面板头加「收起整个 UI」：关面板并立刻进 bars-off 纯观景，右缘小圆钮唤回
+    var head = panel.querySelector('.mpHead');
+    if(head){
+        var hb = document.createElement('button');
+        hb.type = 'button'; hb.id = 'mpHideAll'; hb.className = 'mpHideAll';
+        hb.textContent = '🙈 收起整个 UI';
+        hb.addEventListener('click', function(){
+            panel.classList.remove('on');
+            var app = document.getElementById('app');
+            if(app) app.classList.add('bars-off');
+        });
+        var closeBtn = document.getElementById('modClose');
+        if(closeBtn) head.insertBefore(hb, closeBtn); else head.appendChild(hb);
+    }
+    // 切分小节：一个 .mpSub 起一节，到下一个 .mpSub 前为止；无标题的 .mpSound 独立成节；分隔线在分组里隐藏
+    var kids = Array.prototype.slice.call(panel.children);
+    var sections = [], cur = null;
+    kids.forEach(function(el){
+        if(el.classList.contains('mpHead') || el.classList.contains('mpDisclaimer')) return;
+        if(el.classList.contains('mpSep')){ el.style.display = 'none'; return; }
+        if(el.classList.contains('mpSub') || el.classList.contains('mpSound')){ cur = [el]; sections.push(cur); }
+        else if(cur){ cur.push(el); }
+    });
+    var ANCHORS = {
+        quality:'sceneQualityBtns', sliders:'sceneSliders', envrows:'mpEnvRows',
+        avatar:'sceneAvatarBtn', feat:'mpList', tones:'mpTones', themes:'mpThemes',
+        bloom:'atmoBloomBtns', sound:'muteBtn', music:'mpMusic', entries:'mpEntries',
+        global:'shareBtn', log:'logOpenBtn', chron:'chronOpenBtn', echo:'mpEcho', season:'seasonBtns'
+    };
+    function secKey(sec){
+        for(var k in ANCHORS){
+            var id = ANCHORS[k];
+            for(var i = 0; i < sec.length; i++){
+                if(sec[i].id === id) return k;
+                if(sec[i].querySelector && sec[i].querySelector('#' + id)) return k;
+            }
+        }
+        return null;
+    }
+    var byKey = {};
+    sections.forEach(function(sec){ var k = secKey(sec); if(k) byKey[k] = sec; });
+    function mkGroup(title, open){
+        var g = document.createElement('div');
+        g.className = 'mpGroup' + (open ? ' open' : '');
+        var h = document.createElement('button');
+        h.type = 'button'; h.className = 'mpGrpHead'; h.textContent = title;
+        var ar = document.createElement('span');
+        ar.className = 'mpGrpArrow'; ar.textContent = '▾';
+        h.appendChild(ar);
+        var body = document.createElement('div');
+        body.className = 'mpGrpBody';
+        h.addEventListener('click', function(){ g.classList.toggle('open'); });
+        g.appendChild(h); g.appendChild(body);
+        return { g: g, body: body };
+    }
+    var envG = mkGroup('🌤 环境设置', true);
+    var viewG = mkGroup('🎮 视角控制', false);
+    var playG = mkGroup('🧩 游玩功能', false);
+    function put(grp, keys){
+        keys.forEach(function(k){
+            var sec = byKey[k]; if(!sec) return;
+            sec.forEach(function(node){ grp.body.appendChild(node); });
+        });
+    }
+    put(envG, ['quality', 'sliders', 'envrows', 'tones', 'season', 'bloom', 'themes']);
+    put(playG, ['avatar', 'feat', 'music', 'sound', 'entries', 'global', 'log', 'chron', 'echo']);
+    // 视角组内容：视角切换与自动漫游，都借现有机制触发，不新建任何状态
+    var vSub = document.createElement('div');
+    vSub.className = 'mpSub'; vSub.textContent = '视角与漫游（和操控条上的按钮等价）';
+    var vRow = document.createElement('div');
+    vRow.className = 'mpViews';
+    var vb = document.createElement('button');
+    vb.type = 'button'; vb.id = 'mpViewSwap'; vb.textContent = '👁️ 切换第一 / 第三人称';
+    vb.addEventListener('click', function(){ if(typeof dragonToggleView === 'function') dragonToggleView(); });
+    var rb2 = document.createElement('button');
+    rb2.type = 'button'; rb2.id = 'mpRoamSwap'; rb2.textContent = '🚶 自动漫游 开 / 关';
+    rb2.addEventListener('click', function(){
+        var cb = document.getElementById('feat_roam');
+        if(cb){ cb.checked = !cb.checked; cb.dispatchEvent(new Event('change')); }
+    });
+    vRow.appendChild(vb); vRow.appendChild(rb2);
+    viewG.body.appendChild(vSub); viewG.body.appendChild(vRow);
+    // 兜底：没认出归属的小节放回游玩组末尾，绝不丢内容
+    sections.forEach(function(sec){
+        if(sec[0].parentNode === panel) sec.forEach(function(node){ playG.body.appendChild(node); });
+    });
+    var disc = panel.querySelector('.mpDisclaimer');
+    [envG, viewG, playG].forEach(function(grp){
+        if(disc) panel.insertBefore(grp.g, disc); else panel.appendChild(grp.g);
+    });
+}
+
+/* ==================== #96 进入即沉浸＋旋转引导 ====================
+   借点「开始游玩」的手势：触屏设备请求全屏收掉浏览器边框，全屏成立后
+   再尝试锁横屏；锁不住又仍是竖屏时，出旋转引导层兜底。全程静默兜底，
+   全屏或锁屏失败绝不打断进入流程。App 壳内本来就全屏横屏，整段跳过。 */
+var __worldEntered96 = false, __rotGuideOff96 = false;
+function __inAppShell96(){
+    var ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
+    return ua.indexOf('; wv' + String.fromCharCode(41)) >= 0;
+}
+function __refreshRotGuide(){
+    var g = document.getElementById('rotGuide');
+    if(!g) return;
+    var show = false;
+    if(__worldEntered96 && !__rotGuideOff96 && !__inAppShell96()){
+        var coarse = !!(window.matchMedia && window.matchMedia('(pointer:coarse)').matches);
+        if(coarse && window.innerHeight > window.innerWidth) show = true;
+    }
+    g.style.display = show ? 'flex' : 'none';
+}
+function enterImmersive(){
+    __worldEntered96 = true;
+    __refreshRotGuide();
+    if(__inAppShell96()) return;
+    var coarse = !!(window.matchMedia && window.matchMedia('(pointer:coarse)').matches);
+    if(!coarse) return;
+    try{
+        var el = document.documentElement;
+        var p = null;
+        if(el.requestFullscreen) p = el.requestFullscreen();
+        else if(el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+        if(p && typeof p.then === 'function'){
+            p.then(function(){
+                try{
+                    if(screen.orientation && screen.orientation.lock){
+                        var lp = screen.orientation.lock('landscape');
+                        if(lp && typeof lp.catch === 'function') lp.catch(function(){});
+                    }
+                }catch(e){}
+            }, function(){});
+        }
+    }catch(e){}
+    setTimeout(__refreshRotGuide, 700);
+}
+window.addEventListener('resize', __refreshRotGuide);
+window.addEventListener('orientationchange', __refreshRotGuide);
+(function(){
+    var g = document.getElementById('rotGuide');
+    if(g) g.addEventListener('click', function(){ __rotGuideOff96 = true; __refreshRotGuide(); });
+})();
 
 /* ==================== 操作界面自动隐藏 ====================
    顶栏（#ui）与底栏（#status / 放河灯 / 优化意见 / 齿轮）无操作 3 秒后淡出，
@@ -15736,7 +15929,7 @@ function setupPanelConsolidation(){
         app.classList.remove('bars-off');
         arm();
     }
-    ['ui','status','fbBtn','lanternBtn','modBtn','modPanel','fbMask','ltMask','helpMask','voteMask','logMask','dragonMask','avatarMask','viewMask','echoMask','codexMask','gbMask','chronMask','achMask'].forEach(function(id){
+    ['ui','status','fbBtn','lanternBtn','modBtn','modPanel','fbMask','ltMask','helpMask','voteMask','logMask','dragonMask','avatarMask','viewMask','echoMask','codexMask','gbMask','chronMask','achMask','dragonBar','roomBar','appBar','echoHomeBtn','dragonMenu','rotGuide'].forEach(function(id){
         var el = document.getElementById(id);
         if(!el) return;
         ['pointerdown','input','change','wheel'].forEach(function(ev){
@@ -15769,6 +15962,7 @@ window.addEventListener('load',()=>{
             __mask.classList.remove('on');
             if(typeof logOpen !== 'undefined') logOpen = false;
             if(typeof musicEnterWorld === 'function') musicEnterWorld();   // 保命路径不走 closeLog，这里补上同一进世界起播钩子
+            if(typeof enterImmersive === 'function') enterImmersive();   // #96：保命路径同样借这次手势请求全屏＋锁横屏
             var b = document.getElementById('boot');
             if(b){ b.style.display=''; b.classList.remove('hide'); }   // 恢复加载层给 init 的进度条用
             try{ init(); }
