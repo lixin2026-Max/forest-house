@@ -204,14 +204,17 @@ test('模块有统一挂载/更新钩子', ()=>{
     must(/setupModules\(\);/.test(inlineJs), 'init() 未调用 setupModules()');
     must(/updateModules\(dt, ?t\);/.test(inlineJs), 'animate() 未调用 updateModules()');
 });
-test('BGM 按天气换音阶，音频文件只许站内内置主题曲一份', ()=>{
+test('BGM 按天气换音阶，音频文件只许站内三首内置曲（主题曲＋#68 天气变奏）', ()=>{
     must(/BGM_SCALE\s*=\s*\{/.test(inlineJs), '缺少按天气的音阶表');
     ['sunny','golden','mist','night','rain'].forEach(m =>
         must(new RegExp(m + '\\s*:\\s*\\[').test(inlineJs), '音阶表缺少 ' + m));
-    // 程序化 BGM 本体仍不加载文件；全页只许引用内置主题曲这一份同源音频
+    // 程序化 BGM 本体仍不加载文件；全页只许引用站内三首同源内置音频
+    // （主题曲＋#68 的雨/雪天气变奏，同出一条离线作曲管线），其余音频引用一律不许
+    const ALLOWED_AUDIO = ['assets/audio/chumen-theme.mp3',
+        'assets/audio/chumen-rain.mp3', 'assets/audio/chumen-snow.mp3'];
     const audioRefs = html.match(/[\w./-]+\.(?:mp3|ogg|wav|m4a)/gi) || [];
-    must(audioRefs.length > 0 && audioRefs.every(r => r === 'assets/audio/chumen-theme.mp3'),
-        '引用了主题曲之外的音频文件：' + audioRefs.join(', '));
+    must(audioRefs.length > 0 && audioRefs.every(r => ALLOWED_AUDIO.includes(r)),
+        '引用了三首内置曲之外的音频文件：' + audioRefs.join(', '));
 });
 test('音频有总静音开关，且默认静音（不打扰打开者）', ()=>{
     must(/id="muteBtn"/.test(html), '缺少静音按钮');
@@ -466,6 +469,38 @@ test('自定义音乐：本地文件 BGM、独立通道、偏好只存歌名（I
     // 版权与浏览器限制提示在面板里写明
     must(/不上传、也不分发/.test(html),'面板缺版权提示');
     must(/刷新页面后需重新选一次文件/.test(html),'面板缺刷新重选提示');
+});
+
+test('按天气分歌单：标签映射＋锁定开关只扩 ct2_music、接歌先过天气池（Issue #68）', ()=>{
+    // 天气池核心齐全：当前天气标签、自选歌标签清洗、在池判定、天气变化同步
+    must(/function musicWxTag\(/.test(inlineJs),'缺少 musicWxTag（当前天气→池标签）');
+    must(/function musicWxClean\(/.test(inlineJs),'缺少 musicWxClean（标签清洗）');
+    must(/function musicInPool\(/.test(inlineJs),'缺少 musicInPool（在池判定）');
+    must(/function musicWxSync\(/.test(inlineJs),'缺少 musicWxSync（天气变化同步）');
+    must(/musicWxSync\(\);/.test(inlineJs),'audioWeatherSync 未挂 musicWxSync');
+    // 夜晚不分池（只走既有 ×0.55），冬季的雨归雪组
+    must(/mode === 'night'\) return null/.test(inlineJs),'夜晚应不分池');
+    must(/Env\.season === 'winter'\) \? 'snow' : 'rain'/.test(inlineJs),'冬季雨天应归雪组');
+    // 只扩 ct2_music 字段：tags 映射与 wxLock 随偏好一起存，不新增键
+    must(/tags: tags, wxLock: musicState\.wxLock/.test(inlineJs),'偏好未存 tags/wxLock');
+    must(/pref\.wxLock === true/.test(inlineJs),'未恢复 wxLock');
+    must(/savedTags\[n\]/.test(inlineJs),'未按歌名恢复天气标签');
+    // 接歌先过天气池、池空再放宽：两遍扫描在位
+    must(/pass < 2/.test(inlineJs) && /pass === 1 \|\| musicInPool\(t\)/.test(inlineJs),'musicStep 未做天气池两遍接歌');
+    // UI：锁定开关与逐首标签选择器都在音乐小节里
+    must(/id="musWxLock"/.test(html),'缺跟随天气/锁定开关');
+    must(/id="musWxNow"/.test(html),'缺当前天气池状态行');
+    must(/className = 'wxtag'/.test(inlineJs),'自选歌行未渲染天气标签选择器');
+    // 主题曲地位不动：恒第一首、标签写死不限、暂停保护仍在
+    must(/builtin: true, tag: 'any'/.test(inlineJs),'主题曲未登记为不限标签的第一首');
+    must(/主题曲是世界的常驻 BGM，只能调小音量，不能关掉/.test(inlineJs),'主题曲不可关口径被动过');
+    // 内置天气变奏曲：雨/雪各一首、标签写死、文件真实在位；暂停保护只认主题曲本身
+    must(/WX_BUILTIN_TRACKS/.test(inlineJs),'缺少内置天气变奏曲表');
+    must(/assets\/audio\/chumen-rain\.mp3', tag: 'rain'/.test(inlineJs),'雨版变奏曲未登记或标签错');
+    must(/assets\/audio\/chumen-snow\.mp3', tag: 'snow'/.test(inlineJs),'雪版变奏曲未登记或标签错');
+    must(fs.existsSync(path.join(root,'assets/audio/chumen-rain.mp3')),'雨版变奏曲文件缺失');
+    must(fs.existsSync(path.join(root,'assets/audio/chumen-snow.mp3')),'雪版变奏曲文件缺失');
+    must(/t\.builtin && t\.name === THEME_TRACK_NAME/.test(inlineJs),'暂停保护应只认主题曲（变奏曲可暂停）');
 });
 
 // ---------- 迭代维护规范：模块隔离 ----------

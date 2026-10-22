@@ -733,6 +733,15 @@
     .mpListM li.off{opacity:.5;cursor:default}
     .mpListM .nm{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .mpListM .rm{flex:none;background:none;border:none;color:inherit;font-size:12px;cursor:pointer;padding:0 2px;opacity:.75}
+    .mpListM li.wxout{opacity:.42}
+    .mpListM .wxchip{flex:none;font-size:10px;padding:2px 6px;border-radius:999px;border:1px solid var(--line-soft);opacity:.85}
+    .mpListM .wxtag{flex:none;font-family:inherit;font-size:11px;padding:4px 2px;border-radius:6px;cursor:pointer;
+        border:1px solid var(--line-soft);background:var(--btn);color:var(--btn-txt)}
+    .mpWxRow{display:flex;align-items:center;gap:7px;font-size:11px}
+    .mpWxRow button{font-family:inherit;font-size:11.5px;padding:6px 9px;border-radius:7px;cursor:pointer;
+        border:1px solid var(--line-soft);background:var(--chip);color:var(--btn-txt)}
+    .mpWxRow button.on{background:var(--pri);border-color:var(--pri-line);color:var(--pri-txt)}
+    .mpWxNow{color:var(--mp-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .mpMusTip{font-size:10.5px;color:var(--mp-tip);line-height:1.6}
 
     @media (max-width:600px),(pointer:coarse){
@@ -1058,10 +1067,14 @@
             <button type="button" id="musLoop" title="循环模式：列表循环 / 单曲循环">🔁 列表</button>
         </div>
         <div class="mpVol"><span>BGM 音量</span><input id="musVol" type="range" min="10" max="100" value="80"><span id="musVolVal">80%</span></div>
+        <div class="mpWxRow">
+            <button type="button" id="musWxLock" title="跟随天气：轮播优先播对天气的歌；锁定后不随天气切">🌦 跟随天气</button>
+            <span class="mpWxNow" id="musWxNow"></span>
+        </div>
         <button type="button" class="mpAdd" id="musAdd">🎵 选本地音乐文件（可多选）</button>
         <input id="musFile" type="file" accept="audio/*" multiple hidden>
         <ul class="mpListM" id="musList"></ul>
-        <div class="mpMusTip">列表第一首是世界自带的原创主题曲，进世界就会轻轻循环放着，常驻不能关，音量最低只能调到 10%；你也可以选自己设备上的音乐文件组个歌单，自选音乐在播时主题曲与世界自带音乐都会让行。歌只在你这台设备上播放，不上传、也不分发；请播放自己有权使用的音乐。浏览器限制：刷新页面后需重新选一次文件，歌名和顺序会替你记着。</div>
+        <div class="mpMusTip">列表第一首是世界自带的原创主题曲，进世界就会轻轻循环放着，常驻不能关，音量最低只能调到 10%；你也可以选自己设备上的音乐文件组个歌单，自选音乐在播时主题曲与世界自带音乐都会让行。歌只在你这台设备上播放，不上传、也不分发；请播放自己有权使用的音乐。浏览器限制：刷新页面后需重新选一次文件，歌名和顺序会替你记着。按天气分歌单（v4.3）：给自选歌打上天气标签后，轮播会优先播对当前天气的歌，「不限」任何天气都播；天气变化时正在播的这首不会被打断，播完才换池；不想跟着天气走就点「锁定歌单」。</div>
     </div>
     <div class="mpSep"></div>
     <div class="mpSub">世界入口（原顶栏按钮，已收进面板）</div>
@@ -12470,6 +12483,7 @@ function audioWeatherSync(){
     if(ambRain) ambRain.gain.setTargetAtTime(mode==='rain'?0.55:0.0001, now, 0.9);
     if(ambFire) ambFire.gain.setTargetAtTime(fireOn?0.30:0.0001, now, 0.7);
     musicNightSync();   // 自选音乐的夜晚放轻跟天气变化同拍（函数在音乐模块里）
+    musicWxSync();      // 按天气分歌单的池同步同拍跟上（#68，函数在音乐模块里）
 }
 function audioTick(){
     if(!actx || audioMuted) return;
@@ -12525,7 +12539,8 @@ function setMute(v){
    各走各的、互不打架。自选音乐在播时程序化 BGM 自动让行（audioTick
    查 musicCustomActive），环境声照常；进屋/回户外都不碰这个元素，
    播放天然不中断。音频文件只经内存对象 URL 在本机播放：不上传、
-   不写任何存储；ct2_music 只存音量、循环模式与歌名顺序。首次播放
+   不写任何存储；ct2_music 只存音量、循环模式、歌名顺序与天气分组
+   （标签映射与锁定开关，#68）。首次播放
    必由玩家点击触发，符合浏览器自动播放策略，不绕。 */
 /* 内置原创主题曲（2026-10-22 追加）：站内自带一份同源 MP3 作常驻 BGM，
    恒列歌单第一首，与自选音乐共用同一通道/音量/夜晚放轻；它不是玩家
@@ -12537,13 +12552,23 @@ function setMute(v){
    CSP 媒体口径为它放行同源 'self'（与 blob: 并列，安全审计已同步）。 */
 const THEME_TRACK_NAME = '🎵 主题曲 · 楚门的2.0世界（原创）';
 const THEME_TRACK_SRC = 'assets/audio/chumen-theme.mp3';
+/* #68 内置天气变奏曲：与主题曲同源动机（F♯–A–B–D）、同和弦进行的两个
+   60 秒无缝循环变奏——雨版稀疏钢琴、雪版八音盒，同出一条离线作曲管线
+   （compose_chumen_wx.py）。它们是标签写死的内置曲：恒排主题曲之后、
+   自选歌之前，不可移除、不进歌名存档；主题曲仍恒列第一首、口径不动。 */
+const WX_BUILTIN_TRACKS = [
+    { name: '🌧 雨夜钢琴 · 主题变奏（原创）', url: 'assets/audio/chumen-rain.mp3', tag: 'rain' },
+    { name: '❄ 雪夜八音盒 · 主题变奏（原创）', url: 'assets/audio/chumen-snow.mp3', tag: 'snow' }
+];
 const musicState = {
     el: null,        // 唯一的 Audio 元素（独立通道）
-    tracks: [],      // {name, url|null, builtin?}：url 为空 = 只有歌名存档、文件待重新选入；builtin = 内置主题曲
+    tracks: [],      // {name, url|null, builtin?, tag}：url 为空 = 只有歌名存档、文件待重新选入；builtin = 内置曲；tag = 天气标签
     cur: -1,         // 当前载入的曲目下标（-1 = 还没载入）
     vol: 0.8,        // BGM 音量 0.1~1（下限 0.1 是定死口径：只能调小、不能到 0）
     loop: 'list',    // 'list' 列表循环 | 'one' 单曲循环
     night: false,    // 夜晚时段（音量自动放轻）
+    wx: undefined,   // 当前天气池标签（#68）：'sun'|'rain'|'snow'|'over'；null = 不分池（夜晚）
+    wxLock: false,   // 锁定歌单（#68）：true = 不随天气切池，轮播回全量顺序
     themeDefault: false  // 本机没有自选歌单存档时为真（主题曲即默认歌单）
 };
 function musicCustomActive(){
@@ -12557,6 +12582,48 @@ function musicNightSync(){
     const n = musicIsNight();
     if(n !== musicState.night){ musicState.night = n; musicApplyVol(); }
 }
+/* ---------- 按天气分歌单（Issue #68 / v4.3） ----------
+   在 #18 音乐体系上扩：每首歌一个天气标签（晴/雨/雪/阴/不限），轮播
+   接歌时优先在「当前天气池」里挑（命中标签的歌＋不限的歌），池里没
+   可播的再放宽到全部，永不因分池卡死。切池只影响下一首：天气变化
+   时正在播的一首照常播完，绝不硬切。天气读现行天气系统当前状态
+   （weatherModes[weatherIndex]，含玩家手动选定的天气）；夜晚不分
+   池，只走既有 ×0.55 放轻。玩家可锁定歌单不随天气（wxLock）。
+   标签只扩 ct2_music 的 tags 映射（歌名→标签）与 wxLock 字段，
+   不新增存储键；内置主题曲恒为「不限」、地位与口径一律不动。 */
+const WX_TAG_LABEL = { any:'🎵 不限', sun:'☀ 晴', rain:'🌧 雨', snow:'❄ 雪', over:'☁ 阴' };
+function musicWxClean(v){ return (v === 'sun' || v === 'rain' || v === 'snow' || v === 'over') ? v : 'any'; }
+function musicWxTag(){
+    if(typeof weatherModes === 'undefined') return null;
+    const mode = weatherModes[weatherIndex] || 'sunny';
+    if(mode === 'night') return null;   // 夜晚不分池（已有放轻口径，不与天气池打架）
+    if(mode === 'rain') return (typeof Env !== 'undefined' && Env.season === 'winter') ? 'snow' : 'rain';   // 冬季的雨就是雪（#21）
+    if(mode === 'mist') return 'over';
+    return 'sun';   // sunny / golden 归晴组
+}
+function musicInPool(t){
+    if(musicState.wxLock) return true;
+    const w = musicState.wx;
+    if(!w) return true;
+    const tg = t.tag || 'any';
+    return tg === 'any' || tg === w;   // 「不限」恒在池中
+}
+function musicWxSync(){
+    const w = musicWxTag();
+    if(w !== musicState.wx){ musicState.wx = w; musicRender(); }
+}
+function musicRenderWx(){
+    const btn = document.getElementById('musWxLock');
+    if(btn){
+        btn.textContent = musicState.wxLock ? '🔒 已锁定歌单' : '🌦 跟随天气';
+        btn.classList.toggle('on', musicState.wxLock);
+    }
+    const now = document.getElementById('musWxNow');
+    if(now){
+        now.textContent = musicState.wxLock ? '不随天气切歌'
+            : (musicState.wx ? '当前天气池：' + WX_TAG_LABEL[musicState.wx] : '夜晚不分池');
+    }
+}
 function musicApplyVol(){
     // 音量下限 0.1 在这一处统一钳死：滑杆、存档、任何来路都越不过去
     const v = Math.min(1, Math.max(0.1, musicState.vol));
@@ -12567,9 +12634,14 @@ function musicApplyVol(){
     if(actx && aBgm) aBgm.gain.setTargetAtTime(0.22 * (v / 0.8), actx.currentTime, 0.1);
 }
 function musicSave(){
+    const tags = {};   // #68：只记非「不限」的自选歌标签，键是歌名
+    musicState.tracks.forEach(function(t){
+        if(!t.builtin && t.tag && t.tag !== 'any') tags[t.name] = t.tag;
+    });
     store.music.save({ vol: musicState.vol, loop: musicState.loop,
         names: musicState.tracks.filter(function(t){ return !t.builtin; })
-            .map(function(t){ return t.name; }) });
+            .map(function(t){ return t.name; }),
+        tags: tags, wxLock: musicState.wxLock });
 }
 function musicFmt(s){
     if(!(s >= 0)) s = 0;                 // NaN / 负数 / 未就绪一律当 0
@@ -12589,11 +12661,32 @@ function musicRender(){
             const li = document.createElement('li');
             if(i === musicState.cur) li.className = 'cur';
             if(!t.url) li.className = (li.className + ' off').trim();
+            if(!musicInPool(t)) li.className = (li.className + ' wxout').trim();   // 不在当前天气池里：压暗（仍可点开直选）
             const nm = document.createElement('span');
             nm.className = 'nm';
             nm.textContent = (i === musicState.cur && musicCustomActive() ? '▶ ' : '') + t.name + (t.url ? '' : (t.builtin ? '（文件缺失）' : '（待重新选入）'));
             li.appendChild(nm);
+            if(t.builtin){   // 内置曲的天气标签是写死的，只展示不给改（主题曲＝不限）
+                const chip = document.createElement('span');
+                chip.className = 'wxchip';
+                chip.textContent = WX_TAG_LABEL[t.tag || 'any'];
+                li.appendChild(chip);
+            }
             if(!t.builtin){   // 内置主题曲不可移除，也不写进歌名存档
+                const sel = document.createElement('select');   // #68：自选歌逐首打天气标签
+                sel.className = 'wxtag'; sel.title = '天气标签：轮播时优先播对当前天气的歌';
+                ['any','sun','rain','snow','over'].forEach(function(v){
+                    const op = document.createElement('option');
+                    op.value = v; op.textContent = WX_TAG_LABEL[v];
+                    sel.appendChild(op);
+                });
+                sel.value = t.tag || 'any';
+                sel.addEventListener('click', function(ev){ ev.stopPropagation(); });
+                sel.addEventListener('change', function(){
+                    t.tag = sel.value;
+                    musicSave(); musicRender();
+                });
+                li.appendChild(sel);
                 const rm = document.createElement('button');
                 rm.type = 'button'; rm.className = 'rm'; rm.textContent = '✕'; rm.title = '从列表移除';
                 rm.addEventListener('click', function(ev){ ev.stopPropagation(); musicRemove(i); });
@@ -12623,6 +12716,7 @@ function musicRender(){
         else if(musicState.tracks.length) now.textContent = '歌单还在，点一首开始听';
         else now.textContent = '还没有选歌';
     }
+    musicRenderWx();
     musicRenderTime();
 }
 function musicRenderTime(){
@@ -12661,7 +12755,7 @@ function musicPlay(){
 }
 function musicPause(){
     const t = musicState.tracks[musicState.cur];
-    if(t && t.builtin){   // 主题曲常驻不可关：暂停键对它无效，只给一句提示（render 会重写状态行，提示必须排在它后面）
+    if(t && t.builtin && t.name === THEME_TRACK_NAME){   // 只有主题曲常驻不可关：暂停键对它无效，只给一句提示（render 会重写状态行，提示必须排在它后面）；#68 的天气变奏曲同为内置曲但可正常暂停，故这里只认主题曲本身
         musicRender();
         musicHint('主题曲是世界的常驻 BGM，只能调小音量，不能关掉');
         return;
@@ -12673,6 +12767,19 @@ function musicToggle(){ if(musicCustomActive()) musicPause(); else musicPlay(); 
 function musicStep(d){
     const n = musicState.tracks.length;
     if(!n) return;
+    if(d > 0){
+        // #68 向前接歌先过天气池：命中当前天气标签或「不限」的优先；
+        // 池里没有可播的再放宽到全部——分池只排序，永不卡死轮播
+        for(let pass = 0; pass < 2; pass++){
+            for(let k = 1; k <= n; k++){
+                const i = (((musicState.cur + k) % n) + n) % n;
+                const t = musicState.tracks[i];
+                if(t.url && (pass === 1 || musicInPool(t))){ musicLoad(i); musicPlay(); return; }
+            }
+        }
+        musicHint('列表里的歌都还没选入文件，先点上面选歌');
+        return;
+    }
     for(let k = 1; k <= n; k++){
         const i = (((musicState.cur + d * k) % n) + n) % n;
         if(musicState.tracks[i].url){ musicLoad(i); musicPlay(); return; }
@@ -12701,7 +12808,7 @@ function musicAddFiles(files){
             if(musicState.tracks[ex].url){ try{ URL.revokeObjectURL(musicState.tracks[ex].url); }catch(e){} }
             musicState.tracks[ex].url = url;
         } else {
-            musicState.tracks.push({ name: file.name, url: url });
+            musicState.tracks.push({ name: file.name, url: url, tag: 'any' });
             if(firstNew < 0) firstNew = musicState.tracks.length - 1;
         }
     }
@@ -12721,13 +12828,17 @@ function setupMusic(){
     const pref = store.music.json({});
     if(typeof pref.vol === 'number' && pref.vol === pref.vol) musicState.vol = Math.min(1, Math.max(0.1, pref.vol));   // 旧存档里若有 0 也抬回下限 0.1
     if(pref.loop === 'one' || pref.loop === 'list') musicState.loop = pref.loop;
+    if(pref.wxLock === true) musicState.wxLock = true;   // #68 锁定歌单开关
+    const savedTags = (pref.tags && typeof pref.tags === 'object' && !Array.isArray(pref.tags)) ? pref.tags : {};   // #68 歌名→天气标签
     const savedNames = Array.isArray(pref.names)
         ? pref.names.filter(function(n){ return typeof n === 'string' && !!n; }) : [];
     // 内置主题曲恒列歌单第一首：有自选存档时只作备选不抢播，没有时它就是默认歌单
-    musicState.tracks = [{ name: THEME_TRACK_NAME, url: THEME_TRACK_SRC, builtin: true }]
-        .concat(savedNames.map(function(n){ return { name: n, url: null }; }));
+    musicState.tracks = [{ name: THEME_TRACK_NAME, url: THEME_TRACK_SRC, builtin: true, tag: 'any' }]
+        .concat(WX_BUILTIN_TRACKS.map(function(t){ return { name: t.name, url: t.url, builtin: true, tag: t.tag }; }))
+        .concat(savedNames.map(function(n){ return { name: n, url: null, tag: musicWxClean(savedTags[n]) }; }));
     musicState.themeDefault = savedNames.length === 0;
     musicState.night = musicIsNight();
+    musicState.wx = musicWxTag();
     if(el){
         el.addEventListener('ended', function(){
             if(musicState.loop === 'one'){ el.currentTime = 0; musicPlay(); }
@@ -12748,9 +12859,14 @@ function setupMusic(){
             } else musicHint('这首读不出来（文件可能已移动或损坏）');
         });
     }
-    // 夜晚自动放轻：主钩子挂在 audioWeatherSync（天气一变同拍生效），
+    // 夜晚自动放轻＋天气池同步：主钩子挂在 audioWeatherSync（天气一变同拍生效），
     // 这里的慢轮询只是兜底（个别环境帧循环被节流时也能跟上）
-    setInterval(musicNightSync, 1000);
+    setInterval(function(){ musicNightSync(); musicWxSync(); }, 1000);
+    const wxb = document.getElementById('musWxLock');
+    if(wxb) wxb.addEventListener('click', function(){
+        musicState.wxLock = !musicState.wxLock;
+        musicSave(); musicRender();
+    });
     const pb = document.getElementById('musPlay');
     if(pb) pb.addEventListener('click', musicToggle);
     const pv = document.getElementById('musPrev');
