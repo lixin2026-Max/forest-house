@@ -554,9 +554,14 @@
     .fbCreed span{font-size:11.5px;color:var(--note)}
 
     /* ===== 放河灯（按钮 / 弹窗 / 愿望气泡） ===== */
-    #lanternBtn{position:absolute;left:15px;bottom:15px;z-index:120;
+    /* 放河灯（HUD 重构）：从左下胶囊改为键簇上方的小圆图标钮（🏮），
+       显隐时机（.hide）与夜里发光（.glow）逻辑一概不变，只换位置与形状 */
+    #lanternBtn{position:absolute;right:calc(96px + env(safe-area-inset-right, 0px));
+        bottom:calc(92px + env(safe-area-inset-bottom, 0px));z-index:120;
+        width:48px;height:48px;border-radius:50%;padding:0;
+        display:flex;align-items:center;justify-content:center;
         background:var(--float);color:var(--warm-float-txt);border:1px solid var(--warm-float-line);
-        padding:9px 15px;border-radius:22px;font-size:13px;font-family:inherit;cursor:pointer;
+        font-size:21px;font-family:inherit;cursor:pointer;
         backdrop-filter:blur(6px);transition:background .15s,transform .15s,box-shadow .3s}
     #lanternBtn:hover{background:var(--warm-float-hov);transform:translateY(-1px)}
     #lanternBtn.glow{box-shadow:0 0 18px 3px var(--warm-glow);border-color:var(--warm-glow-line);color:var(--warm-glow-txt)}
@@ -605,22 +610,25 @@
         box-shadow:var(--tip-shadow)}
     #huntToast.on{opacity:1;transform:translate(-50%,0)}
     @media (max-width:600px),(pointer:coarse){
-        #lanternBtn{left:8px;bottom:calc(56px + env(safe-area-inset-bottom, 0px));padding:7px 11px;font-size:12px}
         #huntToast{font-size:12.5px;top:15%}
     }
 
     /* ===== 功能面板 ===== */
-    #modBtn{position:absolute;right:15px;bottom:56px;z-index:121;width:38px;height:38px;border-radius:10px;
+    #modBtn{position:absolute;right:15px;bottom:calc(92px + env(safe-area-inset-bottom, 0px));z-index:121;width:38px;height:38px;border-radius:10px;
         display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:17px;
         border:1px solid var(--line-soft);background:var(--gear);color:var(--nav-txt);
         -webkit-tap-highlight-color:transparent;backdrop-filter:blur(6px)}
     #modBtn:hover{background:var(--float-hov)}
-    #modPanel{position:absolute;right:15px;bottom:104px;z-index:122;width:250px;max-height:min(70vh,520px);
+    #modPanel{position:absolute;right:15px;bottom:140px;z-index:122;width:250px;max-height:min(70vh,520px);
         overflow:auto;padding:13px 14px;border-radius:14px;display:none;
         border:1px solid var(--line-faint);background:var(--gear-panel);color:var(--gear-txt);
         box-shadow:var(--mp-shadow);backdrop-filter:blur(10px);
         font-size:12.5px;line-height:1.5;-webkit-overflow-scrolling:touch}
     #modPanel.on{display:block}
+    /* 优化意见钮（HUD 重构）：常驻胶囊撤下，元素本体被搬进面板建议回音区，
+       在面板里退回静态胶囊形态（原 #fbBtn 的定位/安全区规则一概被此条压住） */
+    #modPanel #fbBtn{position:static;display:inline-flex;align-items:center;margin:2px 0 10px;
+        padding:9px 15px;right:auto;bottom:auto;left:auto;top:auto}
     .mpHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
     .mpHead h4{margin:0;font-size:13.5px;letter-spacing:.02em}
     .mpHead button{background:none;border:none;color:var(--note);font-size:14px;cursor:pointer;padding:2px 4px}
@@ -754,9 +762,9 @@
         .row{grid-template-columns:64px 1fr 34px;gap:6px;margin-bottom:6px;font-size:11px}
         .row input[type=range]{height:14px}
         #fbBtn{left:auto;right:8px;bottom:8px;top:auto;padding:7px 11px;font-size:12px}
-        #modBtn{right:8px;bottom:58px;width:42px;height:42px;font-size:18px;
+        #modBtn{right:8px;bottom:calc(96px + env(safe-area-inset-bottom, 0px));width:42px;height:42px;font-size:18px;
             background:var(--gear-m);border-color:var(--gear-m-line);color:var(--btn-txt)}
-        #modPanel{left:8px;right:8px;bottom:106px;width:auto;max-height:56vh}
+        #modPanel{left:8px;right:8px;bottom:calc(146px + env(safe-area-inset-bottom, 0px));width:auto;max-height:56vh}
         #fbBox{padding:13px 14px}
         #fbText{min-height:88px;font-size:12.5px}
         body.rot90 #fbBtn{left:6px;right:auto;bottom:6px;top:auto}
@@ -780,9 +788,9 @@
         .wbtns button{font-size:11px;padding:6px 2px;min-width:0}
         .row{margin:5px 0}
         #status{top:10px;right:10px;padding:8px 11px;font-size:11px;line-height:1.55}
-        #modBtn{bottom:52px;right:10px}
+        #modBtn{bottom:96px;right:10px}
         #fbBtn{right:10px;bottom:10px}
-        #modPanel{bottom:100px;right:10px;max-height:64vh}
+        #modPanel{bottom:140px;right:10px;max-height:64vh}
     }
     @media (max-height:440px){
         #ui .hint{display:none}
@@ -801,10 +809,10 @@
         #fbBtn{right:calc(8px + env(safe-area-inset-right, 0px));
                bottom:calc(8px + env(safe-area-inset-bottom, 0px))}
         #modBtn{right:calc(8px + env(safe-area-inset-right, 0px));
-                bottom:calc(60px + env(safe-area-inset-bottom, 0px))}
+                bottom:calc(96px + env(safe-area-inset-bottom, 0px))}
         #modPanel{left:calc(8px + env(safe-area-inset-left, 0px));
                   right:calc(8px + env(safe-area-inset-right, 0px));
-                  bottom:calc(112px + env(safe-area-inset-bottom, 0px))}
+                  bottom:calc(146px + env(safe-area-inset-bottom, 0px))}
         #fbMask{padding:env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
                         env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px)}
     }
@@ -830,9 +838,10 @@
         -webkit-tap-highlight-color:transparent;backdrop-filter:blur(4px)}
     #echoHomeBtn.on{display:block}
     #echoHomeBtn:hover{background:var(--wake-hov)}
-    /* 小地图（Issue #65）：独立元素挂在 #app 下，左下角卡片，跟随主题变量；
+    /* 小地图（Issue #65；HUD 重构后移左上）：独立元素挂在 #app 下，左上角卡片
+       （主流开放世界惯例，左下让给摇杆手势区），跟随主题变量；
        界面自动隐藏（bars-off）时跟着一起淡出，拍照模式等整站隐藏机制也能盖住它 */
-    #miniMap{position:absolute;left:15px;bottom:64px;z-index:110;width:148px;height:148px;
+    #miniMap{position:absolute;left:15px;top:15px;z-index:110;width:148px;height:148px;
         border-radius:14px;background:var(--panel);border:1px solid var(--float-line);
         box-shadow:0 4px 18px rgba(0,0,0,.25);overflow:hidden;
         transition:opacity .35s ease,transform .35s ease;-webkit-tap-highlight-color:transparent}
@@ -841,9 +850,9 @@
         background:transparent;color:var(--panel-txt);border:none;font-size:11px;line-height:1;
         font-family:inherit;cursor:pointer;opacity:.75;padding:0}
     #miniMapX:hover{opacity:1}
-    #app.bars-off #miniMap{opacity:0;pointer-events:none;transform:translateY(12px)}
+    #app.bars-off #miniMap{opacity:0;pointer-events:none;transform:translateY(-12px)}
     @media (max-width:600px){
-        #miniMap{left:8px;bottom:100px;width:108px;height:108px;border-radius:12px}
+        #miniMap{left:8px;top:8px;width:108px;height:108px;border-radius:12px}
     }
     /* ===== 网页版 App 下载提示条：只在普通浏览器里出现（App 壳内不显示），关掉后本机记住 ===== */
     #appBar{position:absolute;left:50%;top:calc(10px + env(safe-area-inset-top, 0px));transform:translateX(-50%);z-index:125;
@@ -860,7 +869,7 @@
     /* ===== 拍照模式（Issue #64）：进模式只给 #app 加一个类，界面元素自身状态一概不碰，
        退出摘掉类即逐项原样恢复；隐藏清单覆盖顶/底/状态栏与全部浮钮、弹窗、气泡 ===== */
     #app.photo-on #ui,#app.photo-on #status,#app.photo-on #dragonBar,#app.photo-on #dragonMenu,
-    #app.photo-on #joy,#app.photo-on #roomBar,#app.photo-on #modBtn,#app.photo-on #modPanel,
+    #app.photo-on #joy,#app.photo-on #joyZone,#app.photo-on #roomBar,#app.photo-on #modBtn,#app.photo-on #modPanel,
     #app.photo-on #fbBtn,#app.photo-on #lanternBtn,#app.photo-on #wakeBtn,#app.photo-on #echoHomeBtn,
     #app.photo-on #fbMask,#app.photo-on #ltMask,#app.photo-on #helpMask,#app.photo-on #voteMask,
     #app.photo-on #logMask,#app.photo-on #dragonMask,#app.photo-on #avatarMask,#app.photo-on #viewMask,#app.photo-on #echoMask,#app.photo-on #codexMask,#app.photo-on #achMask,
@@ -892,16 +901,30 @@
     /* 触屏手感：去掉 300ms 点击延迟与长按选中/高亮 */
     button, label, input[type=range]{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
     #scene, #scene canvas{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-    /* ===== 小龙操控（#27）：底部中间小按钮条 + 移动端虚拟摇杆 ===== */
-    #dragonBar{position:absolute;left:50%;bottom:15px;transform:translateX(-50%);z-index:120;
-        display:flex;gap:8px}
-    #dragonBar button{background:var(--float);color:var(--warm-float-txt);border:1px solid var(--warm-float-line);
-        padding:9px 15px;border-radius:22px;font-size:13px;font-family:inherit;cursor:pointer;
-        backdrop-filter:blur(6px);transition:background .15s}
+    /* ===== 小龙操控（#27；HUD 重构）：右下圆形键簇（主流开放世界布局）＋动态摇杆 =====
+       键簇：互动＝大号暖色主钮，回小屋/视角切换＝小圆钮；图标＋极简小字注脚。
+       功能与事件仍走原 actBtn/viewBtn/dragonBtn 三颗钮，只换皮与位置。 */
+    #dragonBar{position:absolute;right:calc(14px + env(safe-area-inset-right, 0px));
+        bottom:calc(14px + env(safe-area-inset-bottom, 0px));z-index:120;
+        display:flex;gap:10px;align-items:flex-end}
+    #dragonBar button{width:56px;height:56px;border-radius:50%;padding:0;
+        background:var(--float);color:var(--warm-float-txt);border:1px solid var(--warm-float-line);
+        font-family:inherit;cursor:pointer;backdrop-filter:blur(6px);
+        display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+        -webkit-tap-highlight-color:transparent;transition:background .15s,transform .1s}
     #dragonBar button:hover{background:var(--warm-float-hov)}
-    #dragonBar button.on{background:var(--warm-pri);border-color:var(--warm-pri-line);color:#fff;font-weight:600}
-    /* ===== 小龙互动菜单（#16/#17）：贴在操控条上方的小面板，风格与 dragonBar 一套 ===== */
-    #dragonMenu{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);z-index:122;
+    #dragonBar button:active{transform:scale(.94)}
+    #dragonBar button.on{background:var(--warm-pri);border-color:var(--warm-pri-line);color:#fff}
+    #dragonBar .cbIco{font-size:21px;line-height:1.05;pointer-events:none}
+    #dragonBar .cbCap{font-size:9px;line-height:1.15;white-space:nowrap;pointer-events:none}
+    #dragonBar #actBtn{width:68px;height:68px;background:var(--warm-pri);
+        border-color:var(--warm-pri-line);color:#fff;box-shadow:0 4px 16px rgba(0,0,0,.28)}
+    #dragonBar #actBtn:hover{background:var(--warm-pri-hov)}
+    #dragonBar #actBtn .cbIco{font-size:26px}
+    #dragonBar #actBtn .cbCap{font-size:10px;font-weight:600}
+    /* ===== 小龙互动菜单（#16/#17）：贴在键簇上方的小面板，风格与 dragonBar 一套 ===== */
+    #dragonMenu{position:absolute;right:calc(14px + env(safe-area-inset-right, 0px));
+        bottom:calc(96px + env(safe-area-inset-bottom, 0px));z-index:122;
         background:var(--float);border:1px solid var(--warm-float-line);border-radius:14px;
         padding:10px 12px;backdrop-filter:blur(6px);text-align:center;max-width:calc(100vw - 24px)}
     #dragonMenu .dmTitle{color:var(--warm-float-txt);font-size:12px;margin-bottom:7px;letter-spacing:1px}
@@ -912,17 +935,24 @@
     #dragonMenu button:hover:not(:disabled){background:var(--warm-float-hov)}
     #dragonMenu button:disabled{opacity:.42;cursor:default}
     #dragonMenu .dmHint{color:var(--panel-hint);font-size:11px;margin-top:6px;min-height:14px}
-    #joy{position:absolute;left:26px;bottom:86px;width:112px;height:112px;border-radius:50%;z-index:121;
-        background:rgba(10,20,10,.35);border:1.5px solid rgba(255,255,255,.4);display:none;touch-action:none}
-    #joy.on{display:block}
-    #joyKnob{position:absolute;left:50%;top:50%;width:48px;height:48px;border-radius:50%;
+    /* 动态原点摇杆：底盘只是视觉层（pointer-events:none），位置由 JS 按触点
+       写 left/top 并以 translate(-50%,-50%) 对心；触摸进行中才 .live 露脸，
+       抬手淡出。输入由 #joyZone 手势区接管（见下）。 */
+    #joy{position:absolute;left:-300px;top:-300px;width:124px;height:124px;border-radius:50%;z-index:121;
+        background:rgba(10,20,10,.35);border:1.5px solid rgba(255,255,255,.4);
+        opacity:0;pointer-events:none;touch-action:none;
+        transform:translate(-50%,-50%);transition:opacity .16s ease}
+    #joy.live{opacity:1}
+    #joyKnob{position:absolute;left:50%;top:50%;width:52px;height:52px;border-radius:50%;
         background:rgba(255,226,176,.85);border:1.5px solid rgba(120,70,10,.5);
         transform:translate(-50%,-50%);pointer-events:none}
-    @media (max-width:600px),(pointer:coarse){
-        #dragonBar{bottom:calc(64px + env(safe-area-inset-bottom, 0px))}
-        #dragonMenu{bottom:calc(118px + env(safe-area-inset-bottom, 0px))}
-        #joy{bottom:calc(140px + env(safe-area-inset-bottom, 0px))}
-    }
+    #joyKnob.back{transition:transform .18s ease}
+    /* 摇杆手势区：左下大片区域，触摸落点即原点。上界 top:148px 与左上小地图
+       （≤132px 高）留开间距，右界只占左半屏——与右下键簇、右缘钮天然不冲突。
+       仅触屏接管态（.on）才 display:block，桌面端永不拦截鼠标。 */
+    #joyZone{position:absolute;left:0;top:172px;bottom:0;width:min(46vw,430px);z-index:95;
+        display:none;touch-action:none;-webkit-tap-highlight-color:transparent}
+    #joyZone.on{display:block}
     /* ===== 进屋看看（#40）：出入按钮 + 切换淡幕（独立小块，不用主题变量） ===== */
     #roomBar{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);z-index:120;
         display:flex;gap:8px}
@@ -975,11 +1005,13 @@
 </div>
 <div id="status">初始化中…</div>
 <div id="dragonBar">
-    <button type="button" id="dragonBtn">🏠 回小屋门口</button>
-    <button type="button" id="viewBtn" style="display:none">👁️ 第三人称</button>
-    <button type="button" id="dragonCustomBtn">🎨 定制小龙</button>
-    <button type="button" id="actBtn">🤚 互动</button>
+    <button type="button" id="dragonBtn" title="回小屋门口"><span class="cbIco">🏠</span><span class="cbCap">回小屋门口</span></button>
+    <button type="button" id="viewBtn" style="display:none" title="切换第一 / 第三人称"><span class="cbIco">👁️</span><span class="cbCap">第三人称</span></button>
+    <button type="button" id="actBtn" title="互动"><span class="cbIco">🤚</span><span class="cbCap">互动</span></button>
 </div>
+<!-- 定制小龙入口（HUD 重构）：撤出游戏画面，只保留在场景中枢面板的化身区
+     （sceneAvatarBtn → openDragonCustom）；此隐藏钮仅作旧代码路径的兜底锚点 -->
+<button type="button" id="dragonCustomBtn" style="display:none" aria-hidden="true">🎨 定制小龙</button>
 <div id="dragonMenu" style="display:none">
     <div class="dmTitle">🐉 和小龙玩</div>
     <div class="dmRow">
@@ -999,6 +1031,7 @@
     <div class="dmHint" id="dmHint"></div>
 </div>
 <div id="joy"><div id="joyKnob"></div></div>
+<div id="joyZone"></div>
 <div id="roomBar">
     <button type="button" id="enterRoomBtn" style="display:none">🚪 进屋看看</button>
     <button type="button" id="exitRoomBtn" style="display:none">🌿 回到院子</button>
@@ -1182,7 +1215,7 @@
     </div>
 </div>
 
-<button id="lanternBtn" type="button" class="hide">🏮 放河灯</button>
+<button id="lanternBtn" type="button" class="hide" title="放河灯" aria-label="放河灯">🏮</button>
 <div id="ltMask">
     <div id="ltBox" role="dialog" aria-modal="true" aria-labelledby="ltTitle">
         <div class="logHead">
@@ -1220,15 +1253,15 @@
         <div class="hrow"><b>移动</b><span>电脑用 WASD / 方向键（Shift 加速），手机用左侧摇杆；也可以点一下地面，它自己走过去</span></div>
         <div class="hrow"><b>转视角</b><span>单指或鼠标拖动画面；第三人称时滚轮（或双指捏合）拉近拉远</span></div>
         <div class="hrow"><b>第一 / 第三人称</b><span>按 V 键或点底部「👁️」按钮切换：第一人称是它的眼睛，第三人称站在它身后；切换时视线不跳。进世界时选过的人称会被记住，下次默认还是它</span></div>
-        <div class="hrow"><b>切换天气</b><span>顶栏天气按钮，或按 T 键：晴天、雾天、夜间、雨天、金色时刻</span></div>
-        <div class="hrow"><b>太阳与雾气</b><span>顶栏两条滑杆，拖动即时生效</span></div>
+        <div class="hrow"><b>切换天气</b><span>右下角齿轮面板「🌤 环境设置」里的天气按钮，或按 T 键：晴天、雾天、夜间、雨天、金色时刻</span></div>
+        <div class="hrow"><b>太阳与雾气</b><span>齿轮面板「🌤 环境设置」里两条滑杆，拖动即时生效</span></div>
         <div class="hrow"><b>自动漫游</b><span>齿轮面板里的功能开关，或按 P 键：它自己沿着小屋周围慢慢散步，你一操作移动就停下交还给你</span></div>
-        <div class="hrow"><b>自动轮转</b><span>顶栏开关，每 10 分钟自动换一次天气；你手动选天气或拖了滑杆，它会自动让位关掉，想恢复再把开关打开</span></div>
+        <div class="hrow"><b>自动轮转</b><span>齿轮面板「🌤 环境设置」里的开关，每 10 分钟自动换一次天气；你手动选天气或拖了滑杆，它会自动让位关掉，想恢复再把开关打开</span></div>
         <div class="hrow"><b>敲门</b><span>点小屋的门：先轻敲两下，门会朝外打开透出暖光</span></div>
         <div class="hrow"><b>进屋看看</b><span>走近门口点出现的「进屋看看」按钮、或门开着时点门洞里的暖光，就带着它一起进屋（屋里拖动环视、点地面走动）；点门或按「回到院子」出来</span></div>
         <div class="hrow"><b>留言墙</b><span>屋里墙上贴着留言墙和大事记板：你写过的意见会变成小纸条贴在墙上（点开能看全文，自己写的还能撕下来），负责人精选的留言也会贴上来；大事记板记着这个世界一路长过来的大日子，齿轮面板里也能翻全本</span></div>
         <div class="hrow"><b>小龙互动</b><span>点小龙、或点底部「🤚 互动」：可以摸头、打招呼、让它转圈。收获的南瓜和玉米会进背包，用背包里的食物喂它，它会自己走过去吃；吃饱后它会开心地跟着你玩一阵（状态栏能看背包和喂食次数）</span></div>
-        <div class="hrow"><b>小龙定制</b><span>底部「🎨 定制小龙」：给它改名字、性别、体色花纹、角和翅膀的样式，再配上围巾、铃铛、草帽这些小配饰，还能选性格（好奇 / 活泼 / 慵懒，散步和作息都不一样）；还能切换化身形态——小龙本体，或小龙少女的三款造型。改动立刻生效，都只存本机</span></div>
+        <div class="hrow"><b>小龙定制</b><span>齿轮面板化身区的「打开定制面板」：给它改名字、性别、体色花纹、角和翅膀的样式，再配上围巾、铃铛、草帽这些小配饰，还能选性格（好奇 / 活泼 / 慵懒，散步和作息都不一样）；还能切换化身形态——小龙本体，或小龙少女的三款造型。改动立刻生效，都只存本机</span></div>
         <div class="hrow"><b>龙蛋开局</b><span>新来的朋友会先在小屋门前见到一颗龙蛋：点一点蛋、或点「🥚 孵化小龙」，就能看它破壳。想重温破壳，齿轮面板里有「🥚 再孵一颗蛋」（成长会从头计，名字和外观保留）</span></div>
         <div class="hrow"><b>篝火</b><span>点篝火堆可以点火、再点熄火</span></div>
         <div class="hrow"><b>每日寻宝</b><span>每天藏 5 件小物（橡果、蘑菇、羽毛、松果、彩蛋），走近点中即收集，集齐有祝贺</span></div>
@@ -1237,7 +1270,7 @@
         <div class="hrow"><b>拍照模式</b><span>顶栏「📷 拍照模式」：暂时放下化身、改用自由镜头取景（只有在拍照模式里能这样飞），藏起全部界面，三分法参考线可开关、色调可切换，点中间的快门存图（文件名带 photo），Esc 或「✕ 退出」自动回到化身视角</span></div>
         <div class="hrow"><b>投票选点子</b><span>顶栏「🗳️ 投票选点子」，给最想要的新点子投票，一台设备一票，票数定期公布</span></div>
         <div class="hrow"><b>世界图鉴</b><span>顶栏「📖 世界图鉴」：真正在世界里见过、种过、找到过的东西才会被记进图鉴，灰色条目旁有发现它的线索；集齐整本有纪念徽章</span></div>
-        <div class="hrow"><b>放河灯</b><span>左下角「🏮 放河灯」，写一句愿望，让它在湖上漂一会儿</span></div>
+        <div class="hrow"><b>放河灯</b><span>右下角键簇上方的「🏮」钮，写一句愿望，让它在湖上漂一会儿</span></div>
         <div class="hrow"><b>湖里的鱼</b><span>湖里养着一群小鱼，会自己巡游、偶尔跃出水面；走到湖边会出现「🐟 投食喂鱼」，花一根背包里的玉米，鱼群就会聚过来抢食。雨天它们格外活跃</span></div>
         <div class="hrow"><b>我的音乐</b><span>右下角齿轮面板里可以选你自己设备上的音乐文件，在世界里当背景乐放（单曲 / 列表循环、夜里自动放轻）；歌只在本机播放、不上传，刷新后要重新选一次文件</span></div>
         <div class="hrow"><b>玩家立牌</b><span>世界里站着的小人/小动物是玩家投稿、负责人审核后放进来的访客，点一点能看它的名字和自我介绍；你也来投稿的话，在「💬 优化意见」里把分类选成「立牌投稿」</span></div>
@@ -6868,6 +6901,22 @@ function dragonBtnText(active){
     /* #100 改版：进世界即化身、没有「放手」态了，这颗钮改成回出生点 */
     return '🏠 回小屋门口';
 }
+/* 键簇按钮文案（HUD 重构）：键簇钮内是图标 span＋注脚 span，直接写
+   textContent 会把结构抹平——统一经此口把「🏠 回小屋门口」式整串拆回
+   图标/注脚分别落位（结构不在时先补建）。只动呈现，语义与旧整串一致。 */
+function setCbText(btn, full){
+    if(!btn) return;
+    let ico = btn.querySelector('.cbIco'), cap = btn.querySelector('.cbCap');
+    if(!ico || !cap){
+        btn.textContent = '';
+        ico = document.createElement('span'); ico.className = 'cbIco';
+        cap = document.createElement('span'); cap.className = 'cbCap';
+        btn.appendChild(ico); btn.appendChild(cap);
+    }
+    const m = /^(\S+)\s+([\s\S]*)$/.exec(full || '');
+    if(m){ ico.textContent = m[1]; cap.textContent = m[2]; }
+    else { ico.textContent = ''; cap.textContent = full || ''; }
+}
 function dragonShouldSleep(ph){
     ph = ph || GClock.phase();
     if(ph === 'night') return true;
@@ -7979,6 +8028,27 @@ const DragonCtl = {
     keys: new Set(), joy: {x:0, y:0, id:null}, init: false,
     savedTarget: new THREE.Vector3()
 };
+/* ---------- 动态原点摇杆（HUD 重构） ----------
+   手感参数集中在此，面板/代码别处不许散落魔法数：
+   dead 死区（归一化行程，内不响应、防漂移）；curve 响应曲线指数（>1 低速更细）；
+   maxR 摇杆帽最大位移 px；smooth 指数平滑速率（1/s，帧率无关）；
+   minCy 原点纵坐标下限（避开左上小地图）；手势区上界在 CSS #joyZone（top:148px）。 */
+const JOY_CFG = { dead: 0.14, curve: 1.3, maxR: 40, smooth: 22, minCy: 190 };
+const JoyDyn = { id: null, ox: 0, oy: 0, tx: 0, ty: 0, lastT: 0 };
+function joyDynEnd(){
+    JoyDyn.id = null; JoyDyn.tx = 0; JoyDyn.ty = 0; JoyDyn.lastT = 0;
+    DragonCtl.joy.x = 0; DragonCtl.joy.y = 0; DragonCtl.joy.id = null;
+    const joy = document.getElementById('joy'), knob = document.getElementById('joyKnob');
+    if(knob){ knob.classList.add('back'); knob.style.transform = 'translate(-50%,-50%)'; }
+    if(joy) joy.classList.remove('live');
+}
+/* 摇杆手势区的开关（与触屏接管态同步）：关时顺手结束进行中的触摸并归零 */
+function joyHud(on){
+    const z = document.getElementById('joyZone');
+    if(z) z.classList.toggle('on', !!on);
+    if(!on && JoyDyn.id !== null) joyDynEnd();
+    if(!on){ const joy = document.getElementById('joy'); if(joy) joy.classList.remove('live'); }
+}
 function dragonPlayerMove(a, dt){
     const Ctl = DragonCtl, p = a.group.position;
     let ix = 0, iz = 0;
@@ -8229,11 +8299,11 @@ function dragonTakeover(){
     DragonCtl.yaw = dragonAgent.group.rotation.y + Math.PI;
     DragonCtl.pitch = 0.34; DragonCtl.dist = 5.4; DragonCtl.init = false;
     const b = document.getElementById('dragonBtn');
-    b.textContent = dragonBtnText(true); b.classList.add('on');
+    setCbText(b, dragonBtnText(true)); b.classList.add('on');
     const vb = document.getElementById('viewBtn');
     vb.style.display = '';
-    vb.textContent = DragonCtl.fp ? '👁️ 第一人称' : '👁️ 第三人称';
-    if(IS_TOUCH) document.getElementById('joy').classList.add('on');
+    setCbText(vb, DragonCtl.fp ? '👁️ 第一人称' : '👁️ 第三人称');
+    if(IS_TOUCH) joyHud(true);
     dragonCall();   // #41：接管时叫一声（音调随性别），没开声音时静默
 }
 function dragonRelease(){
@@ -8251,9 +8321,9 @@ function dragonRelease(){
     controls.target.copy(DragonCtl.savedTarget);
     controls.setExternal(false);
     const b = document.getElementById('dragonBtn');
-    b.textContent = dragonBtnText(false); b.classList.remove('on');
+    setCbText(b, dragonBtnText(false)); b.classList.remove('on');
     document.getElementById('viewBtn').style.display = 'none';
-    document.getElementById('joy').classList.remove('on');
+    joyHud(false);
 }
 function dragonToggleView(){
     if(!DragonCtl.active) return;
@@ -8266,7 +8336,7 @@ function dragonToggleView(){
         ? Math.max(-1.25, Math.min(1.25, -DragonCtl.pitch))
         : Math.max(-0.12, Math.min(1.15, -DragonCtl.pitch));
     if(dragonAgent) dragonAgent.parts.head.visible = !DragonCtl.fp;   // 一人称藏头（龙眼视角惯例），低头看身体不受影响
-    document.getElementById('viewBtn').textContent = DragonCtl.fp ? '👁️ 第一人称' : '👁️ 第三人称';
+    setCbText(document.getElementById('viewBtn'), DragonCtl.fp ? '👁️ 第一人称' : '👁️ 第三人称');
     // #100：切换即落盘，下次进世界默认上次选的人称
     dragonCfg.view = drgViewNormalize(dragonCfg.view);
     dragonCfg.view.fp = DragonCtl.fp; dragonCfg.view.chosen = true;
@@ -8296,7 +8366,7 @@ function rebuildDragonModel(){
 }
 function dragonRefreshLabels(){
     const b = document.getElementById('dragonBtn');
-    if(b) b.textContent = dragonBtnText(DragonCtl.active);
+    if(b) setCbText(b, dragonBtnText(DragonCtl.active));
 }
 function applyDragonCfg(rebuild){
     dragonSaveCfg();
@@ -8502,30 +8572,64 @@ function setupDragonControls(){
         DragonCtl.dist *= e.deltaY > 0 ? 1.1 : 0.9;
         DragonCtl.dist = Math.max(3, Math.min(9.5, DragonCtl.dist));
     }, {passive:true});
-    // 虚拟摇杆（触屏接管时显示）
+    // 动态原点虚拟摇杆（HUD 重构）：触点落在左下手势区即以落点为原点，
+    // 底盘跟到落点处（原点夹回屏内并避开左上小地图），抬手回弹淡出。
+    // 输出仍写 DragonCtl.joy，下游（移动/漫游打断/动画）消费口径零改动。
     const joy = document.getElementById('joy'), knob = document.getElementById('joyKnob');
-    function joySet(e){
-        const r = joy.getBoundingClientRect();
-        let dx = e.clientX - (r.left + r.width/2), dy = e.clientY - (r.top + r.height/2);
-        const d = Math.hypot(dx, dy), max = r.width/2 - 6;
-        if(d > max){ dx *= max/d; dy *= max/d; }
-        knob.style.transform = 'translate(calc(-50% + ' + dx + 'px), calc(-50% + ' + dy + 'px))';
-        DragonCtl.joy.x = dx/max;
-        DragonCtl.joy.y = -dy/max;                        // 推上 = 前进
+    const joyZone = document.getElementById('joyZone');
+    function joyPlace(cx, cy){
+        JoyDyn.ox = Math.max(66, Math.min(window.innerWidth - 66, cx));
+        // 原点纵坐标下限：JOY_CFG.minCy 兜底，再按左上小地图的实际底边动态避让
+        // （小地图尺寸随设备变：粗指针 108px / 细指针 148px，底盘不许压图）
+        let minCy = JOY_CFG.minCy;
+        const mmEl = document.getElementById('miniMap');
+        if(mmEl && mmEl.style.display !== 'none'){
+            const mr = mmEl.getBoundingClientRect();
+            if(mr.height > 0) minCy = Math.max(minCy, mr.bottom + 70);
+        }
+        JoyDyn.oy = Math.max(minCy, Math.min(window.innerHeight - 66, cy));
+        joy.style.left = JoyDyn.ox + 'px';
+        joy.style.top = JoyDyn.oy + 'px';
     }
-    joy.addEventListener('pointerdown', e=>{
-        DragonCtl.joy.id = e.pointerId;
-        if(joy.setPointerCapture){ try{ joy.setPointerCapture(e.pointerId); }catch(_){} }
-        joySet(e); e.preventDefault();
-    });
-    joy.addEventListener('pointermove', e=>{ if(e.pointerId === DragonCtl.joy.id) joySet(e); });
-    const joyEnd = e=>{
-        if(e.pointerId !== DragonCtl.joy.id) return;
-        DragonCtl.joy.id = null; DragonCtl.joy.x = 0; DragonCtl.joy.y = 0;
-        knob.style.transform = 'translate(-50%,-50%)';
-    };
-    joy.addEventListener('pointerup', joyEnd);
-    joy.addEventListener('pointercancel', joyEnd);
+    function joyMove(e){
+        const dx = e.clientX - JoyDyn.ox, dy = e.clientY - JoyDyn.oy;
+        const d = Math.hypot(dx, dy), max = JOY_CFG.maxR;
+        const vis = Math.min(d, max);
+        const vx = d > 0 ? dx / d * vis : 0, vy = d > 0 ? dy / d * vis : 0;
+        knob.classList.remove('back');
+        knob.style.transform = 'translate(calc(-50% + ' + vx + 'px), calc(-50% + ' + vy + 'px))';
+        // 归一化行程 → 死区重映射 → 响应曲线（方向不变，只塑幅值）
+        const m = Math.min(d, max) / max;
+        const om = m > JOY_CFG.dead ? Math.pow((m - JOY_CFG.dead) / (1 - JOY_CFG.dead), JOY_CFG.curve) : 0;
+        JoyDyn.tx = d > 0 ? (dx / d) * om : 0;
+        JoyDyn.ty = d > 0 ? (-dy / d) * om : 0;          // 推上 = 前进（与旧口径一致）
+        // 指数平滑：按事件间隔折算系数，刷新率无关
+        const now = performance.now();
+        const dt = Math.min(0.05, Math.max(0.001, (now - (JoyDyn.lastT || now)) / 1000));
+        JoyDyn.lastT = now;
+        const k = 1 - Math.exp(-JOY_CFG.smooth * dt);
+        DragonCtl.joy.x += (JoyDyn.tx - DragonCtl.joy.x) * k;
+        DragonCtl.joy.y += (JoyDyn.ty - DragonCtl.joy.y) * k;
+        if(JoyDyn.tx === 0 && Math.abs(DragonCtl.joy.x) < 0.004) DragonCtl.joy.x = 0;
+        if(JoyDyn.ty === 0 && Math.abs(DragonCtl.joy.y) < 0.004) DragonCtl.joy.y = 0;
+    }
+    if(joyZone){
+        joyZone.addEventListener('pointerdown', e=>{
+            if(e.pointerType === 'mouse') return;         // 鼠标不接管（点地移动/拖视角照旧）
+            if(JoyDyn.id !== null) return;                // 单指摇杆，第二指不抢
+            JoyDyn.id = e.pointerId; DragonCtl.joy.id = e.pointerId;
+            if(joyZone.setPointerCapture){ try{ joyZone.setPointerCapture(e.pointerId); }catch(_){} }
+            joyPlace(e.clientX, e.clientY);
+            joy.classList.add('live');
+            JoyDyn.lastT = 0;
+            joyMove(e);
+            e.preventDefault();
+        });
+        joyZone.addEventListener('pointermove', e=>{ if(e.pointerId === JoyDyn.id) joyMove(e); });
+        const zEnd = e=>{ if(e.pointerId === JoyDyn.id) joyDynEnd(); };
+        joyZone.addEventListener('pointerup', zEnd);
+        joyZone.addEventListener('pointercancel', zEnd);
+    }
     setupDragonInteract();   // #16/#17：互动菜单、爱心粒子、背包、点龙开菜单
 }
 
@@ -11514,7 +11618,7 @@ function echoRenderPanel(){
     }
     const list=echoState.receipts;
     if(!list.length){
-        box.appendChild(document.createTextNode('你还没提交过建议。在左下角「💬 优化意见」里写下想法，提交后回执码会保存在这里。'));
+        box.appendChild(document.createTextNode('你还没提交过建议。在齿轮面板的「💬 优化意见」里写下想法，提交后回执码会保存在这里。'));
         return;
     }
     const latest=list[list.length-1];
@@ -12046,7 +12150,7 @@ function photoSuspendExplorer(){
     dragonAgent.moveTarget = null;
     DragonCtl.active = false;
     if(dragonAgent.parts && dragonAgent.parts.head) dragonAgent.parts.head.visible = true;   // 取景里要拍到完整的它
-    const jy = document.getElementById('joy'); if(jy) jy.classList.remove('on');
+    joyHud(false);
     const vb = document.getElementById('viewBtn'); if(vb) vb.style.display = 'none';
     const p = dragonAgent.group.position;
     controls.target.set(p.x, p.y + 1.2, p.z);
@@ -12068,8 +12172,8 @@ function photoResumeExplorer(){
     if(dragonAgent.parts && dragonAgent.parts.head) dragonAgent.parts.head.visible = !DragonCtl.fp;
     controls.setExternal(true);
     const vb = document.getElementById('viewBtn');
-    if(vb){ vb.style.display = ''; vb.textContent = DragonCtl.fp ? '👁️ 第一人称' : '👁️ 第三人称'; }
-    if(typeof IS_TOUCH !== 'undefined' && IS_TOUCH){ const jy = document.getElementById('joy'); if(jy) jy.classList.add('on'); }
+    if(vb){ vb.style.display = ''; setCbText(vb, DragonCtl.fp ? '👁️ 第一人称' : '👁️ 第三人称'); }
+    if(typeof IS_TOUCH !== 'undefined' && IS_TOUCH) joyHud(true);
 }
 function enterPhotoMode(){
     if(photoOn) return;
@@ -16699,11 +16803,12 @@ function setupAppBar(){
 }
 
 /* ---------- 操作面板集中化（2026-10-22） ----------
-   把顶栏里的设置行与入口按钮收进场景中枢面板归类：顶栏只留标题与
-   天气切换（核心即时操作）；小龙操控条、摇杆、进出屋按钮这类即时/
-   上下文操作原位不动，意见与放河灯是随栏自动隐藏的场景入口、齿轮
-   是面板入口本人，也都保持原位。搬家只是 appendChild 挪元素本体：
-   id、已绑的事件、各功能自己的显隐控制都跟着元素走，不删任何功能。 */
+   把顶栏里的设置行与入口按钮收进场景中枢面板归类；小龙操控条、摇杆、
+   进出屋按钮这类即时/上下文操作原位不动。搬家只是 appendChild 挪元素
+   本体：id、已绑的事件、各功能自己的显隐控制都跟着元素走，不删功能。
+   【HUD 重构追加】左上常驻条（标题＋天气快切）整体退场：天气排搬进
+   面板环境组、标题纯展示直接撤、#ui 空壳隐藏；优化意见胶囊钮也搬进
+   面板建议回音区，游戏画面右下只留 ⚙ 与键簇。 */
 function setupPanelConsolidation(){
     const panel = document.getElementById('modPanel');
     const envBox = document.getElementById('mpEnvRows');
@@ -16715,6 +16820,31 @@ function setupPanelConsolidation(){
         const rows = (ui.querySelectorAll && ui.querySelectorAll('.row')) || [];
         for(let i = 0; i < rows.length; i++) envBox.appendChild(rows[i]);
     }
+    // 天气快切（HUD 重构）：#wbtns 整排搬进面板、归 🌤 环境组（排在环境
+    // 调节小节之前）。按钮由 buildWeatherButtons 在搬家前建好，事件与
+    // .active 回刷都挂在按钮本体上，搬家不断线；状态源仍是 setWeather。
+    const wb = document.getElementById('wbtns');
+    if(wb && envBox){
+        const wxSec = document.createElement('div');
+        wxSec.className = 'mpSub'; wxSec.textContent = '天气（点选即切换，与 T 键等价）';
+        const wxBox = document.createElement('div');
+        wxBox.id = 'mpWxBtns'; wxBox.appendChild(wb);
+        const anchor = envBox.previousElementSibling;   // 「环境调节」小节标题
+        if(anchor && anchor.parentNode === panel){ panel.insertBefore(wxSec, anchor); panel.insertBefore(wxBox, anchor); }
+        else { panel.appendChild(wxSec); panel.appendChild(wxBox); }
+    }
+    // 优化意见（HUD 重构）：常驻胶囊钮撤下，#fbBtn 本体搬进面板「建议
+    // 回音」区（🧩 社社区一带）；点击仍走它先前绑好的 openFeedback，
+    // 另补一条「点开即收面板」与其它入口钮同口径。
+    const echoBox = document.getElementById('mpEcho');
+    const fbBtn = document.getElementById('fbBtn');
+    if(echoBox && fbBtn){
+        echoBox.insertBefore(fbBtn, echoBox.firstChild);
+        fbBtn.addEventListener('click', function(){ panel.classList.remove('on'); });
+    }
+    // 顶栏退场：内容已全部搬空，标题/提示连同空壳整体隐藏，游戏内不再露面
+    // （元素保留在 DOM 里，poke 名单等旧引用不悬空）
+    ui.style.display = 'none';
     if(entBox){
         const order = ['codexBtn', 'achBtn', 'voteBtn', 'photoBtn', 'snapBtn', 'helpBtn'];
         order.forEach(function(id){
@@ -16764,7 +16894,7 @@ function setupPanelGroups(){
         else if(cur){ cur.push(el); }
     });
     var ANCHORS = {
-        quality:'sceneQualityBtns', sliders:'sceneSliders', envrows:'mpEnvRows',
+        quality:'sceneQualityBtns', sliders:'sceneSliders', envrows:'mpEnvRows', wx:'mpWxBtns',
         avatar:'sceneAvatarBtn', feat:'mpList', tones:'mpTones', themes:'mpThemes',
         bloom:'atmoBloomBtns', sound:'muteBtn', music:'mpMusic', entries:'mpEntries',
         global:'shareBtn', log:'logOpenBtn', chron:'chronOpenBtn', echo:'mpEcho', season:'seasonBtns'
@@ -16804,7 +16934,7 @@ function setupPanelGroups(){
             sec.forEach(function(node){ grp.body.appendChild(node); });
         });
     }
-    put(envG, ['quality', 'sliders', 'envrows', 'tones', 'season', 'bloom', 'themes']);
+    put(envG, ['quality', 'sliders', 'wx', 'envrows', 'tones', 'season', 'bloom', 'themes']);
     put(playG, ['avatar', 'feat', 'music', 'sound', 'entries', 'global', 'log', 'chron', 'echo']);
     // 视角组内容：视角切换与自动漫游，都借现有机制触发，不新建任何状态
     var vSub = document.createElement('div');
@@ -16910,7 +17040,7 @@ window.addEventListener('orientationchange', __refreshRotGuide);
         app.classList.remove('bars-off');
         arm();
     }
-    ['ui','status','fbBtn','lanternBtn','modBtn','modPanel','fbMask','ltMask','helpMask','voteMask','logMask','dragonMask','avatarMask','viewMask','echoMask','codexMask','gbMask','chronMask','achMask','dragonBar','roomBar','appBar','echoHomeBtn','dragonMenu','rotGuide','miniMap','eggMask'].forEach(function(id){
+    ['ui','status','fbBtn','lanternBtn','modBtn','modPanel','fbMask','ltMask','helpMask','voteMask','logMask','dragonMask','avatarMask','viewMask','echoMask','codexMask','gbMask','chronMask','achMask','dragonBar','roomBar','appBar','echoHomeBtn','dragonMenu','rotGuide','miniMap','eggMask','joyZone'].forEach(function(id){
         var el = document.getElementById(id);
         if(!el) return;
         ['pointerdown','input','change','wheel'].forEach(function(ev){

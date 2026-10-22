@@ -681,6 +681,41 @@ test('v5.1 #96 自动隐藏补齐：操控条/进出屋条纳入 bars-off', ()=>
     must(/#app\.bars-off #appBar/.test(html), 'App 提示条未纳入 bars-off');
 });
 
+test('HUD 重构：左上常驻条退场＋天气快切搬进面板环境组', ()=>{
+    must(/ui\.style\.display = 'none'/.test(inlineJs), '顶栏空壳未隐藏');
+    must(/wxBox\.id = 'mpWxBtns'/.test(inlineJs), '天气排未搬进面板');
+    must(/wx:'mpWxBtns'/.test(inlineJs), '天气小节未登记分组锚点');
+    must(/put\(envG, \['quality', 'sliders', 'wx',/.test(inlineJs), '天气小节未归入环境组');
+});
+
+test('HUD 重构：右下圆形键簇（互动主钮＋两小圆钮、定制撤出操控条）', ()=>{
+    must(/#dragonBar\{[^}]*right:calc\(14px/.test(html), '操控条未改右下键簇');
+    must(/#dragonBar #actBtn\{[^}]*width:68px/.test(html), '互动主钮未放大为 68px');
+    const barStart = html.indexOf('<div id="dragonBar">');
+    const bar = html.slice(barStart, html.indexOf('</div>', barStart));
+    must(/id="dragonBtn"/.test(bar) && /id="viewBtn"/.test(bar) && /id="actBtn"/.test(bar), '键簇三钮不全');
+    must(!/dragonCustomBtn/.test(bar), '定制钮仍在操控条里');
+    must(/id="dragonCustomBtn" style="display:none"/.test(html), '定制钮未保留隐藏锚点');
+    must(/function setCbText\(/.test(inlineJs), '缺键簇文案拆分 helper');
+});
+
+test('HUD 重构：小地图左上＋摇杆动态原点（手势区/参数表/平滑）', ()=>{
+    must(/#miniMap\{[^}]*top:15px/.test(html), '小地图未移到左上');
+    must(/id="joyZone"/.test(html), '缺摇杆手势区元素');
+    must(/#joyZone\{[^}]*top:172px/.test(html), '手势区上沿未避让左上小地图');
+    must(/mr\.bottom \+ 70/.test(inlineJs), '摇杆原点未按小地图实际底边动态避让');
+    must(/const JOY_CFG = \{ dead:/.test(inlineJs), '缺摇杆参数表 JOY_CFG');
+    must(/joyZone\.addEventListener\('pointerdown'/.test(inlineJs), '手势区未接管触摸');
+    must(/function joyHud\(/.test(inlineJs), '缺 joyHud 开关');
+    must(/#app\.photo-on #joyZone/.test(html), 'joyZone 未进 photo-on 名单');
+});
+
+test('HUD 重构：河灯小圆钮归队键簇上方＋优化意见搬进面板', ()=>{
+    must(/#lanternBtn\{[^}]*right:calc\(96px/.test(html), '河灯钮未移到键簇上方');
+    must(/echoBox\.insertBefore\(fbBtn/.test(inlineJs), '优化意见钮未搬进面板回音区');
+    must(/#modPanel #fbBtn\{[^}]*position:static/.test(html), '面板内意见钮未退回静态形态');
+});
+
 // ---------- v4.2 #67 龙蛋开局 ----------
 test('v4.2 #67 蛋状态存 ct2_dragon.egg（不新增键）＋新老存档归一', ()=>{
     must(/c\.egg = \{hatched:false, laid:drgTodayStr\(\), born:null\}/.test(inlineJs), '全新存档未置未孵化');
