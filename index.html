@@ -1388,7 +1388,7 @@ function buildRiverPts(){
 const SCENE_KEY='ct2_scene';
 const SCENE = {
     quality: { mode: 'auto' },
-    glSafe: false,   // WebGL 安全模式：真机上下文反复丢失时自动置位并落盘（ct2_scene 的 glSafe 字段，不新增键）；下次启动读到即以最稳参数＋DPR 1.25＋关 Bloom 低配启动，面板可一键恢复默认
+    glSafe: 0,   // WebGL 安全模式档位（ct2_scene 的 glSafe 字段存档位，不新增键）：0 关 / 1 低配（最稳参数＋DPR 1.25＋关 Bloom）/ 2 保命（再剥离水体・草地・天空的自定义 shader 与风摆云影、程序贴图封顶 512、渲染器推迟到点「开始游玩」后才建）；面板可一键恢复默认
     render: {
         bgBrightness: 1,      // 背景亮度：远山环明暗倍率（skyBackdropTick 每帧读）
         grassDensity: 1,      // 草簇密度倍率（GrassSys.applyCounts 每帧读）
@@ -1573,6 +1573,17 @@ void main(){
 }`;
 let WATER_U = null;   // 水体共享 uniforms（pondMesh 与远河潭 disc 同一材质实例）
 function makeWaterMaterial(){
+    if(glSafeLv() >= 2){
+        // 保命模式：水体不用自定义 ShaderMaterial，换朴素 Phong（半透明＋
+        // 高光），几何与 aFlow/aCoord 附加属性原样保留、Phong 自动忽略；
+        // WATER_U 置 null，animate/中枢对水面 uniforms 的写入都有守卫。
+        WATER_U = null;
+        window.__waterTier = function(){};
+        return new THREE.MeshPhongMaterial({
+            color: POND_DAY.clone(), transparent: true, opacity: WATER_CFG.opacity,
+            shininess: 90, specular: new THREE.Color(0x39566b),
+            side: THREE.DoubleSide, fog: true });
+    }
     const detail = waterTexture();
     detail.wrapS = detail.wrapT = THREE.RepeatWrapping;
     const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {}]);
@@ -1973,7 +1984,7 @@ const SceneHub = {
         const sv = store.scene.json({});
         if(sv && typeof sv === 'object'){
             if(sv.q === 'full' || sv.q === 'lite' || sv.q === 'auto') SCENE.quality.mode = sv.q;
-            if(sv.glSafe === 1 || sv.glSafe === true) SCENE.glSafe = true;   // WebGL 安全模式降档标志（同键扩字段）
+            const gv = (sv.glSafe === true) ? 1 : (parseInt(sv.glSafe, 10) || 0); if(gv === 1 || gv === 2) SCENE.glSafe = gv;   // WebGL 安全模式档位（同键扩字段：1 低配 / 2 保命）
             const r = sv.r || {};
             SCENE.render.grassDensity = this._clamp(r.grassDensity, 0.3, 1.3, 1);
             SCENE.render.grassHeightK = this._clamp(r.grassHeightK, 0.6, 1.6, 1);
@@ -1994,7 +2005,7 @@ const SceneHub = {
     save(){
         store.scene.save({
             q: SCENE.quality.mode,
-            glSafe: SCENE.glSafe ? 1 : 0,
+            glSafe: (SCENE.glSafe === 2) ? 2 : (SCENE.glSafe ? 1 : 0),
             r: { grassDensity: SCENE.render.grassDensity, grassHeightK: SCENE.render.grassHeightK,
                  bgBrightness: SCENE.render.bgBrightness },
             c: { drift: SCENE.grass.cloud.drift, strength: SCENE.grass.cloud.strength },
@@ -2105,7 +2116,7 @@ const SceneHub = {
         if(gr && !gr.children.length){
             const gb = document.createElement('button');
             gb.type = 'button'; gb.textContent = '🛡 已进显卡安全模式（低配）· 点此恢复默认画质';
-            gb.addEventListener('click', ()=>{ SCENE.glSafe = false; this.save(); location.reload(); });
+            gb.addEventListener('click', ()=>{ SCENE.glSafe = 0; this.save(); location.reload(); });
             gr.appendChild(gb);
         }
         const av = document.getElementById('sceneAvatarBtn');
@@ -2166,7 +2177,7 @@ function cssRgb(h,a){ return 'rgba('+((h>>16)&255)+','+((h>>8)&255)+','+(h&255)+
 // 起伏另由地面材质的世界噪声层负责（见 GrassSys.patchGround），贴图本身
 // 只管到「一丛草」的尺度，平铺不露馅
 function grassTexture(){
-    const S=1024, c=makeCanvas(S,S), g=c.getContext('2d');
+    const S=(glSafeLv()>=2)?512:1024, c=makeCanvas(S,S), g=c.getContext('2d');   // 保命模式：程序贴图封顶 512
     g.fillStyle='#4c7038'; g.fillRect(0,0,S,S);
     // 底噪：细小色块铺满，破除平涂
     for(let i=0;i<26000;i++){
@@ -2555,6 +2566,7 @@ function skyTierAuto(){
 /* ==================== 天空穹顶（渐变 shader，随天气插值） ==================== */
 let skyMat;
 function createSky(){
+    if(glSafeLv() >= 2){ skyMat = null; return; }   // 保命模式：穹顶 shader 停用，背景走 scene.background 色＋雾（天气循环逐帧刷背景色）
     skyMat = new THREE.ShaderMaterial({
         uniforms:{
             topColor:{value:new THREE.Color(0x3d7bd9)},
@@ -2604,7 +2616,9 @@ const MTN_SEASON_PAINT = {
     winter: { rock:'#6d7683', tree:'#24351f', wash:null }
 };
 function mountainTexture(seasonName){
-    const T=SKY_CFG.tiers[skyTier], W=T.ringTexW, H=T.ringTexH;
+    const T=SKY_CFG.tiers[skyTier];
+    let W=T.ringTexW, H=T.ringTexH;
+    if(glSafeLv()>=2){ W=Math.min(W,512); H=Math.min(H,512); }   // 保命模式：程序贴图封顶 512
     const c=makeCanvas(W,H), g=c.getContext('2d');
     const P=MTN_SEASON_PAINT[seasonName] || MTN_SEASON_PAINT.summer;
     const rnd=mulberry32(4100 + W + seasonName.length*131);
@@ -2826,7 +2840,9 @@ window.__skyTier=function(t){
    云影同源）。对接点 window.__cloudField 供 #75 中枢读取云场参数。 */
 let cloudGroup, cloudTex=null;
 function cloudClusterTexture(){
-    const T=SKY_CFG.tiers[skyTier], W=T.cloudTexW, H=T.cloudTexH;
+    const T=SKY_CFG.tiers[skyTier];
+    let W=T.cloudTexW, H=T.cloudTexH;
+    if(glSafeLv()>=2){ W=Math.min(W,512); H=Math.min(H,512); }   // 保命模式：程序贴图封顶 512
     const c=makeCanvas(W,H), g=c.getContext('2d');
     const rnd=mulberry32(7411);
     const blobs = skyTier==='full' ? 18 : 12;
@@ -5312,6 +5328,7 @@ const GrassSys = {
     _applyCount(im, n){ if(im && im.count !== n) im.count = Math.max(0, n); },
     applyCounts(gk, fk, dk){
         const base = GRASS_CFG.tiers[this.tier || 'full'];
+        if(glSafeLv() >= 2){ gk *= 0.25; fk *= 0.25; dk *= 0.25; }   // 保命模式：草/花/蒲公英实例数降到约 1/4
         this._applyCount((typeof grassIM !== 'undefined') ? grassIM : null,
             Math.min(this.placed.tufts, Math.floor(base.tufts * gk * (this.userDensity || 1))));
         this._applyCount(this._flowerIM,
@@ -5321,6 +5338,7 @@ const GrassSys = {
     },
     tick(dt, t){
         ATMO_U.uTime.value = t;
+        if(glSafeLv() >= 2) ATMO_U.uCloudStrength.value = 0;   // 保命模式：云影关停（每帧压住，防面板滑杆改回）
         ATMO_U.uWindK.value = (typeof Env !== 'undefined') ? Env.windK : 1;
         this.tier = this._tierLock || grassTierAuto();
         let snowK = 0, sname = 'summer';
@@ -5412,7 +5430,7 @@ function meadowTuftGeo(){
 function createMeadowGrass(){
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true,
         roughness: 1, side: THREE.DoubleSide });
-    atmoPatch(mat, { swayAmp: GRASS_CFG.sway.grassAmp, bendH: 0.92 });
+    if(glSafeLv() < 2) atmoPatch(mat, { swayAmp: GRASS_CFG.sway.grassAmp, bendH: 0.92 });   // 保命模式：不注入风摆/云影，草走静态朴素材质
     grassIM = new THREE.InstancedMesh(meadowTuftGeo(), mat, GRASS_CFG.tiers.full.tufts);
     grassIM.castShadow = false;
     grassIM.receiveShadow = true;
@@ -5523,7 +5541,7 @@ function createMeadowFlowers(){
     // 野花：六成成簇（顺草甸的团块感）、四成零散
     const fmat = new THREE.MeshStandardMaterial({ vertexColors: true,
         roughness: 0.9, side: THREE.DoubleSide });
-    atmoPatch(fmat, { swayAmp: GRASS_CFG.sway.flowerAmp, bendH: 0.42 });
+    if(glSafeLv() < 2) atmoPatch(fmat, { swayAmp: GRASS_CFG.sway.flowerAmp, bendH: 0.42 });   // 保命模式：同草簇，静态
     const fim = new THREE.InstancedMesh(meadowFlowerGeo(), fmat, GRASS_CFG.tiers.full.flowers);
     fim.castShadow = false; fim.receiveShadow = true; fim.frustumCulled = false;
     const fpts = [];
@@ -5553,7 +5571,7 @@ function createMeadowFlowers(){
     // 蒲公英：零散点缀，近中景为主
     const dmat = new THREE.MeshStandardMaterial({ map: dandelionPuffTexture(),
         alphaTest: 0.30, vertexColors: true, roughness: 1, side: THREE.DoubleSide });
-    atmoPatch(dmat, { swayAmp: GRASS_CFG.sway.flowerAmp, bendH: 0.55 });
+    if(glSafeLv() < 2) atmoPatch(dmat, { swayAmp: GRASS_CFG.sway.flowerAmp, bendH: 0.55 });   // 保命模式：同草簇，静态
     const dim = new THREE.InstancedMesh(meadowDandelionGeo(), dmat, GRASS_CFG.tiers.full.dandelions);
     dim.castShadow = false; dim.receiveShadow = true; dim.frustumCulled = false;
     const dpts = [];
@@ -8989,9 +9007,11 @@ function lerpWeather(dt){
 
     // 太阳高度用补间后的值（滑杆仍可随时接管，见 setupSliders）
     const elev=curSky.elev, dens=curSky.dens*(1+wx.fogMul*4);
-    skyMat.uniforms.topColor.value.copy(curSky.top);
-    skyMat.uniforms.bottomColor.value.copy(curSky.bot);
-    skyMat.uniforms.exponent.value=curSky.expo;
+    if(skyMat && skyMat.uniforms){   // 保命模式无穹顶（skyMat=null），背景色由紧随其后的 scene.background 逐帧接管
+        skyMat.uniforms.topColor.value.copy(curSky.top);
+        skyMat.uniforms.bottomColor.value.copy(curSky.bot);
+        skyMat.uniforms.exponent.value=curSky.expo;
+    }
     scene.fog.color.copy(curSky.fog);
     scene.fog.density=dens;
     scene.background=curSky.fog;
@@ -11569,6 +11589,9 @@ let toneIndex=0, viewIndex=0;
 let roamAngle=0.22*Math.PI, roamT=0;
 let perfAcc=0, perfFrames=0, perfHold=0;
 const DPR_CAP = IS_MOBILE ? 1.5 : 2;
+/* WebGL 安全模式档位读取（0 关 / 1 低配 / 2 保命）：各建造点都在 init 期
+   执行，此时 SceneHub.load 已跑完、SCENE.glSafe 即最终档位。 */
+function glSafeLv(){ return (typeof SCENE !== 'undefined' && SCENE.glSafe === 2) ? 2 : ((typeof SCENE !== 'undefined' && SCENE.glSafe) ? 1 : 0); }
 /* 实际生效的像素比上限 DPR_LIM：常态等于 DPR_CAP（桌面 2、移动 1.5——K70 Ultra
    这类 3.25 倍密度屏按全 DPR 渲染会把 WebGL 上下文挤掉，移动端故有 1.5 封顶）；
    WebGL 安全模式（ct2_scene.glSafe）读档时压到 1.25，运行时进安全模式也当场
@@ -14011,7 +14034,8 @@ function init(){
            WebGL 安全模式（上次反复丢上下文后落盘的 glSafe）则跳过激进档，
            直接以最稳参数起步，不再先撞一次墙。 */
         var glSafeBoot = (typeof SCENE !== 'undefined' && !!SCENE.glSafe);
-        window.__glSafeBoot = glSafeBoot;   // 上下文丢失处理据此判断「已低配还丢就不再自动重进」
+        window.__glSafeBoot = glSafeBoot;   // 上下文丢失处理据此判断本次启动的安全档位
+        window.__glSafeLevel = glSafeBoot ? ((SCENE.glSafe === 2) ? 2 : 1) : 0;   // 三轮：丢失时按本次档位逐级升档（0→1 低配 → 2 保命）
         var glErr=null, glCfgs = glSafeBoot
             ? [ {antialias:false,powerPreference:'default'}, {} ]
             : [
@@ -14544,7 +14568,7 @@ function setupChangelog(){
         const dead = boot.style.display === 'none' && !gone;
         if(gone){
             clearInterval(wait);
-            setTimeout(openLog, 450);
+            if(!window.__preLogShown) setTimeout(openLog, 450);   // 三轮：安全模式推迟 init 时面板已在点「开始游玩」前展示过，init 后不再重复弹
         }else if(dead || waited >= 15000){
             clearInterval(wait);
         }
@@ -14658,20 +14682,29 @@ function setupGlobal(){
 
     /* 显卡上下文丢失：preventDefault 是硬要求——不调它浏览器永远不会派发
        webglcontextrestored，three 也就没机会重建 GPU 资源续渲（第一轮热修复
-       已补上，此处保留）。策略（2026-10-22 二轮，App 壳内真机复现后升级）：
-       先等 3 秒自恢复；超时未恢复、或恢复后 10 秒内再次丢失，判定这台设备
-       按当前画质扛不住 → 进 WebGL 安全模式：降档标志落盘 ct2_scene.glSafe
-       （同键扩字段，不新增键），本会话当场压 DPR/关 Bloom；若本次不是低配
-       启动的，落盘后自动重进一次，init 会直接按最稳参数＋DPR 1.25＋关
-       Bloom 起步；若已是低配启动仍丢，不再自动重进（防循环），交致命层。 */
+       已补上，此处保留）。策略（2026-10-22 三轮，逐级升档）：先等 3 秒
+       自恢复；超时未恢复、或恢复后 10 秒内再次丢失，判定这台设备按当前
+       档位扛不住 → 安全档位升一级并落盘 ct2_scene.glSafe（同键存档位，
+       不新增键），本会话当场压 DPR/关 Bloom 后自动重进：常态→1 低配
+       （最稳参数＋DPR 1.25＋关 Bloom）；低配启动仍丢→2 保命（再剥离水体/
+       草地/天空的自定义 shader、风摆与云影，贴图封顶 512，渲染器推迟到
+       点「开始游玩」后才建）；已按保命启动仍丢，不再升档（防循环），
+       交致命层。 */
     if(renderer && renderer.domElement){
         var glLostTimer=null, glLastRestoreAt=0, glSafeEntered=false;
         function enterGlSafeMode(){
             if(glSafeEntered) return;
             glSafeEntered=true;
             if(glLostTimer){ clearTimeout(glLostTimer); glLostTimer=null; }
-            if(typeof SCENE !== 'undefined' && !SCENE.glSafe){
-                SCENE.glSafe=true;
+            var bootLv = window.__glSafeLevel || 0;
+            if(bootLv >= 2){
+                if(typeof showFatal==='function')
+                    showFatal('显卡上下文丢失（已按保命模式启动，仍无法稳定，常见于显存不足）。');
+                return;
+            }
+            var nextLv = bootLv + 1;
+            if(typeof SCENE !== 'undefined'){
+                SCENE.glSafe = nextLv;
                 if(typeof SceneHub !== 'undefined') SceneHub.save();
             }
             DPR_LIM=Math.min(DPR_LIM, 1.25);
@@ -14681,13 +14714,10 @@ function setupGlobal(){
             }
             if(typeof AtmoSys !== 'undefined' && AtmoSys.setBloomTier) AtmoSys.setBloomTier(0);
             var st=document.getElementById('status');
-            if(!window.__glSafeBoot){
-                if(st) st.textContent='显卡不稳，已切换低配安全模式，正在重进…';
-                setTimeout(function(){ location.reload(); }, 600);
-            }else{
-                if(typeof showFatal==='function')
-                    showFatal('显卡上下文丢失（已按低配安全模式启动，仍无法稳定，常见于显存不足）。');
-            }
+            if(st) st.textContent = nextLv >= 2
+                ? '显卡不稳，已切换保命模式（最低特效），正在重进…'
+                : '显卡不稳，已切换低配安全模式，正在重进…';
+            setTimeout(function(){ location.reload(); }, 600);
         }
         renderer.domElement.addEventListener('webglcontextlost', function(e){
             e.preventDefault();
@@ -14765,6 +14795,40 @@ function setupGlobal(){
 })();
 
 window.addEventListener('load',()=>{
+    /* 三轮热修复：安全模式（含保命）启动时推迟建渲染器——先退加载层、
+       把更新日志面板稳定展示出来，玩家点「开始游玩」（或 ×/点遮罩/Esc
+       关面板）后才 init；init 失败仍走原致命路径，不挡面板阅读。 */
+    if(typeof SCENE !== 'undefined' && SCENE.glSafe && document.getElementById('logMask')){
+        var __deferStarted = false;
+        var __mask = document.getElementById('logMask');
+        var __startInit = function(){
+            if(__deferStarted) return; __deferStarted = true;
+            __mask.classList.remove('on');
+            if(typeof logOpen !== 'undefined') logOpen = false;
+            var b = document.getElementById('boot');
+            if(b){ b.style.display=''; b.classList.remove('hide'); }   // 恢复加载层给 init 的进度条用
+            try{ init(); }
+            catch(e){
+                bootFail('初始化失败：'+e.message);
+                showFatal('初始化异常：'+e.message+'\n'+(e.stack||''));
+                throw e;
+            }
+        };
+        ['logOk','logX'].forEach(function(id){
+            var el = document.getElementById(id);
+            if(el) el.addEventListener('click', __startInit);
+        });
+        __mask.addEventListener('click', function(e){ if(e.target === __mask) __startInit(); });
+        document.addEventListener('keydown', function(e){
+            if(e.key === 'Escape' && __mask.classList.contains('on')) __startInit();
+        }, true);
+        bootTo(100, '已按安全模式待命，点「开始游玩」进入世界');
+        var __b = document.getElementById('boot');
+        if(__b){ __b.classList.add('hide'); setTimeout(function(){ __b.style.display='none'; }, 700); }
+        window.__preLogShown = true;
+        if(typeof openLog === 'function') setTimeout(openLog, 350);
+        return;
+    }
     try{ init(); }
     catch(e){
         bootFail('初始化失败：'+e.message);
