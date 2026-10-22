@@ -584,6 +584,31 @@ test('v5.1 #100 回音传送＋拍照自由镜头为唯一例外', ()=>{
     must(/setView\(theta,phi,radius\)/.test(inlineJs), '轨道相机缺 setView（拍照接手用）');
 });
 
+// ---------- v5.1 #96 横屏与沉浸 UI ----------
+test('v5.1 #96 进入即沉浸：全屏＋锁横屏静默兜底＋壳内跳过', ()=>{
+    must(/function enterImmersive\(/.test(inlineJs), '缺 enterImmersive');
+    must(/requestFullscreen/.test(inlineJs), '缺全屏请求');
+    must(/orientation\.lock\('landscape'\)/.test(inlineJs), '缺横屏锁定尝试');
+    must(/function __inAppShell96\(/.test(inlineJs), '缺 App 壳判定（壳内应跳过）');
+    must(/id="rotGuide"/.test(html) && /请旋转设备，横屏游玩/.test(html), '缺旋转引导层或文案');
+    must(/photo-on #rotGuide/.test(html), '拍照模式隐藏清单未补 #rotGuide');
+});
+
+test('v5.1 #96 面板三分组可折叠＋收起整个 UI＋Toggle 开关', ()=>{
+    must(/function setupPanelGroups\(/.test(inlineJs), '缺 setupPanelGroups');
+    must(/环境设置/.test(inlineJs) && /视角控制/.test(inlineJs) && /游玩功能/.test(inlineJs), '三分组标题不全');
+    must(/mpGrpHead/.test(html) && /mpGroup/.test(html), '缺分组样式');
+    must(/mpHideAll/.test(inlineJs) && /收起整个 UI/.test(inlineJs), '缺「收起整个 UI」钮');
+    must(/#modPanel input\[type=checkbox\]::after/.test(html), '缺 Toggle 开关样式（圆角滑块）');
+    must(/#mpEnvRows \.row #autoRotV\{display:none\}/.test(html), '自动轮转的冗余开/关文字未移除');
+});
+
+test('v5.1 #96 自动隐藏补齐：操控条/进出屋条纳入 bars-off', ()=>{
+    must(/#app\.bars-off #dragonBar/.test(html), '操控条未纳入 bars-off');
+    must(/#app\.bars-off #roomBar/.test(html), '进出屋条未纳入 bars-off');
+    must(/#app\.bars-off #appBar/.test(html), 'App 提示条未纳入 bars-off');
+});
+
 console.log('\n====================');
 console.log(`Results: ${passed} passed, ${failed} failed`);
 process.exit(failed>0 ? 1 : 0);
