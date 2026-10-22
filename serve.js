@@ -35,6 +35,7 @@ const MIME = {
     '.webp': 'image/webp',
     '.svg': 'image/svg+xml',
     '.ico': 'image/x-icon',
+    '.glb': 'model/gltf-binary',
     '.md': 'text/markdown; charset=utf-8'
 };
 const ALLOWED_EXT = new Set(Object.keys(MIME));
@@ -46,8 +47,8 @@ const SEC_HEADERS = {
     'X-Frame-Options': 'DENY',
     'Referrer-Policy': 'no-referrer',
     'Content-Security-Policy': "default-src 'none'; script-src 'self' 'unsafe-inline'; " +
-        "style-src 'self' 'unsafe-inline'; img-src data: blob:; connect-src 'self' https://formsubmit.co; " +
-        "object-src 'none'; base-uri 'none'; form-action 'none'"
+        "style-src 'self' 'unsafe-inline'; img-src data: blob:; connect-src 'self' https://formsubmit.co blob:; " +
+        "font-src 'none'; media-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'"
 };
 
 function lanAddresses() {
