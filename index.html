@@ -1297,7 +1297,9 @@ function showFatal(msg){
     var el=document.getElementById('error');
     el.style.display='block';
     el.textContent='⚠ 场景无法启动\n\n'+msg+
-        '\n\n请确认 js/three.min.js 与本文件在同一目录，且文件完整（约 600KB）。';
+        ((msg.indexOf('资源')>=0 || msg.indexOf('three')>=0)
+            ? '\n\n请确认 js/three.min.js 与本文件在同一目录，且文件完整（约 600KB）。'
+            : '\n\n可以先刷新页面重试；若反复出现，建议用 Chrome 浏览器打开本页面。');
     document.getElementById('status').textContent='启动失败';
 }
 if(typeof THREE==='undefined'){
@@ -9879,6 +9881,7 @@ function atmoAudioBuild(){
 /* ==================== 动画 ==================== */
 function animate(){
     requestAnimationFrame(animate);
+    if(window.__glCtxLost) return;   // 显卡上下文丢失期间暂停更新，restored 后自动续上
     const dt=Math.min(0.05,clock.getDelta());
     const t=clock.elapsedTime;
 
@@ -13976,7 +13979,19 @@ function buildExpansion(){
 function init(){
     try{
         bootTo(18,'准备渲染器…');
-        renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
+        /* 分级尝试建渲染器：个别手机浏览器/WebView 对 high-performance＋抗锯齿的组合会
+           直接拒绝创建 WebGL 上下文（Error creating WebGL context），逐级退到最稳配置，
+           全部失败才报致命错误（2026-10-22 真机故障修复） */
+        var glErr=null, glCfgs=[
+            {antialias:true,powerPreference:'high-performance'},
+            {antialias:true,powerPreference:'default'},
+            {antialias:false,powerPreference:'default'},
+            {}
+        ];
+        for(var gi=0; gi<glCfgs.length && !renderer; gi++){
+            try{ renderer=new THREE.WebGLRenderer(glCfgs[gi]); }catch(ge){ glErr=ge; renderer=null; }
+        }
+        if(!renderer) throw glErr||new Error('Error creating WebGL context.');
         updateOrientation();
         renderer.setSize(LAYOUT.w,LAYOUT.h);
         renderer.setPixelRatio(dprCur);
@@ -14609,12 +14624,31 @@ function setupGlobal(){
         }
     }, true);
 
-    /* 显卡上下文丢失：给出可操作提示，而不是静默卡死 */
+    /* 显卡上下文丢失：先给浏览器自恢复留宽限（preventDefault 后 three 会在 restored
+       时重建 GPU 资源并续渲），宽限内恢复了就收掉提示继续玩；超时未恢复才报致命错误。
+       旧版一丢上下文就盖致命层、又不监听 restored，真机上表现为「必须手动刷新」
+       （2026-10-22 真机故障修复） */
     if(renderer && renderer.domElement){
+        var glLostTimer=null;
         renderer.domElement.addEventListener('webglcontextlost', function(e){
             e.preventDefault();
-            if(typeof showFatal==='function')
-                showFatal('显卡上下文丢失（常见于显存不足或切换显卡）。刷新页面即可恢复。');
+            window.__glCtxLost=true;
+            var st=document.getElementById('status');
+            if(st) st.textContent='显卡繁忙，正在恢复…';
+            if(glLostTimer) clearTimeout(glLostTimer);
+            glLostTimer=setTimeout(function(){
+                if(window.__glCtxLost && typeof showFatal==='function')
+                    showFatal('显卡上下文丢失（常见于显存不足或切换显卡）。刷新页面即可恢复。');
+            }, 5000);
+        }, false);
+        renderer.domElement.addEventListener('webglcontextrestored', function(){
+            window.__glCtxLost=false;
+            if(glLostTimer){ clearTimeout(glLostTimer); glLostTimer=null; }
+            var er=document.getElementById('error');
+            if(er && er.style.display!=='none' && er.textContent.indexOf('显卡上下文丢失')>=0)
+                er.style.display='none';
+            var st=document.getElementById('status');
+            if(st && st.textContent.indexOf('显卡')>=0) st.textContent='已恢复';
         }, false);
     }
 }
