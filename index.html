@@ -2272,7 +2272,11 @@ const SceneHub = {
                 bootTier = (SCENE.glSafe === 1 || SCENE.glSafe === 2) ? SCENE.glSafe : 0;
             } else {
                 bootTier = GL_TIER.trust;
-                if(GL_TIER.stable && GL_TIER.trust > 0){
+                /* 弱 WebView 环境（微信/QQ/UC 系）不参加试升：它的保守起步是
+                   环境定的，不拿稳定性去赌；软件渲染设备不在此列，照常走
+                   「跑稳后试升」的出口（init 里试升优先于探针弱判定）。 */
+                const weakUaHold = (typeof weakWebUA === 'function') && weakWebUA();
+                if(GL_TIER.stable && GL_TIER.trust > 0 && !weakUaHold){
                     const tgt = GL_TIER.trust - 1;
                     if((GL_TIER.tries[tgt] || 0) < 2 && (GL_TIER.fails[tgt] || 0) < 2){
                         GL_TIER.trial = tgt;
