@@ -174,7 +174,8 @@ test('MOBILE 旋转后触摸拖动方向已补偿', ()=>{
 });
 test('MOBILE 性能降档生效（阴影/实例数量）', ()=>{
     must(/mapSize\.set\(IS_MOBILE\?1024:2048/.test(inlineJs),'阴影分辨率未降档');
-    must(/IS_MOBILE\?140:260/.test(inlineJs),'草地实例未降档');
+    // #73 起草地降档走 GRASS_CFG 双档（grassTierAuto：移动端/低画质 → lite 档实例数）
+    must(/function grassTierAuto\(\)\{\s*return \(IS_MOBILE \|\|/.test(inlineJs),'草地实例未降档');
 });
 
 // ---------- AC9: 部署与端侧判定 ----------
@@ -193,8 +194,8 @@ test('GitHub Pages 需要的 .nojekyll 存在', ()=>{
 });
 
 // ---------- AC10: 可插拔功能模块 ----------
-test('功能注册表齐备（7 个可独立开关的模块）', ()=>{
-    ['bgm','ambience','particles','views','interact','daynight','tone','roam']
+test('功能注册表齐备（可独立开关的模块）', ()=>{
+    ['bgm','ambience','particles','interact','daynight','tone','roam']
         .forEach(k => must(new RegExp(k + ':\\s*\\{\\s*on:(true|false)').test(inlineJs), '缺少功能开关 ' + k));
 });
 test('模块有统一挂载/更新钩子', ()=>{
@@ -203,11 +204,14 @@ test('模块有统一挂载/更新钩子', ()=>{
     must(/setupModules\(\);/.test(inlineJs), 'init() 未调用 setupModules()');
     must(/updateModules\(dt, ?t\);/.test(inlineJs), 'animate() 未调用 updateModules()');
 });
-test('BGM 按天气换音阶，且不加载任何音频文件', ()=>{
+test('BGM 按天气换音阶，音频文件只许站内内置主题曲一份', ()=>{
     must(/BGM_SCALE\s*=\s*\{/.test(inlineJs), '缺少按天气的音阶表');
     ['sunny','golden','mist','night','rain'].forEach(m =>
         must(new RegExp(m + '\\s*:\\s*\\[').test(inlineJs), '音阶表缺少 ' + m));
-    must(!/\.(mp3|ogg|wav|m4a)(\?|"|')/i.test(html), '不应引用音频文件');
+    // 程序化 BGM 本体仍不加载文件；全页只许引用内置主题曲这一份同源音频
+    const audioRefs = html.match(/[\w./-]+\.(?:mp3|ogg|wav|m4a)/gi) || [];
+    must(audioRefs.length > 0 && audioRefs.every(r => r === 'assets/audio/chumen-theme.mp3'),
+        '引用了主题曲之外的音频文件：' + audioRefs.join(', '));
 });
 test('音频有总静音开关，且默认静音（不打扰打开者）', ()=>{
     must(/id="muteBtn"/.test(html), '缺少静音按钮');
@@ -220,11 +224,12 @@ test('门与篝火可点击（门有名字，可被 raycast 命中）', ()=>{
     must(/function onSceneTap\(ev\)/.test(inlineJs), '缺少点击命中处理');
     must(/function buildCampfire\(\)/.test(inlineJs), '缺少篝火');
 });
-test('自动漫游是可选彩蛋（默认关，拖动即让位）', ()=>{
+test('自动漫游是可选彩蛋（默认关，移动输入即让位）', ()=>{
     must(/roam:\s*\{\s*on:false/.test(inlineJs), '漫游应默认关闭');
-    must(/function updateRoam\(dt\)/.test(inlineJs), '缺少 updateRoam()');
-    must(/updateRoam\(dt\);/.test(inlineJs), 'updateModules 未调用 updateRoam()');
-    must(/if\(FEAT\.roam\.on\)\{ FEAT\.roam\.on = false/.test(inlineJs), '拖动时应自动退出漫游');
+    must(/function updateAvatarRoam\(dt\)/.test(inlineJs), '缺少 updateAvatarRoam()（#100 化身漫游）');
+    must(/updateAvatarRoam\(dt\);/.test(inlineJs), 'updateModules 未调用 updateAvatarRoam()');
+    must(/function stopAvatarRoam\(\)/.test(inlineJs), '缺少 stopAvatarRoam()（玩家接管）');
+    must(/stopAvatarRoam\(\);   \/\/ #100：玩家一动手/.test(inlineJs), '手动移动时应自动退出漫游');
 });
 test('自适应分辨率（掉帧降像素比、流畅再升回）', ()=>{
     must(/function perfTick\(dt\)/.test(inlineJs), '缺少 perfTick()');
@@ -297,12 +302,12 @@ test('FB 提交：先复制兜底，再只回传到白名单地址', ()=>{    mu
     const outside = abs.filter(u => !/^https:\/\/formsubmit\.co\//.test(u));
     must(outside.length===0,'出现白名单外的绝对 URL：'+outside.join(', '));
     must(!/XMLHttpRequest|sendBeacon|WebSocket/.test(inlineJs),'出现其他网络通道');
-    // 全页只允许十二个具名本地键：ct2_visits（访问计数）、ct2_hunt（寻宝进度）、ct2_help（帮助已提示标记）、ct2_farm（种田存档）、ct2_vote（投票已投标记）、ct2_theme（界面深浅主题偏好）、ct2_echo（建议回音回执）、ct2_bag（小龙背包与喂食计数）、ct2_dragon（小龙自定义外观与个性）、ct2_codex（图鉴解锁集合）、ct2_guest（留言上墙本机副本）与 ct2_music（自定义音乐偏好与歌名），都不上传
+    // 全页只允许十四个具名本地键：ct2_visits（访问计数）、ct2_hunt（寻宝进度）、ct2_help（帮助已提示标记）、ct2_farm（种田存档）、ct2_vote（投票已投标记）、ct2_theme（界面深浅主题偏好）、ct2_echo（建议回音回执）、ct2_bag（小龙背包与喂食计数）、ct2_dragon（小龙自定义外观与个性）、ct2_codex（图鉴解锁集合）、ct2_guest（留言上墙本机副本）、ct2_music（自定义音乐偏好与歌名）、ct2_scene（场景中枢画质总档与渲染参数偏好）与 ct2_ach（成就徽章解锁集合与日期），都不上传
     must(!/sessionStorage|document\.cookie/.test(inlineJs),'出现未授权的存储');
     const lsKeys = [...inlineJs.matchAll(/localStorage\.(?:getItem|setItem)\('([^']+)'/g)].map(m=>m[1]);
-    const badKeys = lsKeys.filter(k => k !== 'ct2_visits' && k !== 'ct2_hunt' && k !== 'ct2_help' && k !== 'ct2_farm' && k !== 'ct2_vote' && k !== 'ct2_theme' && k !== 'ct2_echo' && k !== 'ct2_bag' && k !== 'ct2_dragon' && k !== 'ct2_codex' && k !== 'ct2_guest' && k !== 'ct2_music');
+    const badKeys = lsKeys.filter(k => k !== 'ct2_visits' && k !== 'ct2_hunt' && k !== 'ct2_help' && k !== 'ct2_farm' && k !== 'ct2_vote' && k !== 'ct2_theme' && k !== 'ct2_echo' && k !== 'ct2_bag' && k !== 'ct2_dragon' && k !== 'ct2_codex' && k !== 'ct2_guest' && k !== 'ct2_music' && k !== 'ct2_scene' && k !== 'ct2_ach');
     must(badKeys.length===0,'出现未授权的本地存储键：'+badKeys.join(', '));
-    // 动态键只允许具名常量 HUNT_KEY / HELP_KEY / FARM_KEY / VOTE_KEY / THEME_KEY / ECHO_KEY / BAG_KEY / DRAGON_KEY / CODEX_KEY / GUEST_KEY / MUSIC_KEY，且它们的取值必须写死
+    // 动态键只允许具名常量 HUNT_KEY / HELP_KEY / FARM_KEY / VOTE_KEY / THEME_KEY / ECHO_KEY / BAG_KEY / DRAGON_KEY / CODEX_KEY / GUEST_KEY / MUSIC_KEY / SCENE_KEY / ACH_KEY，且它们的取值必须写死
     must(/const HUNT_KEY='ct2_hunt'/.test(inlineJs),'HUNT_KEY 必须写死为 ct2_hunt');
     must(/const HELP_KEY='ct2_help'/.test(inlineJs),'HELP_KEY 必须写死为 ct2_help');
     must(/const FARM_KEY='ct2_farm'/.test(inlineJs),'FARM_KEY 必须写死为 ct2_farm');
@@ -314,7 +319,9 @@ test('FB 提交：先复制兜底，再只回传到白名单地址', ()=>{    mu
     must(/const GUEST_KEY='ct2_guest'/.test(inlineJs),'GUEST_KEY 必须写死为 ct2_guest');
     must(/const CODEX_KEY='ct2_codex'/.test(inlineJs),'CODEX_KEY 必须写死为 ct2_codex');
     must(/const MUSIC_KEY='ct2_music'/.test(inlineJs),'MUSIC_KEY 必须写死为 ct2_music');
-    must(!/localStorage\.(?:getItem|setItem)\((?!'ct2_visits'|HUNT_KEY|HELP_KEY|FARM_KEY|VOTE_KEY|THEME_KEY|ECHO_KEY|BAG_KEY|DRAGON_KEY|CODEX_KEY|GUEST_KEY|MUSIC_KEY)/.test(inlineJs),'存在动态拼接的存储键');
+    must(/const SCENE_KEY='ct2_scene'/.test(inlineJs),'SCENE_KEY 必须写死为 ct2_scene');
+    must(/const ACH_KEY='ct2_ach'/.test(inlineJs),'ACH_KEY 必须写死为 ct2_ach');
+    must(!/localStorage\.(?:getItem|setItem)\((?!'ct2_visits'|HUNT_KEY|HELP_KEY|FARM_KEY|VOTE_KEY|THEME_KEY|ECHO_KEY|BAG_KEY|DRAGON_KEY|CODEX_KEY|GUEST_KEY|MUSIC_KEY|SCENE_KEY|ACH_KEY)/.test(inlineJs),'存在动态拼接的存储键');
     // 顺序保证：先复制，后发送
     const iCopy = inlineJs.indexOf('copyToClipboard(text).then(');
     const iSend = inlineJs.indexOf('sendFeedback({');
@@ -416,6 +423,19 @@ test('世界图鉴：声明式条目、本机解锁存档与判定挂点（Issue
     const defs = inlineJs.match(/cat:'(plant|crop|treasure|weather|place|animal)'/g) || [];
     must(defs.length>=30,'图鉴条目过少：'+defs.length);
 });
+test('成就徽章：声明式条目、本机存档与判定挂点（Issue #66）', ()=>{
+    must(/const ACH_KEY='ct2_ach'/.test(inlineJs),'ACH_KEY 必须写死为 ct2_ach');
+    must(/const ACH_DEFS\s*=\s*\[/.test(inlineJs),'缺少声明式成就条目 ACH_DEFS');
+    must(/function setupAch\(/.test(inlineJs),'缺少 setupAch');
+    must(/function achTick\(/.test(inlineJs),'缺少成就巡检 achTick');
+    must(/function achState\(/.test(inlineJs),'缺少成就状态快照 achState');
+    must(/ach:\s*mkSlot\(\(\)=>localStorage\.getItem\(ACH_KEY\)/.test(inlineJs),'store 缺 ach 槽');
+    must(/id="achBtn"/.test(html) && /id="achMask"/.test(html) && /id="achBody"/.test(html),
+        '成就入口/弹窗缺一');
+    const blk = inlineJs.slice(inlineJs.indexOf('const ACH_DEFS'), inlineJs.indexOf('];', inlineJs.indexOf('const ACH_DEFS')));
+    const n = (blk.match(/\{ id:'/g) || []).length;
+    must(n>=14,'成就条目过少：'+n);
+});
 test('FB 回传必须显式带 Referer（FormSubmit 靠它判来源）', ()=>{
     // 线上曾因 <meta name="referrer" content="no-referrer"> 被抹掉 Referer，
     // FormSubmit 回「not a web server」而拒收；修法是在 fetch 上单独指定。
@@ -439,7 +459,7 @@ test('自定义音乐：本地文件 BGM、独立通道、偏好只存歌名（I
     must(/id="musList"/.test(html),'缺播放列表容器');
     // 文件只在本机内存里播：对象 URL 播放，偏好只存音量/循环/歌名
     must(/URL\.createObjectURL/.test(inlineJs),'未用对象 URL 本机播放');
-    must(/media-src blob:;/.test(html),'CSP 未给 blob 媒体开本机口子');
+    must(/media-src 'self' blob:;/.test(html),'CSP 未给同源主题曲与 blob 媒体开口子');
     must(/store\.music\.save\(\{\s*vol:/.test(inlineJs) && /names:/.test(inlineJs),'偏好未按 vol/loop/names 存');
     // 自选音乐在播时程序化 BGM 必须让行（不叠音打架）
     must(/FEAT\.bgm\.on && !musicCustomActive\(\)/.test(inlineJs),'audioTick 未给自选音乐让行');
@@ -501,6 +521,92 @@ test('全局模块：分享链接 / 弱网低画质 / 版本日志 / 免责声�
     must(/dprCur=1;/.test(inlineJs), '低画质未降到 1 倍像素比');
     must(/const VERSIONS = \[/.test(inlineJs) && /id="mpVer"/.test(html), '缺版本日志');
     must(/class="mpDisclaimer"/.test(html), '缺共创免责声明');
+});
+
+// ---------- v5.1 网页版保底可玩 ----------
+test('v5.1 裸探针：标准 getContext 阶梯＋逐格全新 canvas＋活 context 交接', ()=>{
+    must(/function probeGL\(\)/.test(inlineJs), '缺少 probeGL');
+    must(/'webgl2'/.test(inlineJs) && /'experimental-webgl'/.test(inlineJs), '探针类型阶梯不全（需 webgl2/webgl/experimental-webgl）');
+    must(/document\.createElement\('canvas'\)/.test(inlineJs), '探针未逐格新建 canvas');
+    must(/context:\s*probe\.ctx/.test(inlineJs), '未把探针的活 context 交给引擎');
+    must(/__probeForceFail/.test(inlineJs) && /__probeFakeRenderer/.test(inlineJs), '缺少探针验收钩子');
+    must(/UNMASKED_RENDERER_WEBGL/.test(inlineJs), '未读渲染器字符串做软件渲染识别');
+});
+
+test('v5.1 弱环境直接保命＋弱 UA 首访低配（有存档不覆盖）', ()=>{
+    must(/probe\.weak && glSafeLv\(\) < 2/.test(inlineJs), '缺少探针弱判定直接保命起步');
+    must(/__hadSceneSave/.test(inlineJs), '缺少新鲜档案标记 __hadSceneSave');
+    must(/!window\.__hadSceneSave && weakWebUA\(\)/.test(inlineJs), '弱 UA 低配起步未以无存档为前提');
+});
+
+test('v5.1 致命层：下载 App 主按钮＋刷新重试，无 Chrome 主推', ()=>{
+    must(/dl\.href='download\.html'/.test(inlineJs), '致命层缺下载 App 按钮（相对路径 download.html）');
+    must(/下载 App 玩/.test(inlineJs), '致命层缺「下载 App 玩」文案');
+    must(/刷新重试/.test(inlineJs), '致命层缺刷新重试按钮');
+    must(!/建议用 Chrome/.test(inlineJs), '仍残留「建议用 Chrome」主推文案');
+    must(/#error \.fbtns/.test(html), '缺致命层按钮区样式');
+});
+
+// ---------- v5.1 #100 视角体系改版 ----------
+test('v5.1 #100 上帝/环绕观看入口已清除（巡游/锁定开关、预设视角面板）', ()=>{
+    must(!/id="orbitChk"/.test(html), '仍残留自动巡游开关 orbitChk');
+    must(!/id="lockChk"/.test(html), '仍残留视角锁定开关 lockChk');
+    must(!/id="mpViews"/.test(html), '仍残留预设视角面板 mpViews');
+    must(!/id="lockRow"/.test(html), '仍残留视角锁定行 lockRow');
+    must(!/wx\.orbit/.test(inlineJs), '仍残留 wx.orbit 巡游状态引用');
+    must(!/function setViewLock\(/.test(inlineJs), '仍残留 setViewLock 定义');
+    must(!/views:\s*\{ on:/.test(inlineJs), '仍残留 FEAT.views 预设视角模块');
+});
+
+test('v5.1 #100 视角选择卡＋选择落盘 ct2_dragon.view（不新增键）', ()=>{
+    must(/id="viewMask"/.test(html), '缺视角选择卡 viewMask');
+    must(/data-vw="fp"/.test(html) && /data-vw="tp"/.test(html), '视角卡缺第一/第三人称两张卡');
+    must(/function drgViewNormalize\(/.test(inlineJs), '缺视角字段规整 drgViewNormalize');
+    must(/function openViewCard\(/.test(inlineJs) && /function chooseView\(/.test(inlineJs), '缺视角卡开关/选择函数');
+    must(/c\.view = drgViewNormalize\(/.test(inlineJs), 'drgLoadCfg 未接入 view 字段');
+});
+
+test('v5.1 #100 探索者出生＋传送＋化身漫游', ()=>{
+    must(/function setupEntryFlow\(/.test(inlineJs), '缺进入流程 setupEntryFlow');
+    must(/function avatarTeleportTo\(/.test(inlineJs), '缺化身传送 avatarTeleportTo');
+    must(/function avatarGoHome\(/.test(inlineJs), '缺回出生点 avatarGoHome');
+    must(/function updateAvatarRoam\(/.test(inlineJs), '缺化身自动漫游 updateAvatarRoam');
+    must(/function stopAvatarRoam\(/.test(inlineJs), '缺漫游接管 stopAvatarRoam');
+    must(/avatarSpawnPoint\(\)/.test(inlineJs), '缺出生点 avatarSpawnPoint');
+    must(/houseLocal\(-0\.65, 9\.5\)/.test(inlineJs), '出生点未锚在小屋门口（门前石板路、房子禁行圈外）');
+});
+
+test('v5.1 #100 回音传送＋拍照自由镜头为唯一例外', ()=>{
+    must(/function echoFlyTo\(/.test(inlineJs) && /avatarTeleportTo\(pos\.x, pos\.z/.test(inlineJs), '回音未改化身传送');
+    must(!/echoHomeView/.test(inlineJs), '仍残留旧镜头存档 echoHomeView');
+    must(/function photoSuspendExplorer\(/.test(inlineJs), '拍照模式缺探索者让位');
+    must(/function photoResumeExplorer\(/.test(inlineJs), '拍照模式缺探索者归位（人称还原）');
+    must(/setView\(theta,phi,radius\)/.test(inlineJs), '轨道相机缺 setView（拍照接手用）');
+});
+
+// ---------- v5.1 #96 横屏与沉浸 UI ----------
+test('v5.1 #96 进入即沉浸：全屏＋锁横屏静默兜底＋壳内跳过', ()=>{
+    must(/function enterImmersive\(/.test(inlineJs), '缺 enterImmersive');
+    must(/requestFullscreen/.test(inlineJs), '缺全屏请求');
+    must(/orientation\.lock\('landscape'\)/.test(inlineJs), '缺横屏锁定尝试');
+    must(/function __inAppShell96\(/.test(inlineJs), '缺 App 壳判定（壳内应跳过）');
+    must(/id="rotGuide"/.test(html) && /请旋转设备，横屏游玩/.test(html), '缺旋转引导层或文案');
+    must(/photo-on #rotGuide/.test(html), '拍照模式隐藏清单未补 #rotGuide');
+});
+
+test('v5.1 #96 面板三分组可折叠＋收起整个 UI＋Toggle 开关', ()=>{
+    must(/function setupPanelGroups\(/.test(inlineJs), '缺 setupPanelGroups');
+    must(/环境设置/.test(inlineJs) && /视角控制/.test(inlineJs) && /游玩功能/.test(inlineJs), '三分组标题不全');
+    must(/mpGrpHead/.test(html) && /mpGroup/.test(html), '缺分组样式');
+    must(/mpHideAll/.test(inlineJs) && /收起整个 UI/.test(inlineJs), '缺「收起整个 UI」钮');
+    must(/#modPanel input\[type=checkbox\]::after/.test(html), '缺 Toggle 开关样式（圆角滑块）');
+    must(/#mpEnvRows \.row #autoRotV\{display:none\}/.test(html), '自动轮转的冗余开/关文字未移除');
+});
+
+test('v5.1 #96 自动隐藏补齐：操控条/进出屋条纳入 bars-off', ()=>{
+    must(/#app\.bars-off #dragonBar/.test(html), '操控条未纳入 bars-off');
+    must(/#app\.bars-off #roomBar/.test(html), '进出屋条未纳入 bars-off');
+    must(/#app\.bars-off #appBar/.test(html), 'App 提示条未纳入 bars-off');
 });
 
 console.log('\n====================');
