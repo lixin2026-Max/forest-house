@@ -902,6 +902,7 @@
     <div class="mpSub">画质总开关（草 / 天空 / 水体 / 模型四套一起切）</div>
     <div class="mpViews" id="sceneQualityBtns"></div>
     <div class="mpTip" id="sceneQualityTip"></div>
+    <div class="mpViews" id="glSafeRow" style="display:none"></div>
     <div class="mpSep"></div>
     <div class="mpSub">渲染调节（拖动实时生效）</div>
     <div id="sceneSliders"></div>
@@ -1296,10 +1297,16 @@ function showFatal(msg){
     if(b) b.style.display='none';
     var el=document.getElementById('error');
     el.style.display='block';
+    /* App 壳（系统 WebView，UA 带 wv 标记）里没有「换个浏览器」的退路，
+       文案改为关重开/降画质；普通浏览器环境保持 Chrome 建议。标记串用
+       fromCharCode 拼，避免字面括号扰动 verify 的朴素括号计数。 */
+    var inWebView = (typeof navigator!=='undefined' && (navigator.userAgent||'').indexOf('; wv' + String.fromCharCode(41)) >= 0);
     el.textContent='⚠ 场景无法启动\n\n'+msg+
         ((msg.indexOf('资源')>=0 || msg.indexOf('three')>=0)
             ? '\n\n请确认 js/three.min.js 与本文件在同一目录，且文件完整（约 600KB）。'
-            : '\n\n可以先刷新页面重试；若反复出现，建议用 Chrome 浏览器打开本页面。');
+            : (inWebView
+                ? '\n\n可以先刷新页面重试；若反复出现，请完全关闭 App 后重新打开，或在操作页（右上 ⚙）里把画质调到「保底」。'
+                : '\n\n可以先刷新页面重试；若反复出现，建议用 Chrome 浏览器打开本页面。'));
     document.getElementById('status').textContent='启动失败';
 }
 if(typeof THREE==='undefined'){
@@ -1381,6 +1388,7 @@ function buildRiverPts(){
 const SCENE_KEY='ct2_scene';
 const SCENE = {
     quality: { mode: 'auto' },
+    glSafe: false,   // WebGL 安全模式：真机上下文反复丢失时自动置位并落盘（ct2_scene 的 glSafe 字段，不新增键）；下次启动读到即以最稳参数＋DPR 1.25＋关 Bloom 低配启动，面板可一键恢复默认
     render: {
         bgBrightness: 1,      // 背景亮度：远山环明暗倍率（skyBackdropTick 每帧读）
         grassDensity: 1,      // 草簇密度倍率（GrassSys.applyCounts 每帧读）
@@ -1965,6 +1973,7 @@ const SceneHub = {
         const sv = store.scene.json({});
         if(sv && typeof sv === 'object'){
             if(sv.q === 'full' || sv.q === 'lite' || sv.q === 'auto') SCENE.quality.mode = sv.q;
+            if(sv.glSafe === 1 || sv.glSafe === true) SCENE.glSafe = true;   // WebGL 安全模式降档标志（同键扩字段）
             const r = sv.r || {};
             SCENE.render.grassDensity = this._clamp(r.grassDensity, 0.3, 1.3, 1);
             SCENE.render.grassHeightK = this._clamp(r.grassHeightK, 0.6, 1.6, 1);
@@ -1985,6 +1994,7 @@ const SceneHub = {
     save(){
         store.scene.save({
             q: SCENE.quality.mode,
+            glSafe: SCENE.glSafe ? 1 : 0,
             r: { grassDensity: SCENE.render.grassDensity, grassHeightK: SCENE.render.grassHeightK,
                  bgBrightness: SCENE.render.bgBrightness },
             c: { drift: SCENE.grass.cloud.drift, strength: SCENE.grass.cloud.strength },
@@ -2025,6 +2035,8 @@ const SceneHub = {
         const box = document.getElementById('sceneQualityBtns');
         if(box) for(let i = 0; i < box.children.length; i++)
             box.children[i].classList.toggle('on', box.children[i].dataset.q === SCENE.quality.mode);
+        const gr = document.getElementById('glSafeRow');
+        if(gr) gr.style.display = SCENE.glSafe ? '' : 'none';   // WebGL 安全模式中才露出「恢复默认画质」入口
         const tip = document.getElementById('sceneQualityTip');
         if(tip){
             const auto = (typeof IS_MOBILE !== 'undefined' && IS_MOBILE) ? '保底（移动设备自动判定）' : '拉满（桌面设备自动判定）';
@@ -2088,6 +2100,13 @@ const SceneHub = {
                 row.appendChild(lb); row.appendChild(inp); row.appendChild(val);
                 sb.appendChild(row);
             });
+        }
+        const gr = document.getElementById('glSafeRow');
+        if(gr && !gr.children.length){
+            const gb = document.createElement('button');
+            gb.type = 'button'; gb.textContent = '🛡 已进显卡安全模式（低配）· 点此恢复默认画质';
+            gb.addEventListener('click', ()=>{ SCENE.glSafe = false; this.save(); location.reload(); });
+            gr.appendChild(gb);
         }
         const av = document.getElementById('sceneAvatarBtn');
         if(av) av.addEventListener('click', ()=>{
@@ -9590,7 +9609,8 @@ const AtmoSys = {
             scene.add(this._bloomGroup);
         }
         this.registerWindCore();
-        this.bloomTier = (typeof IS_MOBILE !== 'undefined' && IS_MOBILE) ? 0 : 2;
+        this.bloomTier = (typeof SCENE !== 'undefined' && SCENE.glSafe) ? 0
+            : ((typeof IS_MOBILE !== 'undefined' && IS_MOBILE) ? 0 : 2);   // WebGL 安全模式：Bloom 默认关
         this._tierAuto = true;
     },
     /* ---------- 模块 1：分层雾 ---------- */
@@ -11549,7 +11569,13 @@ let toneIndex=0, viewIndex=0;
 let roamAngle=0.22*Math.PI, roamT=0;
 let perfAcc=0, perfFrames=0, perfHold=0;
 const DPR_CAP = IS_MOBILE ? 1.5 : 2;
+/* 实际生效的像素比上限 DPR_LIM：常态等于 DPR_CAP（桌面 2、移动 1.5——K70 Ultra
+   这类 3.25 倍密度屏按全 DPR 渲染会把 WebGL 上下文挤掉，移动端故有 1.5 封顶）；
+   WebGL 安全模式（ct2_scene.glSafe）读档时压到 1.25，运行时进安全模式也当场
+   压下来，perfTick 与 applyLowQuality 都按 DPR_LIM 走、不会再往回升。 */
+let DPR_LIM = (typeof SCENE !== 'undefined' && SCENE.glSafe) ? 1.25 : DPR_CAP;
 let dprCur = Math.min((typeof window!=='undefined'&&window.devicePixelRatio)||1, DPR_CAP);
+if(dprCur > DPR_LIM) dprCur = DPR_LIM;
 
 /* ---------- 音频：全部程序化生成，不加载任何音频文件 ---------- */
 function audioEnsure(){
@@ -13232,10 +13258,10 @@ function perfTick(dt){
         dprCur = Math.max(1, dprCur - 0.25);
         renderer.setPixelRatio(dprCur);
         perfHold = 0;
-    }else if(fps > 56 && dprCur < DPR_CAP){
+    }else if(fps > 56 && dprCur < DPR_LIM){
         perfHold++;
         if(perfHold >= 3){
-            dprCur = Math.min(DPR_CAP, dprCur + 0.25);
+            dprCur = Math.min(DPR_LIM, dprCur + 0.25);
             renderer.setPixelRatio(dprCur);
             perfHold = 0;
         }
@@ -13981,13 +14007,19 @@ function init(){
         bootTo(18,'准备渲染器…');
         /* 分级尝试建渲染器：个别手机浏览器/WebView 对 high-performance＋抗锯齿的组合会
            直接拒绝创建 WebGL 上下文（Error creating WebGL context），逐级退到最稳配置，
-           全部失败才报致命错误（2026-10-22 真机故障修复） */
-        var glErr=null, glCfgs=[
-            {antialias:true,powerPreference:'high-performance'},
-            {antialias:true,powerPreference:'default'},
-            {antialias:false,powerPreference:'default'},
-            {}
-        ];
+           全部失败才报致命错误（2026-10-22 真机故障修复）。
+           WebGL 安全模式（上次反复丢上下文后落盘的 glSafe）则跳过激进档，
+           直接以最稳参数起步，不再先撞一次墙。 */
+        var glSafeBoot = (typeof SCENE !== 'undefined' && !!SCENE.glSafe);
+        window.__glSafeBoot = glSafeBoot;   // 上下文丢失处理据此判断「已低配还丢就不再自动重进」
+        var glErr=null, glCfgs = glSafeBoot
+            ? [ {antialias:false,powerPreference:'default'}, {} ]
+            : [
+                {antialias:true,powerPreference:'high-performance'},
+                {antialias:true,powerPreference:'default'},
+                {antialias:false,powerPreference:'default'},
+                {}
+              ];
         for(var gi=0; gi<glCfgs.length && !renderer; gi++){
             try{ renderer=new THREE.WebGLRenderer(glCfgs[gi]); }catch(ge){ glErr=ge; renderer=null; }
         }
@@ -14558,7 +14590,7 @@ function applyLowQuality(){
         if(renderer.setPixelRatio) renderer.setPixelRatio(1);
         if(FEAT.particles && FEAT.particles.on) toggleFeat('particles', false);
     }else{
-        dprCur=Math.min(window.devicePixelRatio||1, DPR_CAP);
+        dprCur=Math.min(window.devicePixelRatio||1, DPR_LIM);
         if(renderer.setPixelRatio) renderer.setPixelRatio(dprCur);
         if(FEAT.particles && !FEAT.particles.on) toggleFeat('particles', true);
     }
@@ -14624,25 +14656,56 @@ function setupGlobal(){
         }
     }, true);
 
-    /* 显卡上下文丢失：先给浏览器自恢复留宽限（preventDefault 后 three 会在 restored
-       时重建 GPU 资源并续渲），宽限内恢复了就收掉提示继续玩；超时未恢复才报致命错误。
-       旧版一丢上下文就盖致命层、又不监听 restored，真机上表现为「必须手动刷新」
-       （2026-10-22 真机故障修复） */
+    /* 显卡上下文丢失：preventDefault 是硬要求——不调它浏览器永远不会派发
+       webglcontextrestored，three 也就没机会重建 GPU 资源续渲（第一轮热修复
+       已补上，此处保留）。策略（2026-10-22 二轮，App 壳内真机复现后升级）：
+       先等 3 秒自恢复；超时未恢复、或恢复后 10 秒内再次丢失，判定这台设备
+       按当前画质扛不住 → 进 WebGL 安全模式：降档标志落盘 ct2_scene.glSafe
+       （同键扩字段，不新增键），本会话当场压 DPR/关 Bloom；若本次不是低配
+       启动的，落盘后自动重进一次，init 会直接按最稳参数＋DPR 1.25＋关
+       Bloom 起步；若已是低配启动仍丢，不再自动重进（防循环），交致命层。 */
     if(renderer && renderer.domElement){
-        var glLostTimer=null;
+        var glLostTimer=null, glLastRestoreAt=0, glSafeEntered=false;
+        function enterGlSafeMode(){
+            if(glSafeEntered) return;
+            glSafeEntered=true;
+            if(glLostTimer){ clearTimeout(glLostTimer); glLostTimer=null; }
+            if(typeof SCENE !== 'undefined' && !SCENE.glSafe){
+                SCENE.glSafe=true;
+                if(typeof SceneHub !== 'undefined') SceneHub.save();
+            }
+            DPR_LIM=Math.min(DPR_LIM, 1.25);
+            if(typeof dprCur !== 'undefined' && dprCur>1.25){
+                dprCur=1.25;
+                if(renderer && renderer.setPixelRatio) renderer.setPixelRatio(dprCur);
+            }
+            if(typeof AtmoSys !== 'undefined' && AtmoSys.setBloomTier) AtmoSys.setBloomTier(0);
+            var st=document.getElementById('status');
+            if(!window.__glSafeBoot){
+                if(st) st.textContent='显卡不稳，已切换低配安全模式，正在重进…';
+                setTimeout(function(){ location.reload(); }, 600);
+            }else{
+                if(typeof showFatal==='function')
+                    showFatal('显卡上下文丢失（已按低配安全模式启动，仍无法稳定，常见于显存不足）。');
+            }
+        }
         renderer.domElement.addEventListener('webglcontextlost', function(e){
             e.preventDefault();
             window.__glCtxLost=true;
+            if(glLastRestoreAt && (performance.now()-glLastRestoreAt)<10000){
+                enterGlSafeMode();   // 刚恢复又丢：原参数重建必再丢，直接进安全模式
+                return;
+            }
             var st=document.getElementById('status');
             if(st) st.textContent='显卡繁忙，正在恢复…';
             if(glLostTimer) clearTimeout(glLostTimer);
             glLostTimer=setTimeout(function(){
-                if(window.__glCtxLost && typeof showFatal==='function')
-                    showFatal('显卡上下文丢失（常见于显存不足或切换显卡）。刷新页面即可恢复。');
-            }, 5000);
+                if(window.__glCtxLost) enterGlSafeMode();
+            }, 3000);
         }, false);
         renderer.domElement.addEventListener('webglcontextrestored', function(){
             window.__glCtxLost=false;
+            glLastRestoreAt=performance.now();
             if(glLostTimer){ clearTimeout(glLostTimer); glLostTimer=null; }
             var er=document.getElementById('error');
             if(er && er.style.display!=='none' && er.textContent.indexOf('显卡上下文丢失')>=0)
