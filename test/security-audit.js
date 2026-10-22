@@ -32,8 +32,8 @@ const dangers = {
     'innerHTML/outerHTML': /(inner|outer)HTML/,
     'eval': /\beval\s*\(/,
     'new Function': /new\s+Function\s*\(/,
-    // 只允许十三个具名本地键：ct2_visits 字面量、寻宝的 HUNT_KEY、帮助的 HELP_KEY、种田的 FARM_KEY、投票的 VOTE_KEY、主题的 THEME_KEY、回执的 ECHO_KEY、背包的 BAG_KEY、小龙自定义的 DRAGON_KEY、图鉴的 CODEX_KEY、留言副本的 GUEST_KEY 、音乐偏好的 MUSIC_KEY 与成就徽章的 ACH_KEY 常量（下方另有钉死检查）；其余一律不许
-    'localStorage（非授权键）': /localStorage\.(?:getItem|setItem)\((?!'ct2_visits'|HUNT_KEY|HELP_KEY|FARM_KEY|VOTE_KEY|THEME_KEY|ECHO_KEY|BAG_KEY|DRAGON_KEY|CODEX_KEY|GUEST_KEY|MUSIC_KEY|ACH_KEY)/,
+    // 只允许十四个具名本地键：ct2_visits 字面量、寻宝的 HUNT_KEY、帮助的 HELP_KEY、种田的 FARM_KEY、投票的 VOTE_KEY、主题的 THEME_KEY、回执的 ECHO_KEY、背包的 BAG_KEY、小龙自定义的 DRAGON_KEY、图鉴的 CODEX_KEY、留言副本的 GUEST_KEY 、音乐偏好的 MUSIC_KEY、场景中枢偏好的 SCENE_KEY 与成就徽章的 ACH_KEY 常量（下方另有钉死检查）；其余一律不许
+    'localStorage（非授权键）': /localStorage\.(?:getItem|setItem)\((?!'ct2_visits'|HUNT_KEY|HELP_KEY|FARM_KEY|VOTE_KEY|THEME_KEY|ECHO_KEY|BAG_KEY|DRAGON_KEY|CODEX_KEY|GUEST_KEY|MUSIC_KEY|SCENE_KEY|ACH_KEY)/,
     'sessionStorage': /sessionStorage/,
     'document.cookie': /document\.cookie/,
     'XMLHttpRequest': /XMLHttpRequest/,
@@ -68,12 +68,13 @@ check('背包存储键 BAG_KEY 写死为 ct2_bag', /const BAG_KEY='ct2_bag'/.tes
 check('回执存储键 ECHO_KEY 写死为 ct2_echo', /const ECHO_KEY='ct2_echo'/.test(html));
 // 自定义音乐偏好同理：只能经具名常量 MUSIC_KEY 使用，取值钉死（只存偏好与歌名，不存文件）
 check('音乐存储键 MUSIC_KEY 写死为 ct2_music', /const MUSIC_KEY='ct2_music'/.test(html));
-// 媒体口径：只放行页面自造的 blob:（玩家本机选的文件），不许任何网络/data 媒体
-check('CSP media-src 只放行 blob:', /media-src blob:;/.test(html) && !/media-src[^;]*(https?|data:|\*|'self')/.test(html));
+// 媒体口径：放行页面自造的 blob:（玩家本机选的文件）与同源 'self'（站内内置主题曲一份），不许任何外网/data 媒体
+check('CSP media-src 只放行同源与 blob:', /media-src 'self' blob:;/.test(html) && !/media-src[^;]*(https?|data:|\*)/.test(html));
 // 留言上墙本机副本同理：只能经具名常量 GUEST_KEY 使用，取值钉死
 check('留言存储键 GUEST_KEY 写死为 ct2_guest', /const GUEST_KEY='ct2_guest'/.test(html));
 // 世界图鉴解锁同理：只能经具名常量 CODEX_KEY 使用，取值钉死
 check('图鉴存储键 CODEX_KEY 写死为 ct2_codex', /const CODEX_KEY='ct2_codex'/.test(html));
+check('场景中枢存储键 SCENE_KEY 写死为 ct2_scene', /const SCENE_KEY='ct2_scene'/.test(html));
 // 成就徽章解锁同理：只能经具名常量 ACH_KEY 使用，取值钉死
 check('成就存储键 ACH_KEY 写死为 ct2_ach', /const ACH_KEY='ct2_ach'/.test(html));
 

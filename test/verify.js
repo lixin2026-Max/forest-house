@@ -174,7 +174,8 @@ test('MOBILE 旋转后触摸拖动方向已补偿', ()=>{
 });
 test('MOBILE 性能降档生效（阴影/实例数量）', ()=>{
     must(/mapSize\.set\(IS_MOBILE\?1024:2048/.test(inlineJs),'阴影分辨率未降档');
-    must(/IS_MOBILE\?140:260/.test(inlineJs),'草地实例未降档');
+    // #73 起草地降档走 GRASS_CFG 双档（grassTierAuto：移动端/低画质 → lite 档实例数）
+    must(/function grassTierAuto\(\)\{\s*return \(IS_MOBILE \|\|/.test(inlineJs),'草地实例未降档');
 });
 
 // ---------- AC9: 部署与端侧判定 ----------
@@ -203,11 +204,14 @@ test('模块有统一挂载/更新钩子', ()=>{
     must(/setupModules\(\);/.test(inlineJs), 'init() 未调用 setupModules()');
     must(/updateModules\(dt, ?t\);/.test(inlineJs), 'animate() 未调用 updateModules()');
 });
-test('BGM 按天气换音阶，且不加载任何音频文件', ()=>{
+test('BGM 按天气换音阶，音频文件只许站内内置主题曲一份', ()=>{
     must(/BGM_SCALE\s*=\s*\{/.test(inlineJs), '缺少按天气的音阶表');
     ['sunny','golden','mist','night','rain'].forEach(m =>
         must(new RegExp(m + '\\s*:\\s*\\[').test(inlineJs), '音阶表缺少 ' + m));
-    must(!/\.(mp3|ogg|wav|m4a)(\?|"|')/i.test(html), '不应引用音频文件');
+    // 程序化 BGM 本体仍不加载文件；全页只许引用内置主题曲这一份同源音频
+    const audioRefs = html.match(/[\w./-]+\.(?:mp3|ogg|wav|m4a)/gi) || [];
+    must(audioRefs.length > 0 && audioRefs.every(r => r === 'assets/audio/chumen-theme.mp3'),
+        '引用了主题曲之外的音频文件：' + audioRefs.join(', '));
 });
 test('音频有总静音开关，且默认静音（不打扰打开者）', ()=>{
     must(/id="muteBtn"/.test(html), '缺少静音按钮');
@@ -297,12 +301,12 @@ test('FB 提交：先复制兜底，再只回传到白名单地址', ()=>{    mu
     const outside = abs.filter(u => !/^https:\/\/formsubmit\.co\//.test(u));
     must(outside.length===0,'出现白名单外的绝对 URL：'+outside.join(', '));
     must(!/XMLHttpRequest|sendBeacon|WebSocket/.test(inlineJs),'出现其他网络通道');
-    // 全页只允许十三个具名本地键：ct2_visits（访问计数）、ct2_hunt（寻宝进度）、ct2_help（帮助已提示标记）、ct2_farm（种田存档）、ct2_vote（投票已投标记）、ct2_theme（界面深浅主题偏好）、ct2_echo（建议回音回执）、ct2_bag（小龙背包与喂食计数）、ct2_dragon（小龙自定义外观与个性）、ct2_codex（图鉴解锁集合）、ct2_guest（留言上墙本机副本）、ct2_music（自定义音乐偏好与歌名）与 ct2_ach（成就徽章解锁集合与日期），都不上传
+    // 全页只允许十四个具名本地键：ct2_visits（访问计数）、ct2_hunt（寻宝进度）、ct2_help（帮助已提示标记）、ct2_farm（种田存档）、ct2_vote（投票已投标记）、ct2_theme（界面深浅主题偏好）、ct2_echo（建议回音回执）、ct2_bag（小龙背包与喂食计数）、ct2_dragon（小龙自定义外观与个性）、ct2_codex（图鉴解锁集合）、ct2_guest（留言上墙本机副本）、ct2_music（自定义音乐偏好与歌名）、ct2_scene（场景中枢画质总档与渲染参数偏好）与 ct2_ach（成就徽章解锁集合与日期），都不上传
     must(!/sessionStorage|document\.cookie/.test(inlineJs),'出现未授权的存储');
     const lsKeys = [...inlineJs.matchAll(/localStorage\.(?:getItem|setItem)\('([^']+)'/g)].map(m=>m[1]);
-    const badKeys = lsKeys.filter(k => k !== 'ct2_visits' && k !== 'ct2_hunt' && k !== 'ct2_help' && k !== 'ct2_farm' && k !== 'ct2_vote' && k !== 'ct2_theme' && k !== 'ct2_echo' && k !== 'ct2_bag' && k !== 'ct2_dragon' && k !== 'ct2_codex' && k !== 'ct2_guest' && k !== 'ct2_music' && k !== 'ct2_ach');
+    const badKeys = lsKeys.filter(k => k !== 'ct2_visits' && k !== 'ct2_hunt' && k !== 'ct2_help' && k !== 'ct2_farm' && k !== 'ct2_vote' && k !== 'ct2_theme' && k !== 'ct2_echo' && k !== 'ct2_bag' && k !== 'ct2_dragon' && k !== 'ct2_codex' && k !== 'ct2_guest' && k !== 'ct2_music' && k !== 'ct2_scene' && k !== 'ct2_ach');
     must(badKeys.length===0,'出现未授权的本地存储键：'+badKeys.join(', '));
-    // 动态键只允许具名常量 HUNT_KEY / HELP_KEY / FARM_KEY / VOTE_KEY / THEME_KEY / ECHO_KEY / BAG_KEY / DRAGON_KEY / CODEX_KEY / GUEST_KEY / MUSIC_KEY / ACH_KEY，且它们的取值必须写死
+    // 动态键只允许具名常量 HUNT_KEY / HELP_KEY / FARM_KEY / VOTE_KEY / THEME_KEY / ECHO_KEY / BAG_KEY / DRAGON_KEY / CODEX_KEY / GUEST_KEY / MUSIC_KEY / SCENE_KEY / ACH_KEY，且它们的取值必须写死
     must(/const HUNT_KEY='ct2_hunt'/.test(inlineJs),'HUNT_KEY 必须写死为 ct2_hunt');
     must(/const HELP_KEY='ct2_help'/.test(inlineJs),'HELP_KEY 必须写死为 ct2_help');
     must(/const FARM_KEY='ct2_farm'/.test(inlineJs),'FARM_KEY 必须写死为 ct2_farm');
@@ -314,8 +318,9 @@ test('FB 提交：先复制兜底，再只回传到白名单地址', ()=>{    mu
     must(/const GUEST_KEY='ct2_guest'/.test(inlineJs),'GUEST_KEY 必须写死为 ct2_guest');
     must(/const CODEX_KEY='ct2_codex'/.test(inlineJs),'CODEX_KEY 必须写死为 ct2_codex');
     must(/const MUSIC_KEY='ct2_music'/.test(inlineJs),'MUSIC_KEY 必须写死为 ct2_music');
+    must(/const SCENE_KEY='ct2_scene'/.test(inlineJs),'SCENE_KEY 必须写死为 ct2_scene');
     must(/const ACH_KEY='ct2_ach'/.test(inlineJs),'ACH_KEY 必须写死为 ct2_ach');
-    must(!/localStorage\.(?:getItem|setItem)\((?!'ct2_visits'|HUNT_KEY|HELP_KEY|FARM_KEY|VOTE_KEY|THEME_KEY|ECHO_KEY|BAG_KEY|DRAGON_KEY|CODEX_KEY|GUEST_KEY|MUSIC_KEY|ACH_KEY)/.test(inlineJs),'存在动态拼接的存储键');
+    must(!/localStorage\.(?:getItem|setItem)\((?!'ct2_visits'|HUNT_KEY|HELP_KEY|FARM_KEY|VOTE_KEY|THEME_KEY|ECHO_KEY|BAG_KEY|DRAGON_KEY|CODEX_KEY|GUEST_KEY|MUSIC_KEY|SCENE_KEY|ACH_KEY)/.test(inlineJs),'存在动态拼接的存储键');
     // 顺序保证：先复制，后发送
     const iCopy = inlineJs.indexOf('copyToClipboard(text).then(');
     const iSend = inlineJs.indexOf('sendFeedback({');
@@ -453,7 +458,7 @@ test('自定义音乐：本地文件 BGM、独立通道、偏好只存歌名（I
     must(/id="musList"/.test(html),'缺播放列表容器');
     // 文件只在本机内存里播：对象 URL 播放，偏好只存音量/循环/歌名
     must(/URL\.createObjectURL/.test(inlineJs),'未用对象 URL 本机播放');
-    must(/media-src blob:;/.test(html),'CSP 未给 blob 媒体开本机口子');
+    must(/media-src 'self' blob:;/.test(html),'CSP 未给同源主题曲与 blob 媒体开口子');
     must(/store\.music\.save\(\{\s*vol:/.test(inlineJs) && /names:/.test(inlineJs),'偏好未按 vol/loop/names 存');
     // 自选音乐在播时程序化 BGM 必须让行（不叠音打架）
     must(/FEAT\.bgm\.on && !musicCustomActive\(\)/.test(inlineJs),'audioTick 未给自选音乐让行');
@@ -515,6 +520,30 @@ test('全局模块：分享链接 / 弱网低画质 / 版本日志 / 免责声�
     must(/dprCur=1;/.test(inlineJs), '低画质未降到 1 倍像素比');
     must(/const VERSIONS = \[/.test(inlineJs) && /id="mpVer"/.test(html), '缺版本日志');
     must(/class="mpDisclaimer"/.test(html), '缺共创免责声明');
+});
+
+// ---------- v5.1 网页版保底可玩 ----------
+test('v5.1 裸探针：标准 getContext 阶梯＋逐格全新 canvas＋活 context 交接', ()=>{
+    must(/function probeGL\(\)/.test(inlineJs), '缺少 probeGL');
+    must(/'webgl2'/.test(inlineJs) && /'experimental-webgl'/.test(inlineJs), '探针类型阶梯不全（需 webgl2/webgl/experimental-webgl）');
+    must(/document\.createElement\('canvas'\)/.test(inlineJs), '探针未逐格新建 canvas');
+    must(/context:\s*probe\.ctx/.test(inlineJs), '未把探针的活 context 交给引擎');
+    must(/__probeForceFail/.test(inlineJs) && /__probeFakeRenderer/.test(inlineJs), '缺少探针验收钩子');
+    must(/UNMASKED_RENDERER_WEBGL/.test(inlineJs), '未读渲染器字符串做软件渲染识别');
+});
+
+test('v5.1 弱环境直接保命＋弱 UA 首访低配（有存档不覆盖）', ()=>{
+    must(/probe\.weak && glSafeLv\(\) < 2/.test(inlineJs), '缺少探针弱判定直接保命起步');
+    must(/__hadSceneSave/.test(inlineJs), '缺少新鲜档案标记 __hadSceneSave');
+    must(/!window\.__hadSceneSave && weakWebUA\(\)/.test(inlineJs), '弱 UA 低配起步未以无存档为前提');
+});
+
+test('v5.1 致命层：下载 App 主按钮＋刷新重试，无 Chrome 主推', ()=>{
+    must(/dl\.href='download\.html'/.test(inlineJs), '致命层缺下载 App 按钮（相对路径 download.html）');
+    must(/下载 App 玩/.test(inlineJs), '致命层缺「下载 App 玩」文案');
+    must(/刷新重试/.test(inlineJs), '致命层缺刷新重试按钮');
+    must(!/建议用 Chrome/.test(inlineJs), '仍残留「建议用 Chrome」主推文案');
+    must(/#error \.fbtns/.test(html), '缺致命层按钮区样式');
 });
 
 console.log('\n====================');
