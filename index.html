@@ -16660,7 +16660,7 @@ const CHANGELOG_NOTES = [
     ]}
 ];
 
-let logOpen = false, logCur = 0;
+let logOpen = false, logCur = 0, logDeferTimer = null, logDeferNeedsEntry = null;
 function renderLog(){
     const body = document.getElementById('logBody');
     const tabs = document.getElementById('logTabs');
@@ -16693,6 +16693,7 @@ function renderLog(){
 }
 function openLog(){
     if(logOpen) return;
+    if(logDeferTimer){ clearInterval(logDeferTimer); logDeferTimer = null; }   // 任何途径打开都作数：撤销待弹的顺延，免得关掉又自己弹回来
     logOpen = true;
     logCur = 0;                       // 每次打开都先定位当前版本
     renderLog();
@@ -16707,6 +16708,52 @@ function closeLog(){
     document.getElementById('logMask').classList.remove('on');
     musicEnterWorld();   // 关掉日志＝进世界：默认歌单时主题曲借这次手势起播（只认第一次）
     if(typeof enterImmersive === 'function') enterImmersive();   // #96：同一次手势里请求全屏＋锁横屏（失败静默）
+}
+/* 开页自动弹日志的前置守卫（层叠竞态修复）：日志的延迟开场（+450ms）比化身卡的
+   出场轮询（400ms 一探、只认日志「已开」）慢半拍——新玩家会先开化身卡，日志随后
+   开在卡的下层（z 134 < 化身/视角卡 136 < 龙蛋卡 140），按钮被盖住点不到，
+   进入轮询又被 logOpen 卡住，只能干等安全阀。故自动开场先过这道守卫：
+   任一前置卡正开着、龙蛋序章进行中（蛋在窝里 / 正在破壳），或进入流程的
+   前置条件还没走完（化身未选 / 蛋未孵 / 视角未选——与 setupEntryFlow 的
+   进世界条件同一口径），都顺延；条件是单向落盘的（选过的卡同步落盘才关），
+   守卫一旦放行就不会再有卡后来居上，不留「卡与卡之间」的竞态缝。顺延期间
+   logOpen 仍为假，进入流程不被挡，玩家进世界后日志补弹在世界之上，关掉即玩。
+   老玩家存档里三项前置都是齐的，守卫直接放行，开页时序与从前一字不变。
+   手动从面板点开日志不走守卫（玩家自己点的，不算抢层）。 */
+function logFrontBlocked(){
+    if(typeof avOpen !== 'undefined' && avOpen) return true;
+    if(typeof viewOpen !== 'undefined' && viewOpen) return true;
+    const ids = ['avatarMask', 'viewMask', 'eggMask'];
+    for(let i = 0; i < ids.length; i++){
+        const el = document.getElementById(ids[i]);
+        if(el && el.classList.contains('on')) return true;
+    }
+    if(typeof eggMode !== 'undefined' && (eggMode === 'egg' || eggMode === 'hatching')) return true;
+    if(typeof dragonCfg !== 'undefined' && dragonCfg){
+        if(!(dragonCfg.avatar && dragonCfg.avatar.chosen)) return true;
+        if(!(dragonCfg.view && dragonCfg.view.chosen)) return true;
+        if(typeof dragonHatched === 'function' && !dragonHatched()) return true;
+    }
+    return false;
+}
+function openLogDeferred(){
+    if(logOpen) return;
+    /* 安排开场的这一刻先给前置进度拍个快照：已经齐全的是老玩家，照旧直接弹；
+       没齐的是新玩家流程——前置刚走完的那一拍，日志与进世界轮询（同为 400ms）
+       还会抢跑道（日志先开则 logOpen 又把出生挡在门外），故新玩家一律等
+       enteredWorld 落地后再补弹，两条路径各自确定，不再抛硬币。 */
+    if(logDeferNeedsEntry === null) logDeferNeedsEntry = logFrontBlocked();
+    const blockedNow = function(){
+        if(logFrontBlocked()) return true;
+        if(logDeferNeedsEntry && !(typeof enteredWorld !== 'undefined' && enteredWorld)) return true;
+        return false;
+    };
+    if(!blockedNow()){ openLog(); return; }
+    if(logDeferTimer) return;
+    logDeferTimer = setInterval(function(){
+        if(logOpen){ clearInterval(logDeferTimer); logDeferTimer = null; return; }
+        if(!blockedNow()){ clearInterval(logDeferTimer); logDeferTimer = null; openLog(); }
+    }, 400);
 }
 function setupChangelog(){
     const mask = document.getElementById('logMask');
@@ -16730,7 +16777,7 @@ function setupChangelog(){
         const dead = boot.style.display === 'none' && !gone;
         if(gone){
             clearInterval(wait);
-            if(!window.__preLogShown) setTimeout(openLog, 450);   // 三轮：安全模式推迟 init 时面板已在点「开始游玩」前展示过，init 后不再重复弹
+            if(!window.__preLogShown) setTimeout(openLogDeferred, 450);   // 三轮：安全模式推迟 init 时面板已在点「开始游玩」前展示过，init 后不再重复弹；开场先过前置守卫（logFrontBlocked），不开在化身卡下层
         }else if(dead || waited >= 15000){
             clearInterval(wait);
         }
