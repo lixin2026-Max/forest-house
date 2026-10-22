@@ -508,6 +508,30 @@ test('全局模块：分享链接 / 弱网低画质 / 版本日志 / 免责声�
     must(/class="mpDisclaimer"/.test(html), '缺共创免责声明');
 });
 
+// ---------- v5.1 网页版保底可玩 ----------
+test('v5.1 裸探针：标准 getContext 阶梯＋逐格全新 canvas＋活 context 交接', ()=>{
+    must(/function probeGL\(\)/.test(inlineJs), '缺少 probeGL');
+    must(/'webgl2'/.test(inlineJs) && /'experimental-webgl'/.test(inlineJs), '探针类型阶梯不全（需 webgl2/webgl/experimental-webgl）');
+    must(/document\.createElement\('canvas'\)/.test(inlineJs), '探针未逐格新建 canvas');
+    must(/context:\s*probe\.ctx/.test(inlineJs), '未把探针的活 context 交给引擎');
+    must(/__probeForceFail/.test(inlineJs) && /__probeFakeRenderer/.test(inlineJs), '缺少探针验收钩子');
+    must(/UNMASKED_RENDERER_WEBGL/.test(inlineJs), '未读渲染器字符串做软件渲染识别');
+});
+
+test('v5.1 弱环境直接保命＋弱 UA 首访低配（有存档不覆盖）', ()=>{
+    must(/probe\.weak && glSafeLv\(\) < 2/.test(inlineJs), '缺少探针弱判定直接保命起步');
+    must(/__hadSceneSave/.test(inlineJs), '缺少新鲜档案标记 __hadSceneSave');
+    must(/!window\.__hadSceneSave && weakWebUA\(\)/.test(inlineJs), '弱 UA 低配起步未以无存档为前提');
+});
+
+test('v5.1 致命层：下载 App 主按钮＋刷新重试，无 Chrome 主推', ()=>{
+    must(/dl\.href='download\.html'/.test(inlineJs), '致命层缺下载 App 按钮（相对路径 download.html）');
+    must(/下载 App 玩/.test(inlineJs), '致命层缺「下载 App 玩」文案');
+    must(/刷新重试/.test(inlineJs), '致命层缺刷新重试按钮');
+    must(!/建议用 Chrome/.test(inlineJs), '仍残留「建议用 Chrome」主推文案');
+    must(/#error \.fbtns/.test(html), '缺致命层按钮区样式');
+});
+
 console.log('\n====================');
 console.log(`Results: ${passed} passed, ${failed} failed`);
 process.exit(failed>0 ? 1 : 0);
