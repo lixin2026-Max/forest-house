@@ -194,8 +194,8 @@ test('GitHub Pages 需要的 .nojekyll 存在', ()=>{
 });
 
 // ---------- AC10: 可插拔功能模块 ----------
-test('功能注册表齐备（7 个可独立开关的模块）', ()=>{
-    ['bgm','ambience','particles','views','interact','daynight','tone','roam']
+test('功能注册表齐备（可独立开关的模块）', ()=>{
+    ['bgm','ambience','particles','interact','daynight','tone','roam']
         .forEach(k => must(new RegExp(k + ':\\s*\\{\\s*on:(true|false)').test(inlineJs), '缺少功能开关 ' + k));
 });
 test('模块有统一挂载/更新钩子', ()=>{
@@ -224,11 +224,12 @@ test('门与篝火可点击（门有名字，可被 raycast 命中）', ()=>{
     must(/function onSceneTap\(ev\)/.test(inlineJs), '缺少点击命中处理');
     must(/function buildCampfire\(\)/.test(inlineJs), '缺少篝火');
 });
-test('自动漫游是可选彩蛋（默认关，拖动即让位）', ()=>{
+test('自动漫游是可选彩蛋（默认关，移动输入即让位）', ()=>{
     must(/roam:\s*\{\s*on:false/.test(inlineJs), '漫游应默认关闭');
-    must(/function updateRoam\(dt\)/.test(inlineJs), '缺少 updateRoam()');
-    must(/updateRoam\(dt\);/.test(inlineJs), 'updateModules 未调用 updateRoam()');
-    must(/if\(FEAT\.roam\.on\)\{ FEAT\.roam\.on = false/.test(inlineJs), '拖动时应自动退出漫游');
+    must(/function updateAvatarRoam\(dt\)/.test(inlineJs), '缺少 updateAvatarRoam()（#100 化身漫游）');
+    must(/updateAvatarRoam\(dt\);/.test(inlineJs), 'updateModules 未调用 updateAvatarRoam()');
+    must(/function stopAvatarRoam\(\)/.test(inlineJs), '缺少 stopAvatarRoam()（玩家接管）');
+    must(/stopAvatarRoam\(\);   \/\/ #100：玩家一动手/.test(inlineJs), '手动移动时应自动退出漫游');
 });
 test('自适应分辨率（掉帧降像素比、流畅再升回）', ()=>{
     must(/function perfTick\(dt\)/.test(inlineJs), '缺少 perfTick()');
@@ -544,6 +545,43 @@ test('v5.1 致命层：下载 App 主按钮＋刷新重试，无 Chrome 主推',
     must(/刷新重试/.test(inlineJs), '致命层缺刷新重试按钮');
     must(!/建议用 Chrome/.test(inlineJs), '仍残留「建议用 Chrome」主推文案');
     must(/#error \.fbtns/.test(html), '缺致命层按钮区样式');
+});
+
+// ---------- v5.1 #100 视角体系改版 ----------
+test('v5.1 #100 上帝/环绕观看入口已清除（巡游/锁定开关、预设视角面板）', ()=>{
+    must(!/id="orbitChk"/.test(html), '仍残留自动巡游开关 orbitChk');
+    must(!/id="lockChk"/.test(html), '仍残留视角锁定开关 lockChk');
+    must(!/id="mpViews"/.test(html), '仍残留预设视角面板 mpViews');
+    must(!/id="lockRow"/.test(html), '仍残留视角锁定行 lockRow');
+    must(!/wx\.orbit/.test(inlineJs), '仍残留 wx.orbit 巡游状态引用');
+    must(!/function setViewLock\(/.test(inlineJs), '仍残留 setViewLock 定义');
+    must(!/views:\s*\{ on:/.test(inlineJs), '仍残留 FEAT.views 预设视角模块');
+});
+
+test('v5.1 #100 视角选择卡＋选择落盘 ct2_dragon.view（不新增键）', ()=>{
+    must(/id="viewMask"/.test(html), '缺视角选择卡 viewMask');
+    must(/data-vw="fp"/.test(html) && /data-vw="tp"/.test(html), '视角卡缺第一/第三人称两张卡');
+    must(/function drgViewNormalize\(/.test(inlineJs), '缺视角字段规整 drgViewNormalize');
+    must(/function openViewCard\(/.test(inlineJs) && /function chooseView\(/.test(inlineJs), '缺视角卡开关/选择函数');
+    must(/c\.view = drgViewNormalize\(/.test(inlineJs), 'drgLoadCfg 未接入 view 字段');
+});
+
+test('v5.1 #100 探索者出生＋传送＋化身漫游', ()=>{
+    must(/function setupEntryFlow\(/.test(inlineJs), '缺进入流程 setupEntryFlow');
+    must(/function avatarTeleportTo\(/.test(inlineJs), '缺化身传送 avatarTeleportTo');
+    must(/function avatarGoHome\(/.test(inlineJs), '缺回出生点 avatarGoHome');
+    must(/function updateAvatarRoam\(/.test(inlineJs), '缺化身自动漫游 updateAvatarRoam');
+    must(/function stopAvatarRoam\(/.test(inlineJs), '缺漫游接管 stopAvatarRoam');
+    must(/avatarSpawnPoint\(\)/.test(inlineJs), '缺出生点 avatarSpawnPoint');
+    must(/houseLocal\(-0\.65, 9\.5\)/.test(inlineJs), '出生点未锚在小屋门口（门前石板路、房子禁行圈外）');
+});
+
+test('v5.1 #100 回音传送＋拍照自由镜头为唯一例外', ()=>{
+    must(/function echoFlyTo\(/.test(inlineJs) && /avatarTeleportTo\(pos\.x, pos\.z/.test(inlineJs), '回音未改化身传送');
+    must(!/echoHomeView/.test(inlineJs), '仍残留旧镜头存档 echoHomeView');
+    must(/function photoSuspendExplorer\(/.test(inlineJs), '拍照模式缺探索者让位');
+    must(/function photoResumeExplorer\(/.test(inlineJs), '拍照模式缺探索者归位（人称还原）');
+    must(/setView\(theta,phi,radius\)/.test(inlineJs), '轨道相机缺 setView（拍照接手用）');
 });
 
 console.log('\n====================');

@@ -202,11 +202,6 @@
     #fbMsg{margin-top:9px;font-size:12px;color:var(--ok);min-height:17px;line-height:1.5}
     #fbMsg.err{color:var(--err)}
 
-    /* ===== 视角锁定（顶栏开关行，开启时整行点亮、一眼可辨） ===== */
-    #lockRow input{accent-color:#e2703a;width:16px;height:16px;cursor:pointer}
-    #lockRow.on label{color:var(--accent);font-weight:600}
-    #lockRow.on b{color:var(--lock-b)}
-
     /* ===== 操作帮助（入口 / 弹窗 / 首次轻提示） ===== */
     #helpBtn{width:100%;margin-top:9px;background:var(--ghost);border:1px solid var(--ghost-line);
         color:var(--ghost-txt);padding:7px 4px;border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit;transition:.15s}
@@ -358,15 +353,15 @@
     }
 
     /* ===== 小龙少女化身（Issue #79）：首次选择卡，与定制弹窗同题 ===== */
-    #avatarMask{display:none;position:absolute;inset:0;z-index:136;
+    #avatarMask,#viewMask{display:none;position:absolute;inset:0;z-index:136;
         background:var(--mask);backdrop-filter:blur(2px);
         align-items:center;justify-content:center;padding:16px}
-    #avatarMask.on{display:flex}
-    #avatarBox{width:470px;max-width:100%;max-height:100%;overflow:auto;
+    #avatarMask.on,#viewMask.on{display:flex}
+    #avatarBox,#viewBox{width:470px;max-width:100%;max-height:100%;overflow:auto;
         background:var(--dlg);color:var(--dlg-txt);border:1px solid var(--dlg-line);
         border-radius:14px;padding:16px 18px;box-shadow:var(--dlg-shadow);font-size:13px}
-    #avatarBox h4{margin:0 0 4px;font-size:15px;color:var(--dlg-h)}
-    #avatarBox p.sub{margin:0 0 10px;font-size:11.5px;color:var(--dlg-sub);line-height:1.5}
+    #avatarBox h4,#viewBox h4{margin:0 0 4px;font-size:15px;color:var(--dlg-h)}
+    #avatarBox p.sub,#viewBox p.sub{margin:0 0 10px;font-size:11.5px;color:var(--dlg-sub);line-height:1.5}
     .avGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:4px 0 6px}
     .avCard{font-family:inherit;text-align:left;padding:11px 12px;border-radius:11px;cursor:pointer;
         border:1px solid var(--line-soft);background:var(--tab-bg);color:var(--soft-txt);transition:background .15s}
@@ -374,8 +369,8 @@
     .avCard .avT{font-size:13.5px;font-weight:600;color:var(--dlg-txt);display:block;margin-bottom:3px}
     .avCard .avD{font-size:11.5px;line-height:1.5;color:var(--note);display:block}
     @media (max-width:600px),(pointer:coarse){
-        #avatarBox{padding:13px 14px}
-        #avatarMask{padding:env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+        #avatarBox,#viewBox{padding:13px 14px}
+        #avatarMask,#viewMask{padding:env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
                         env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px)}
     }
 
@@ -791,7 +786,7 @@
     #app.photo-on #joy,#app.photo-on #roomBar,#app.photo-on #modBtn,#app.photo-on #modPanel,
     #app.photo-on #fbBtn,#app.photo-on #lanternBtn,#app.photo-on #wakeBtn,#app.photo-on #echoHomeBtn,
     #app.photo-on #fbMask,#app.photo-on #ltMask,#app.photo-on #helpMask,#app.photo-on #voteMask,
-    #app.photo-on #logMask,#app.photo-on #dragonMask,#app.photo-on #avatarMask,#app.photo-on #echoMask,#app.photo-on #codexMask,#app.photo-on #achMask,
+    #app.photo-on #logMask,#app.photo-on #dragonMask,#app.photo-on #avatarMask,#app.photo-on #viewMask,#app.photo-on #echoMask,#app.photo-on #codexMask,#app.photo-on #achMask,
     #app.photo-on #gbMask,#app.photo-on #chronMask,#app.photo-on #huntToast,#app.photo-on #helpTip,#app.photo-on #appBar,
     #app.photo-on #wishBubble,#app.photo-on #sdBubble,#app.photo-on #codexToast,#app.photo-on #achToast{display:none !important}
     #photoUI{display:none;position:absolute;inset:0;z-index:140;pointer-events:none}
@@ -880,13 +875,11 @@
 <div id="scene"></div>
 <div id="ui">
     <h3>🌍 楚门的2.0世界</h3>
-    <div class="hint"><span class="mouse">鼠标拖拽旋转 ｜ 滚轮缩放 ｜ T 键切换天气 ｜ P 键切换自动巡游</span><span class="touch">单指拖动旋转 ｜ 双指捏合缩放 ｜ 点按钮切换天气</span></div>
+    <div class="hint"><span class="mouse">WASD / 方向键移动 ｜ 鼠标拖动转视角 ｜ V 键切换第一 / 第三人称 ｜ T 键切换天气 ｜ P 键自动漫游</span><span class="touch">左侧摇杆移动 ｜ 单指拖动转视角 ｜ 点按钮切换天气</span></div>
     <div class="wbtns" id="wbtns"></div>
     <div class="row"><label>太阳高度角</label><input type="range" id="sunElev" min="3" max="80" value="45"><b id="sunElevV">45°</b></div>
     <div class="row"><label>雾气浓度</label><input type="range" id="fogAmt" min="0" max="100" value="0"><b id="fogAmtV">0%</b></div>
-    <div class="row"><label>自动巡游</label><input type="checkbox" id="orbitChk"><b id="orbitV">关</b></div>
     <div class="row"><label>自动轮转</label><input type="checkbox" id="autoRotChk" checked><b id="autoRotV">开</b></div>
-    <div class="row" id="lockRow"><label>视角锁定</label><input type="checkbox" id="lockChk"><b id="lockV">关</b></div>
     <button type="button" id="helpBtn">❓ 操作帮助</button>
     <div class="uiBtns">
         <button type="button" id="snapBtn">📸 快照存图</button>
@@ -905,7 +898,7 @@
 </div>
 <div id="status">初始化中…</div>
 <div id="dragonBar">
-    <button type="button" id="dragonBtn">🐉 操控小龙</button>
+    <button type="button" id="dragonBtn">🏠 回小屋门口</button>
     <button type="button" id="viewBtn" style="display:none">👁️ 第三人称</button>
     <button type="button" id="dragonCustomBtn">🎨 定制小龙</button>
     <button type="button" id="actBtn">🤚 互动</button>
@@ -971,9 +964,6 @@
     <div class="mpSep"></div>
     <div class="mpSub">功能开关</div>
     <div class="mpList" id="mpList"></div>
-    <div class="mpSep"></div>
-    <div class="mpSub">视角</div>
-    <div class="mpViews" id="mpViews"></div>
     <div class="mpSep"></div>
     <div class="mpSub">色调氛围</div>
     <div class="mpTones" id="mpTones"></div>
@@ -1128,15 +1118,15 @@
             <button type="button" class="dlgX" id="helpX" aria-label="关闭">✕</button>
         </div>
         <p class="sub">这个小世界能玩的东西都在这儿了，慢慢逛。</p>
-        <div class="hrow"><b>旋转视角</b><span>单指或鼠标拖动画面</span></div>
-        <div class="hrow"><b>缩放远近</b><span>双指捏合，或滚动鼠标滚轮</span></div>
+        <div class="hrow"><b>移动</b><span>电脑用 WASD / 方向键（Shift 加速），手机用左侧摇杆；也可以点一下地面，它自己走过去</span></div>
+        <div class="hrow"><b>转视角</b><span>单指或鼠标拖动画面；第三人称时滚轮（或双指捏合）拉近拉远</span></div>
+        <div class="hrow"><b>第一 / 第三人称</b><span>按 V 键或点底部「👁️」按钮切换：第一人称是它的眼睛，第三人称站在它身后；切换时视线不跳。进世界时选过的人称会被记住，下次默认还是它</span></div>
         <div class="hrow"><b>切换天气</b><span>顶栏天气按钮，或按 T 键：晴天、雾天、夜间、雨天、金色时刻</span></div>
         <div class="hrow"><b>太阳与雾气</b><span>顶栏两条滑杆，拖动即时生效</span></div>
-        <div class="hrow"><b>自动巡游</b><span>顶栏开关，或按 P 键，镜头自己慢慢环游</span></div>
+        <div class="hrow"><b>自动漫游</b><span>齿轮面板里的功能开关，或按 P 键：它自己沿着小屋周围慢慢散步，你一操作移动就停下交还给你</span></div>
         <div class="hrow"><b>自动轮转</b><span>顶栏开关，每 10 分钟自动换一次天气；你手动选天气或拖了滑杆，它会自动让位关掉，想恢复再把开关打开</span></div>
-        <div class="hrow"><b>视角锁定</b><span>顶栏开关，锁住后拖动与巡游都不动镜头（缩放仍可用）</span></div>
         <div class="hrow"><b>敲门</b><span>点小屋的门：先轻敲两下，门会朝外打开透出暖光</span></div>
-        <div class="hrow"><b>进屋看看</b><span>门开着时点门洞里的暖光、或点门口出现的「进屋看看」按钮，就能进屋参观（拖动环视、点地面走动）；操控小龙时走近门口，按钮会带它一起进屋。屋里点门或按「回到院子」出来</span></div>
+        <div class="hrow"><b>进屋看看</b><span>走近门口点出现的「进屋看看」按钮、或门开着时点门洞里的暖光，就带着它一起进屋（屋里拖动环视、点地面走动）；点门或按「回到院子」出来</span></div>
         <div class="hrow"><b>留言墙</b><span>屋里墙上贴着留言墙和大事记板：你写过的意见会变成小纸条贴在墙上（点开能看全文，自己写的还能撕下来），负责人精选的留言也会贴上来；大事记板记着这个世界一路长过来的大日子，齿轮面板里也能翻全本</span></div>
         <div class="hrow"><b>小龙互动</b><span>点小龙、或点底部「🤚 互动」：可以摸头、打招呼、让它转圈。收获的南瓜和玉米会进背包，用背包里的食物喂它，它会自己走过去吃；吃饱后它会开心地跟着你玩一阵（状态栏能看背包和喂食次数）</span></div>
         <div class="hrow"><b>小龙定制</b><span>底部「🎨 定制小龙」：给它改名字、性别、体色花纹、角和翅膀的样式，再配上围巾、铃铛、草帽这些小配饰，还能选性格（好奇 / 活泼 / 慵懒，散步和作息都不一样）；还能切换化身形态——小龙本体，或小龙少女的三款造型。改动立刻生效，都只存本机</span></div>
@@ -1144,7 +1134,7 @@
         <div class="hrow"><b>每日寻宝</b><span>每天藏 5 件小物（橡果、蘑菇、羽毛、松果、彩蛋），走近点中即收集，集齐有祝贺</span></div>
         <div class="hrow"><b>种田</b><span>点农田里空着的地块播种，再点一下浇水（雨天自动浇），等昼夜轮转一圈、或到了第二天成熟后，再点一下收获</span></div>
         <div class="hrow"><b>快照存图</b><span>顶栏「📸 快照存图」，把当前画面（连天气和昼夜）存成图片下载到本机</span></div>
-        <div class="hrow"><b>拍照模式</b><span>顶栏「📷 拍照模式」：藏起全部界面专心取景，三分法参考线可开关、色调可切换，点中间的快门存图（文件名带 photo），Esc 或「✕ 退出」回到世界</span></div>
+        <div class="hrow"><b>拍照模式</b><span>顶栏「📷 拍照模式」：暂时放下化身、改用自由镜头取景（只有在拍照模式里能这样飞），藏起全部界面，三分法参考线可开关、色调可切换，点中间的快门存图（文件名带 photo），Esc 或「✕ 退出」自动回到化身视角</span></div>
         <div class="hrow"><b>投票选点子</b><span>顶栏「🗳️ 投票选点子」，给最想要的新点子投票，一台设备一票，票数定期公布</span></div>
         <div class="hrow"><b>世界图鉴</b><span>顶栏「📖 世界图鉴」：真正在世界里见过、种过、找到过的东西才会被记进图鉴，灰色条目旁有发现它的线索；集齐整本有纪念徽章</span></div>
         <div class="hrow"><b>放河灯</b><span>左下角「🏮 放河灯」，写一句愿望，让它在湖上漂一会儿</span></div>
@@ -1153,7 +1143,7 @@
         <div class="hrow"><b>玩家立牌</b><span>世界里站着的小人/小动物是玩家投稿、负责人审核后放进来的访客，点一点能看它的名字和自我介绍；你也来投稿的话，在「💬 优化意见」里把分类选成「立牌投稿」</span></div>
         <div class="hrow"><b>节日彩蛋</b><span>逢年过节（还有小龙的诞生日），世界会自己换上应景的小装扮：灯笼、河灯、圣诞树、气球……小龙也会戴上节日小配饰，节日过了自动收好</span></div>
         <div class="hrow"><b>界面隐藏</b><span>顶栏与底栏停手 3 秒会自动隐藏，点屏幕右缘的小圆钮可以唤回</span></div>
-        <div class="hrow"><b>更多设置</b><span>右下角齿轮里有功能开关、预设视角、色调、声音与我的音乐，还有版本日志、世界大事记和建议回音（凭回执码查建议状态）</span></div>
+        <div class="hrow"><b>更多设置</b><span>右下角齿轮里有功能开关、色调、声音与我的音乐，还有版本日志、世界大事记和建议回音（凭回执码查建议状态）</span></div>
         <div id="helpRow">
             <button type="button" class="primary" id="helpOk">知道啦</button>
             <button type="button" class="ghost" id="helpClose">关闭</button>
@@ -1282,6 +1272,25 @@
         <p class="sub">不选也没关系：关掉这张卡，就先以小龙本体的样子进去逛逛。</p>
     </div>
 </div>
+<div id="viewMask">
+    <div id="viewBox" role="dialog" aria-modal="true" aria-labelledby="vwTitle">
+        <div class="logHead">
+            <h4 id="vwTitle">👁️ 用哪种视角探索这个世界？</h4>
+        </div>
+        <p class="sub">没有上帝视角啦——你就是它本龙（本少女）。选一个视角出发，之后随时按 V 键或点底部「👁️」按钮切换，视线不跳；这次的选择会被记住，下次进来默认还是它。</p>
+        <div class="avGrid">
+            <button type="button" class="avCard" data-vw="tp">
+                <span class="avT">🧍 第三人称</span>
+                <span class="avD">站在它身后上方看它探索世界，能看到它全部的小动作。</span>
+            </button>
+            <button type="button" class="avCard" data-vw="fp">
+                <span class="avT">👀 第一人称</span>
+                <span class="avD">用它自己的眼睛看世界，低头能看到自己的身子和爪子。</span>
+            </button>
+        </div>
+        <p class="sub">不选也没关系：关掉这张卡，就先用第三人称进去逛逛。</p>
+    </div>
+</div>
 <div id="echoMask">
     <div id="echoBox" role="dialog" aria-modal="true" aria-labelledby="echoTitle">
         <div class="logHead">
@@ -1354,7 +1363,7 @@
 <div id="huntToast"></div>
 <div id="helpTip">👋 第一次来？点顶栏里的「❓ 操作帮助」，玩法都在里面</div>
 <button id="wakeBtn" type="button" title="显示操作界面" aria-label="显示操作界面">‹</button>
-<button id="echoHomeBtn" type="button" title="飞回小屋">🏠 回到小屋</button>
+<button id="echoHomeBtn" type="button" title="回到小屋门口">🏠 回到小屋</button>
 </div><!-- /#app -->
 <div id="error"></div>
 
@@ -1967,7 +1976,7 @@ let swayGroups = [];           // 风动组：花/草/树枝
 const weatherModes  = ['sunny','mist','night','rain','golden'];
 const weatherLabels = ['晴天','雾天','夜间','雨天','金色时刻'];
 // 当前生效的天气目标值（滑杆在此基础上微调）
-const wx = { elev:45, fogMul:0, orbit:false };
+const wx = { elev:45, fogMul:0 };
 
 /* ==================== 配置区（可移植性接缝 · 集中可调参数） ====================
    全场可调参数尽量收在这里，不散落魔法数字。将来移植到小程序/App 时，
@@ -2549,14 +2558,8 @@ function makeOrbitControls(cam, dom){
                 st.tTheta=st.tPhi=st.tRadius=null;
             }
         }
-        if(wx.orbit && !st.dragging && !st.locked) st.theta += 0.0016;
-        // 巡游呼吸（#36 构图）：环游时俯仰与远近缓缓起伏，画面不再是匀速死转；
-        // 有 flyTo 目标在途时让位，不跟补间抢镜头
-        if(wx.orbit && !st.dragging && !st.locked && st.tTheta===null){
-            st.orbitT=(st.orbitT||0)+0.016;
-            st.phi=Math.PI*0.42+Math.sin(st.orbitT*0.14)*Math.PI*0.035;   // #76：呼吸基准跟默认机位走
-            st.radius=33+Math.sin(st.orbitT*0.09+1.7)*4;
-        }
+        /* #100：上帝/环绕观看已取消——本控制器不再自己巡游，只在拍照
+           模式里作自由镜头被借用（外部接管＝探索者相机在写画面时停手） */
         const sp=Math.sin(st.phi), cp=Math.cos(st.phi);
         cam.position.set(
             st.target.x+st.radius*sp*Math.sin(st.theta),
@@ -2627,6 +2630,8 @@ function makeOrbitControls(cam, dom){
     apply();
     return { update:apply, target:st.target,
         flyTo(theta,phi,radius){ if(st.locked) return; st.tTheta=theta; st.tPhi=phi; st.tRadius=radius; },
+        /* #100：把轨道状态直接摆到指定球面位（拍照模式从探索者机位无缝接手时用） */
+        setView(theta,phi,radius){ st.theta=theta; st.phi=phi; st.radius=radius; st.tTheta=st.tPhi=st.tRadius=null; },
         setLocked(v){ st.locked=!!v; if(st.locked) st.tTheta=st.tPhi=st.tRadius=null; },
         isLocked(){ return st.locked; },
         /* 外部相机（小龙第一/第三人称）接管开关：接管期间轨道相机不写相机、
@@ -4453,9 +4458,9 @@ function createInterior(){
     setupRoomInput();
     document.getElementById('enterRoomBtn').addEventListener('click', enterRoom);
     document.getElementById('exitRoomBtn').addEventListener('click', exitRoom);
-    // 室内不接管小龙开关：免得轨道/龙相机在屋里打架（出屋自动恢复可点）
+    // 室内不许用「回小屋门口」传送：免得龙凭空出屋、相机在屋里打架（出屋自动恢复可点）
     document.getElementById('dragonBtn').addEventListener('click', e=>{
-        if(Interior.active){ e.stopImmediatePropagation(); showHuntToast('先出屋，再操控' + dragonCfg.name + ' 🐉'); }
+        if(Interior.active){ e.stopImmediatePropagation(); showHuntToast('先出屋，再回小屋门口 🏠'); }
     }, true);
     window.__interior = Interior;
     window.__roomDragon = false;
@@ -6570,10 +6575,19 @@ function drgAvatarNormalize(raw){
         parts: girlPartsNormalize(a.parts, style)
     };
 }
+/* 探索者视角（v5.1 #100）：{fp:是否第一人称, chosen:是否在进入卡上选过}
+   同样复用 ct2_dragon 的 view 字段——不新增存储键。老存档/首次默认
+   第三人称、未选择，首次进世界时由视角选择卡补上 chosen；之后在游戏里
+   按 V 切换也会同步写回这里，下次进来默认上次的人称。 */
+function drgViewNormalize(raw){
+    const v = (raw && typeof raw === 'object') ? raw : null;
+    if(!v) return {fp:false, chosen:false};
+    return { fp: !!v.fp, chosen: !!v.chosen };
+}
 function drgLoadCfg(){
     const c = JSON.parse(JSON.stringify(DRG_DEFAULT_CFG));
     const raw = store.dragon.json(null);
-    if(!raw){ c.grow = drgGrowNormalize(null); c.stage = 0; c.avatar = drgAvatarNormalize(null); return c; }
+    if(!raw){ c.grow = drgGrowNormalize(null); c.stage = 0; c.avatar = drgAvatarNormalize(null); c.view = drgViewNormalize(null); return c; }
     for(const k of Object.keys(DRG_ENUMS)) if(DRG_ENUMS[k].indexOf(raw[k]) >= 0) c[k] = raw[k];
     if(raw.wingSize === 1.35 || raw.wingSize === 1) c.wingSize = raw.wingSize;
     if(raw.colors && drgIsHex(raw.colors.body) && drgIsHex(raw.colors.belly) && drgIsHex(raw.colors.accent))
@@ -6585,6 +6599,7 @@ function drgLoadCfg(){
     c.grow = drgGrowNormalize(raw.grow);   // #52：成长记录（跨天推进/升档登记都在这里发生）
     c.stage = c.grow.stage;
     c.avatar = drgAvatarNormalize(raw.avatar);   // #79：化身形态（缺失即小龙本体）
+    c.view = drgViewNormalize(raw.view);   // #100：探索者视角（缺失即第三人称、未选择）
     return c;
 }
 let dragonCfg = drgLoadCfg();
@@ -6611,8 +6626,8 @@ function drgColorsOf(cfg){
 }
 function dragonPronoun(){ return dragonCfg.gender === 'female' ? '她' : '他'; }
 function dragonBtnText(active){
-    if(active) return '🙌 放手让' + dragonPronoun() + '玩';
-    return '🐉 操控' + dragonCfg.name;
+    /* #100 改版：进世界即化身、没有「放手」态了，这颗钮改成回出生点 */
+    return '🏠 回小屋门口';
 }
 function dragonShouldSleep(ph){
     ph = ph || GClock.phase();
@@ -7673,6 +7688,20 @@ function dragonAnimate(a, dt, t){
         } else if(g.kind === 'spin'){
             const ge = gp < .5 ? 2*gp*gp : 1 - Math.pow(-2*gp + 2, 2)/2;
             P.lie.rotation.y = -Math.PI*2*ge;                       // 整组绕自身竖轴转一圈，不动 group 朝向状态
+        } else if(g.kind === 'eat'){
+            /* #100 探索者自食：咀嚼姿势由紧随其后的 eat 叠加层出（条件已
+               放宽到本手势），这里同步食物缩小，吃完记账收尾 */
+            a.eatT = g.t;
+            if(foodMesh) foodMesh.scale.setScalar(Math.max(0.2, 1 - 0.72*(g.t/2.4)));
+            if(gp >= 1 && !g._fed){
+                g._fed = 1;
+                removeFood();
+                a.eatT = 0;
+                const bb = bagEnsure(); bb.fed++; saveBag();
+                a.happyT = 8;
+                updateStatus();
+                showHuntToast('😋 吃饱啦！（喂食 ' + bb.fed + ' 次）');
+            }
         }
         if(gp >= 1){
             a.gesture = null;
@@ -7681,9 +7710,10 @@ function dragonAnimate(a, dt, t){
             a.happyT = Math.max(a.happyT || 0, 5);                 // 玩完开心一会儿（尾巴信号）
         }
     }
-    if(a.state === 'eat'){
+    if(a.state === 'eat' || (a.gesture && a.gesture.kind === 'eat')){
         // 啃食：垂头 0.24 + 咀嚼起伏 0.05（峰值 0.29，仍在睡姿验收过的颈量程内），
-        // 头部 2% 咀嚼微缩放当腮帮鼓动（颈球随头同缩放、始终沉在脖颈基座里，不断链）
+        // 头部 2% 咀嚼微缩放当腮帮鼓动（颈球随头同缩放、始终沉在脖颈基座里，不断链）；
+        // #100 起探索者自食也走这一层（手势 'eat' 驱动，eatT 由手势分支同步）
         const eet = Math.min(1, (a.eatT || 0)*2.5);
         const chew = Math.sin(t*7.5);
         P.head.rotation.x += (0.24 + chew*0.05)*eet;
@@ -7720,6 +7750,7 @@ function dragonPlayerMove(a, dt){
     ix += Ctl.joy.x; iz += Ctl.joy.y;
     let moved = false;
     if(Math.abs(ix) > 0.08 || Math.abs(iz) > 0.08){
+        stopAvatarRoam();   // #100：玩家一动手，自动漫游立刻交还控制
         a.moveTarget = null;   // 手动输入优先于点击目标
         const fx = -Math.sin(Ctl.yaw), fz = -Math.cos(Ctl.yaw);   // 相机前向（地面投影）
         const rx = -fz, rz = fx;                                  // 相机右向
@@ -7951,14 +7982,7 @@ function dragonTakeover(){
     if(foodMesh){ bagAdd(foodKind); removeFood(); }
     hideDragonMenu();
     AgentKit.setState(dragonAgent, 'player');
-    // 互斥规矩：操控优先——巡游自动停、视角锁定自动解（与巡游/锁定互斥的既有口径一致）
-    if(wx.orbit){
-        wx.orbit = false;
-        const oc = document.getElementById('orbitChk'); if(oc) oc.checked = false;
-        const ob = document.getElementById('orbitV'); if(ob) ob.textContent = '关';
-    }
-    if(viewLocked) setViewLock(false);
-    // 轨道相机交权：存好它的注视点，放手时原样还回去
+    // 轨道相机交权：存好它的注视点（拍照模式自由镜头借用轨道相机时还会用到）
     DragonCtl.savedTarget.copy(controls.target);
     controls.setExternal(true);
     // 起始镜头站到龙身后上方
@@ -8003,6 +8027,10 @@ function dragonToggleView(){
         : Math.max(-0.12, Math.min(1.15, -DragonCtl.pitch));
     if(dragonAgent) dragonAgent.parts.head.visible = !DragonCtl.fp;   // 一人称藏头（龙眼视角惯例），低头看身体不受影响
     document.getElementById('viewBtn').textContent = DragonCtl.fp ? '👁️ 第一人称' : '👁️ 第三人称';
+    // #100：切换即落盘，下次进世界默认上次选的人称
+    dragonCfg.view = drgViewNormalize(dragonCfg.view);
+    dragonCfg.view.fp = DragonCtl.fp; dragonCfg.view.chosen = true;
+    dragonSaveCfg();
 }
 
 /* ---------- 定制生效：存档 + 整只重建 + 文案刷新（#41） ----------
@@ -8066,9 +8094,100 @@ function updateDragonCam(dt){
     }
 }
 
+/* ---------- 出生点与传送（v5.1 #100：探索者化身的落点口径） ----------
+   出生点＝小屋门口：门在小屋本地 (-0.65, 2.66)；WalkMap 给房子留了
+   8.5 的禁行圈（墙基/门廊不许踩），落点取门前石板路上、刚出禁行圈的
+   本地 (-0.65, 9.5)（距屋心约 9.5），生下来面朝院子。回音「带我去
+   看看」、底栏「🏠 回小屋门口」都走 avatarTeleportTo 把化身送过去，
+   不再飞镜头（上帝视角已取消）。 */
+function avatarSpawnPoint(){
+    const s = houseLocal(-0.65, 9.5);
+    return { x: s[0], z: s[1] };
+}
+/* 把化身落到 (x,z) 附近的可走点（目标不可走时向外螺旋找），并让它面向
+   (faceX,faceZ)；相机偏航同步转到它身后，传送前后视线方向不乱跳 */
+function avatarTeleportTo(x, z, faceX, faceZ){
+    if(!dragonAgent) return false;
+    let px = x, pz = z;
+    if(typeof WalkMap !== 'undefined' && !WalkMap.isWalkable(px, pz)){
+        let found = false;
+        for(let r = 1.5; r <= 8 && !found; r += 1.3){
+            for(let k = 0; k < 10; k++){
+                const a2 = k * Math.PI / 5, cx = x + Math.cos(a2) * r, cz = z + Math.sin(a2) * r;
+                if(WalkMap.isWalkable(cx, cz)){ px = cx; pz = cz; found = true; break; }
+            }
+        }
+        if(!found) return false;
+    }
+    stopAvatarRoam();
+    const a = dragonAgent;
+    a.group.position.set(px, terrainH(px, pz), pz);
+    a.moveTarget = null;
+    if(typeof faceX === 'number' && typeof faceZ === 'number'){
+        const fa = Math.atan2(faceX - px, faceZ - pz);
+        a.group.rotation.y = fa;
+        DragonCtl.yaw = fa + Math.PI;   // 相机站到身后：与切换人称同一条视线口径
+    }
+    DragonCtl.init = false;
+    return true;
+}
+function avatarGoHome(){
+    const sp = avatarSpawnPoint();
+    if(avatarTeleportTo(sp.x, sp.z, sp.x + HOUSE_F.x * 4, sp.z + HOUSE_F.z * 4))
+        showHuntToast('🏠 回到小屋门口啦');
+}
+
+/* ---------- 自动漫游（v5.1 #100 改版）：化身沿旧巡游路线自己散步 ----------
+   路线＝旧巡游镜头的环屋圆周（中心 (-2.4,-0.8)、半径约 33）内缩到
+   半径 26 的一圈路点（每 22.5° 一个）；不可走的路点自动跳过，走路
+   复用点击移动的 moveTarget 机制（player 态自带走路与转向）。玩家一
+   动手（按键 / 摇杆 / 点地面 / 传送）漫游立刻停、开关同步关掉。 */
+const ROAM_CENTER = { x: -2.4, z: -0.8 }, ROAM_RADIUS = 26, ROAM_STEPS = 16;
+let roamWp = -1, roamStuckT = 0, roamLastX = 0, roamLastZ = 0;
+function roamPoint(i){
+    const a2 = (i % ROAM_STEPS) * (Math.PI * 2 / ROAM_STEPS);
+    return { x: ROAM_CENTER.x + Math.cos(a2) * ROAM_RADIUS, z: ROAM_CENTER.z + Math.sin(a2) * ROAM_RADIUS };
+}
+function avatarRoamOff(){   // 只清驱动状态，不碰开关（供 FEAT teardown 用）
+    if(dragonAgent && roamWp >= 0) dragonAgent.moveTarget = null;
+    roamWp = -1; roamStuckT = 0;
+}
+function stopAvatarRoam(){   // 玩家接管：清状态 + 关开关 + 面板同步
+    avatarRoamOff();
+    if(typeof FEAT !== 'undefined' && FEAT.roam && FEAT.roam.on){
+        FEAT.roam.on = false;
+        if(typeof refreshModUI === 'function') refreshModUI();
+    }
+}
+function updateAvatarRoam(dt){
+    if(!dragonAgent || !DragonCtl.active) return;
+    if(typeof Interior !== 'undefined' && Interior.active) return;
+    const a = dragonAgent, p = a.group.position;
+    if(roamWp >= 0 && a.moveTarget){   // 卡住检测：占着路点却没动，2.5 秒后放弃往下走
+        if(Math.hypot(p.x - roamLastX, p.z - roamLastZ) < 0.05) roamStuckT += dt; else roamStuckT = 0;
+        if(roamStuckT > 2.5){ a.moveTarget = null; roamStuckT = 0; }
+    }
+    roamLastX = p.x; roamLastZ = p.z;
+    if(a.moveTarget) return;
+    if(roamWp < 0){   // 首次：从离化身最近的路点起步
+        let best = 0, bd = Infinity;
+        for(let i = 0; i < ROAM_STEPS; i++){
+            const q = roamPoint(i), d = Math.hypot(q.x - p.x, q.z - p.z);
+            if(d < bd){ bd = d; best = i; }
+        }
+        roamWp = best;
+    }
+    for(let n = 0; n < ROAM_STEPS; n++){
+        roamWp = (roamWp + 1) % ROAM_STEPS;
+        const q = roamPoint(roamWp);
+        if(typeof WalkMap === 'undefined' || WalkMap.isWalkable(q.x, q.z)){ a.moveTarget = { x: q.x, z: q.z }; return; }
+    }
+}
+
 /* ---------- 输入绑定 ---------- */
 const _dgRay = new THREE.Raycaster(), _dgNdc = new THREE.Vector2();
 function dragonClickMove(e){
+    stopAvatarRoam();   // #100：点地面移动＝玩家接管，自动漫游停
     const r = renderer.domElement.getBoundingClientRect();
     _dgNdc.set(((e.clientX - r.left)/r.width)*2 - 1, -((e.clientY - r.top)/r.height)*2 + 1);
     _dgRay.setFromCamera(_dgNdc, camera);
@@ -8094,7 +8213,10 @@ function dragonClickMove(e){
 function setupDragonControls(){
     const dom = renderer.domElement;
     document.getElementById('dragonBtn').addEventListener('click', ()=>{
-        if(DragonCtl.active) dragonRelease(); else dragonTakeover();
+        /* #100：这颗钮现在是「回小屋门口」（传送回出生点）；屋里点它会被
+           createInterior 的捕获监听拦下提示先出屋，不会误传 */
+        if(typeof Interior !== 'undefined' && Interior.active) return;
+        avatarGoHome();
     });
     document.getElementById('viewBtn').addEventListener('click', dragonToggleView);
     window.addEventListener('keydown', e=>{
@@ -8359,7 +8481,23 @@ function dragonGesture(kind){
 }
 function dragonFeed(kind){
     const a=dragonAgent, b=bagEnsure(); if(!a) return;
-    if(a.mode==='player'){ showHuntToast('🐉 操控它的时候没法喂，先放手让它自己玩吧'); return; }
+    if(a.mode==='player'){
+        /* #100 探索者口径：进世界后你就是它本尊，没有「放手」这回事了——
+           喂食＝自己吃：食物摆到面前低头啃完（手势叠加层驱动，见 pose 的
+           'eat' 分支），背包与喂食次数照常记账，成长不受影响 */
+        if(a.gesture) return;
+        if(kind==='pumpkin' ? b.pumpkin<=0 : b.corn<=0){
+            showHuntToast('🎒 背包里没有' + (kind==='pumpkin' ? '南瓜' : '玉米') + '啦，去农田收获一些吧');
+            return;
+        }
+        if(kind==='pumpkin') b.pumpkin--; else b.corn--;
+        saveBag(); updateStatus();
+        placeFood(kind);
+        hideDragonMenu();
+        a.gesture={kind:'eat', t:0};
+        a.gestureDur = 2.4;
+        return;
+    }
     if(a.state==='sleep' || a.state==='sleepGo'){ showHuntToast('💤 它睡着了，等它醒了再喂'); return; }
     if(dragonBusy()) return;
     if(kind==='pumpkin' ? b.pumpkin<=0 : b.corn<=0){
@@ -8388,7 +8526,7 @@ function refreshDragonMenu(){
     if(bw){ bw.disabled=gw.stage<2; bw.textContent=gw.stage<2 ? '🔒 作揖' : '🙇 作揖'; }
     const hint=document.getElementById('dmHint');
     if(hint){
-        let h='已喂 '+b.fed+' 次 · 喂饱后它会跟着你玩一阵';
+        let h='已喂 '+b.fed+' 次 · 选一样它就当场吃掉，越吃越亲近';
         if(gw.stage<2) h+=' · 🌱 还差 '+(DRG_GROW_STAGE_DAYS[gw.stage+1]-gw.days)+' 天长成'+DRG_GROWTH[gw.stage+1].label;
         hint.textContent=h;
     }
@@ -8893,9 +9031,11 @@ function setupDragonCustom(){
     document.getElementById('dgReset').addEventListener('click', () => {
         const keepGrow = dragonCfg.grow;   // #52：恢复默认只清外观/性格，成长是陪伴记录，不清
         const keepAvatar = dragonCfg.avatar;   // #79：化身形态是「我是谁」的选择，不是外观微调，同样不清
+        const keepView = dragonCfg.view;   // #100：视角偏好同理，不清
         dragonCfg = JSON.parse(JSON.stringify(DRG_DEFAULT_CFG));
         if(keepGrow){ dragonCfg.grow = keepGrow; dragonCfg.stage = keepGrow.stage; }
         if(keepAvatar) dragonCfg.avatar = keepAvatar;
+        if(keepView) dragonCfg.view = keepView;
         applyDragonCfg(true); refreshDragonPanel();
     });
     dragonRefreshLabels();
@@ -8983,6 +9123,90 @@ function setupAvatar(){
             clearInterval(wait);
         }
     }, 400);
+}
+
+/* ---------- 视角选择卡（v5.1 #100）：选完化身接着选人称 ----------
+   口径与化身卡一致：只在 view.chosen 为假时出场一次；选了任何一张卡
+   即落盘，关掉（点遮罩 / Esc）按默认第三人称记为已选，之后想换按 V。 */
+let viewOpen = false;
+function openViewCard(){
+    if(viewOpen) return;
+    const mask = document.getElementById('viewMask');
+    if(!mask) return;
+    viewOpen = true;
+    mask.classList.add('on');
+}
+function closeViewCard(){
+    if(!viewOpen) return;
+    viewOpen = false;
+    const mask = document.getElementById('viewMask');
+    if(mask) mask.classList.remove('on');
+}
+function chooseView(fp, silent){
+    dragonCfg.view = drgViewNormalize(dragonCfg.view);
+    dragonCfg.view.fp = !!fp;
+    dragonCfg.view.chosen = true;
+    dragonSaveCfg();
+    closeViewCard();
+    if(!silent && typeof showHuntToast === 'function')
+        showHuntToast(fp ? '👀 第一人称出发！低头能看到自己的身子（按 V 切换）'
+                         : '🧍 第三人称出发！站在它身后看世界（按 V 切换）');
+}
+function setupViewCard(){
+    const mask = document.getElementById('viewMask');
+    if(!mask) return;
+    const cards = (typeof mask.querySelectorAll === 'function') ? mask.querySelectorAll('.avCard') : [];
+    if(cards && cards.forEach) cards.forEach(b => {
+        b.addEventListener('click', () => chooseView(b.dataset.vw === 'fp'));
+    });
+    mask.addEventListener('click', e => { if(e.target === mask) chooseView(false, true); });
+    document.addEventListener('keydown', e => {
+        if(e.key === 'Escape' && viewOpen){ chooseView(false, true); e.stopPropagation(); }
+    }, true);
+}
+
+/* ---------- 进入世界（v5.1 #100）：探索者出生流程 ----------
+   没有观看态了：加载完成、更新日志关掉、化身与视角都选过（老玩家是
+   存档里的选择）之后，把化身放到小屋门口出生点，直接以所选人称接管。
+   条件没齐就等（化身卡 / 视角卡会自己按队列出场），齐了只执行一次。 */
+let enteredWorld = false;
+function enterWorldNow(){
+    if(enteredWorld) return;
+    enteredWorld = true;
+    const sp = avatarSpawnPoint();
+    if(dragonAgent){
+        dragonAgent.group.position.set(sp.x, terrainH(sp.x, sp.z), sp.z);
+        dragonAgent.group.rotation.y = HOUSE_ROT;   // 面朝院子
+        dragonAgent.moveTarget = null;
+    }
+    dragonCfg.view = drgViewNormalize(dragonCfg.view);
+    DragonCtl.fp = !!dragonCfg.view.fp;
+    if(dragonAgent) dragonAgent.parts.head.visible = !DragonCtl.fp;
+    dragonTakeover();
+}
+function setupEntryFlow(){
+    if(typeof setInterval !== 'function') return;
+    let waited = 0;
+    const wait = setInterval(() => {
+        waited += 400;
+        if(enteredWorld){ clearInterval(wait); return; }
+        if(!dragonAgent) return;                        // init 未完成（保命推迟路径等点开始游玩）
+        const boot = document.getElementById('boot');
+        if(boot && !boot.classList.contains('hide') && boot.style.display !== 'none') return;
+        if(typeof logOpen !== 'undefined' && logOpen) return;   // 更新日志还开着
+        if(avOpen || viewOpen) return;                          // 选择卡还开着
+        if(!(dragonCfg.avatar && dragonCfg.avatar.chosen)) return;   // 化身卡还没选（它自己会弹）
+        if(!(dragonCfg.view && dragonCfg.view.chosen)){ openViewCard(); return; }
+        enterWorldNow();
+    }, 400);
+    /* 安全阀：等得太久（异常叠层等）就按存档/默认直接进世界，不把人挡在门外 */
+    setTimeout(() => {
+        if(enteredWorld) return;
+        clearInterval(wait);
+        if(avOpen) chooseAvatar('dragon', 0, true);
+        if(viewOpen) chooseView(false, true);
+        if(dragonAgent) enterWorldNow();
+    }, 90000);
 }
 
 function setupDragonGrowth(){
@@ -10228,26 +10452,12 @@ function cycleWeather(){ playerTakeover(); setWeather((weatherIndex+1)%weatherMo
 function onKeyDown(e){
     if(e.key==='t'||e.key==='T')cycleWeather();
     if(e.key==='p'||e.key==='P'){
-        wx.orbit=!wx.orbit;
-        if(wx.orbit&&viewLocked) setViewLock(false);   // 巡游与锁定互斥：开巡游先解锁
-        document.getElementById('orbitChk').checked=wx.orbit;
-        document.getElementById('orbitV').textContent=wx.orbit?'开':'关';
+        /* #100：P 键改管「自动漫游」（化身沿环屋路线散步），与齿轮面板
+           里的同名开关走同一个 toggleFeat 入口，两边状态同步 */
+        if(typeof FEAT!=='undefined' && typeof toggleFeat==='function') toggleFeat('roam', !FEAT.roam.on);
     }
 }
-/* ---------- 视角锁定（Issue #7）：与自动巡游互斥，状态只从这一处进出 ---------- */
-let viewLocked=false;
-function setViewLock(v){
-    viewLocked=!!v;
-    if(controls&&controls.setLocked) controls.setLocked(viewLocked);
-    const c=document.getElementById('lockChk'); if(c) c.checked=viewLocked;
-    const b=document.getElementById('lockV'); if(b) b.textContent=viewLocked?'开':'关';
-    const r=document.getElementById('lockRow'); if(r) r.classList.toggle('on',viewLocked);
-    if(viewLocked&&wx.orbit){   // 开锁定即停巡游，两处 UI 一起归位
-        wx.orbit=false;
-        const oc=document.getElementById('orbitChk'); if(oc) oc.checked=false;
-        const ob=document.getElementById('orbitV'); if(ob) ob.textContent='关';
-    }
-}
+/* ---------- 视角锁定（Issue #7）：#100 已随上帝视角一并取消 ---------- */
 function setupSliders(){
     const se=document.getElementById('sunElev'), sv=document.getElementById('sunElevV');
     se.addEventListener('input',()=>{
@@ -10261,14 +10471,8 @@ function setupSliders(){
     fa.addEventListener('input',()=>{playerTakeover();wx.fogMul=fa.value/100;fv.textContent=fa.value+'%';});
     const arc=document.getElementById('autoRotChk');
     if(arc) arc.addEventListener('change',e=>{ setAutoRotate(e.target.checked); });
-    document.getElementById('orbitChk').addEventListener('change',e=>{
-        wx.orbit=e.target.checked;
-        if(wx.orbit&&viewLocked) setViewLock(false);   // 巡游与锁定互斥：开巡游先解锁
-        document.getElementById('orbitV').textContent=wx.orbit?'开':'关';
-    });
-    document.getElementById('lockChk').addEventListener('change',e=>{
-        setViewLock(e.target.checked);
-    });
+    /* #100：原「自动巡游 / 视角锁定」两颗顶栏开关已随上帝视角删除；
+       自动漫游在齿轮面板功能开关里（或按 P），自动轮转仍是上面这颗 */
 }
 
 /* ==================== 优化意见弹窗 ==================== */
@@ -10648,7 +10852,7 @@ function openEchoLetter(entry){
     }
     if(entry.mark){
         const p3=document.createElement('p');
-        p3.textContent='我们在改进的地方留了一块小牌子作纪念——点下面「带我去看看」，镜头直接带你过去；看完点屏幕右边的「🏠 回到小屋」就能飞回来。';
+        p3.textContent='我们在改进的地方留了一块小牌子作纪念——点下面「带我去看看」，直接把你送到牌子跟前；看完点屏幕右边的「🏠 回到小屋」就能回到小屋门口。';
         body.appendChild(p3);
     }
     const p4=document.createElement('p');
@@ -10675,42 +10879,31 @@ function echoShowLetters(entries){
     openEchoLetter(entries[0]);
 }
 
-/* ---------- 「带我去看看」：镜头直达改进点 ---------- */
+/* ---------- 「带我去看看」：化身传送到改进点跟前（#100 改版） ----------
+   旧版是轨道镜头飞过去（上帝视角），已取消：现在把化身直接送到牌子
+   附近的可走点、以当前人称站在那里面对牌子；人称不切换、视线不断层。 */
 function echoFlyTo(pos){
     if(!pos || typeof pos.x!=='number' || typeof pos.z!=='number') return;
-    if(typeof DragonCtl!=='undefined' && DragonCtl.active) dragonRelease();
-    if(typeof viewLocked!=='undefined' && viewLocked) setViewLock(false);
-    if(wx.orbit){   // 巡游中先让位（与既有互斥口径一致）
-        wx.orbit=false;
-        const oc=document.getElementById('orbitChk'); if(oc) oc.checked=false;
-        const ob=document.getElementById('orbitV'); if(ob) ob.textContent='关';
-    }
     if(typeof FEAT!=='undefined' && FEAT.roam && FEAT.roam.on){ FEAT.roam.on=false; refreshModUI(); }
-    if(!controls || !controls.flyTo || !controls.target) return;
-    echoSaveHome();   // 飞走前记下当前镜头（只记第一次），回程钮才知道家在哪
-    controls.target.set(pos.x, terrainH(pos.x, pos.z)+1.6, pos.z);
-    controls.flyTo(Math.atan2(pos.x, pos.z), 0.30*Math.PI, 13);
-    const hb=document.getElementById('echoHomeBtn'); if(hb) hb.classList.add('on');
+    const go = () => {
+        if(avatarTeleportTo(pos.x, pos.z, pos.x, pos.z)){
+            const hb=document.getElementById('echoHomeBtn'); if(hb) hb.classList.add('on');
+            showHuntToast('💌 到了！纪念牌就在你面前，看完点右边「🏠 回到小屋」回去');
+        } else {
+            showHuntToast('💌 那个地方暂时过不去，先在世界里逛逛吧');
+        }
+    };
+    if(typeof Interior !== 'undefined' && Interior.active){ exitRoom(); setTimeout(go, 380); }   // 在屋里先出屋再传
+    else go();
 }
 
-/* ---------- 「🏠 回到小屋」：飞回飞走前的位置（#39 收口小修） ----------
-   与 #40/#41 的 savedTarget 同一口径：去程存、回程还原，中间用预设视角/进屋/
-   操控龙都不会冲掉这份存档，钮一直留到玩家点它为止。 */
-let echoHomeView=null;
-function echoSaveHome(){
-    if(echoHomeView || !controls || !camera) return;
-    const t=controls.target, dx=camera.position.x-t.x, dy=camera.position.y-t.y, dz=camera.position.z-t.z;
-    const r=Math.hypot(dx,dy,dz); if(!(r>0)) return;
-    echoHomeView={ x:t.x, y:t.y, z:t.z, theta:Math.atan2(dx,dz),
-        phi:Math.acos(Math.max(-1,Math.min(1,dy/r))), radius:r };
-}
+/* ---------- 「🏠 回到小屋」：传送回出生点（小屋门口）（#100 改版） ----------
+   旧版飞回「飞走前的镜头位置」；现在没有观看镜头了，回程一律回出生点，
+   与底栏「🏠 回小屋门口」同一落点口径（avatarGoHome）。 */
 function echoGoHome(){
     const hb=document.getElementById('echoHomeBtn'); if(hb) hb.classList.remove('on');
-    if(!echoHomeView || !controls || !controls.flyTo){ echoHomeView=null; return; }
-    if(typeof viewLocked!=='undefined' && viewLocked) setViewLock(false);
-    const v=echoHomeView; echoHomeView=null;
-    controls.target.set(v.x, v.y, v.z);
-    controls.flyTo(v.theta, v.phi, v.radius);
+    if(typeof Interior !== 'undefined' && Interior.active){ exitRoom(); setTimeout(avatarGoHome, 380); return; }
+    avatarGoHome();
 }
 
 /* ---------- 回音墙（公开鸣谢，挂在更新日志弹窗里） ----------
@@ -11292,36 +11485,70 @@ function setupSnapshot(){
     btn.addEventListener('click',function(){ captureSnapshot(snapshotName()); });
 }
 
-/* ==================== 拍照模式（Issue #64） ====================
+/* ==================== 拍照模式（Issue #64；#100 改版） ====================
    在快照之上做正经取景：进入后给 #app 加 photo-on 类藏尽全部界面（顶/底/状态栏、
    浮钮、弹窗、气泡，清单见 CSS），只剩画面＋三分法参考线＋底部极简控件。
    界面元素自身的状态（class / inline display）一概不碰，退出摘类即逐项原样恢复；
    #app 的 class 整串在进入时存下、退出时原样写回（挡住自动隐藏计时器在模式里
-   偷偷加 bars-off 造成的进出不一致）。镜头还是轨道相机本人，拖拽/滚轮照常；
-   会自己动镜头的三样进模式先存后停、退出按原状态恢复：自动巡游（wx.orbit＋
-   勾选框口径同 P 键）、昼夜自动轮转（setAutoRotate 唯一入口）、视角锁定
-   （setViewLock）。色调复用 applyTone 循环切 TONES，退出保留（本就是全局设置）。
-   快门复用 captureSnapshot，文件名带 photo 标记；闪白是 DOM 动画，不进成图
-   （成图只抓渲染器画布，本就不含任何 DOM——参考线同理）。不新增存储键。 */
+   偷偷加 bars-off 造成的进出不一致）。
+   #100 起它是全世界唯一的自由镜头：进入时探索者化身先「让位」——人称
+   参数（fp/yaw/pitch/dist）整套存下、化身站定，轨道相机从当前机位无缝
+   接手作自由镜头（拖拽/滚轮照常）；退出时按存下的人称原样还原，视线
+   回到化身身上分毫不差。昼夜自动轮转（setAutoRotate 唯一入口）同样
+   进模式先停、退出恢复。色调复用 applyTone 循环切 TONES，退出保留
+   （本就是全局设置）。快门复用 captureSnapshot，文件名带 photo 标记；
+   闪白是 DOM 动画，不进成图（成图只抓渲染器画布，本就不含任何 DOM
+   ——参考线同理）。不新增存储键。 */
 let photoOn=false, photoSaved=null, photoGridOn=true;
-function photoOrbitSync(){
-    const oc=document.getElementById('orbitChk'); if(oc) oc.checked=wx.orbit;
-    const ob=document.getElementById('orbitV'); if(ob) ob.textContent=wx.orbit?'开':'关';
-}
 function refreshPhotoToneBtn(){
     const b=document.getElementById('photoToneBtn');
     if(b && typeof TONES!=='undefined' && TONES[toneIndex]) b.textContent='🎨 '+TONES[toneIndex].n;
 }
+/* 探索者让位：存人称 → 化身站定 → 轨道相机按当前机位反推球面位接手 */
+function photoSuspendExplorer(){
+    if(!dragonAgent || !controls) return;
+    photoSaved.fp = DragonCtl.fp; photoSaved.yaw = DragonCtl.yaw;
+    photoSaved.pitch = DragonCtl.pitch; photoSaved.dist = DragonCtl.dist;
+    stopAvatarRoam();
+    DragonCtl.keys.clear(); DragonCtl.joy.x = 0; DragonCtl.joy.y = 0;
+    dragonAgent.moveTarget = null;
+    DragonCtl.active = false;
+    if(dragonAgent.parts && dragonAgent.parts.head) dragonAgent.parts.head.visible = true;   // 取景里要拍到完整的它
+    const jy = document.getElementById('joy'); if(jy) jy.classList.remove('on');
+    const vb = document.getElementById('viewBtn'); if(vb) vb.style.display = 'none';
+    const p = dragonAgent.group.position;
+    controls.target.set(p.x, p.y + 1.2, p.z);
+    const dx = camera.position.x - controls.target.x,
+          dy = camera.position.y - controls.target.y,
+          dz = camera.position.z - controls.target.z;
+    const r = Math.max(2.5, Math.hypot(dx, dy, dz));
+    if(controls.setView) controls.setView(Math.atan2(dx, dz),
+        Math.acos(Math.max(-1, Math.min(1, dy / r))), r);
+    controls.setExternal(false);
+    controls.update();
+}
+/* 探索者归位：按存下的人称还原（fp 时藏头等细节与切换人称同一口径） */
+function photoResumeExplorer(){
+    if(!photoSaved || !dragonAgent) return;
+    DragonCtl.fp = !!photoSaved.fp; DragonCtl.yaw = photoSaved.yaw;
+    DragonCtl.pitch = photoSaved.pitch; DragonCtl.dist = photoSaved.dist;
+    DragonCtl.active = true; DragonCtl.init = false;
+    if(dragonAgent.parts && dragonAgent.parts.head) dragonAgent.parts.head.visible = !DragonCtl.fp;
+    controls.setExternal(true);
+    const vb = document.getElementById('viewBtn');
+    if(vb){ vb.style.display = ''; vb.textContent = DragonCtl.fp ? '👁️ 第一人称' : '👁️ 第三人称'; }
+    if(typeof IS_TOUCH !== 'undefined' && IS_TOUCH){ const jy = document.getElementById('joy'); if(jy) jy.classList.add('on'); }
+}
 function enterPhotoMode(){
     if(photoOn) return;
-    if(typeof DragonCtl!=='undefined' && DragonCtl.active){ showHuntToast('🐉 先放下小龙，再安心拍照'); return; }
+    if(typeof DragonCtl==='undefined' || !DragonCtl.active){ showHuntToast('🐉 先进入世界，再安心拍照'); return; }
+    if(typeof Interior!=='undefined' && Interior.active){ showHuntToast('🏠 先出屋，再安心拍照'); return; }
     const app=document.getElementById('app'); if(!app) return;
-    photoSaved={ appClass:app.className, orbit:!!wx.orbit,
+    photoSaved={ appClass:app.className,
         autoRotate:(typeof autoRotate!=='undefined')?!!autoRotate:true,
-        locked:(typeof viewLocked!=='undefined')?!!viewLocked:false };
-    if(wx.orbit){ wx.orbit=false; photoOrbitSync(); }
+        fp:false, yaw:0, pitch:0.34, dist:5.4 };
     if(photoSaved.autoRotate && typeof setAutoRotate==='function') setAutoRotate(false);
-    if(photoSaved.locked && typeof setViewLock==='function') setViewLock(false);
+    photoSuspendExplorer();
     const mp=document.getElementById('modPanel'); if(mp) mp.classList.remove('on');
     app.classList.add('photo-on');
     const ui=document.getElementById('photoUI'); if(ui) ui.style.display='block';
@@ -11335,11 +11562,8 @@ function exitPhotoMode(){
     const ui=document.getElementById('photoUI'); if(ui) ui.style.display='none';
     const app=document.getElementById('app');
     if(app && photoSaved) app.className=photoSaved.appClass;
-    if(photoSaved){
-        if(photoSaved.orbit){ wx.orbit=true; photoOrbitSync(); }
-        if(photoSaved.autoRotate && typeof setAutoRotate==='function') setAutoRotate(true);
-        if(photoSaved.locked && typeof setViewLock==='function') setViewLock(true);
-    }
+    if(photoSaved && photoSaved.autoRotate && typeof setAutoRotate==='function') setAutoRotate(true);
+    photoResumeExplorer();
     photoSaved=null;
 }
 function setupPhotoMode(){
@@ -11498,7 +11722,6 @@ function setupVote(){
    bgm       背景音乐（按天气/昼夜换音阶；WebAudio 程序化合成，零音频文件）
    ambience  环境音效（风 / 雨 / 鸟鸣 / 虫鸣 / 篝火噼啪）
    particles 氛围粒子（夜间萤火、白天浮尘；一份 Points 复用）
-   views     预设视角
    interact  点击交互（门开合 / 篝火点燃）
    daynight  自动时序（白天→黄昏→夜晚循环）
    tone      色调氛围（CSS filter，零渲染开销）
@@ -11508,10 +11731,9 @@ const FEAT = {
     bgm:       { on:true, label:'背景音乐 BGM' },
     ambience:  { on:true, label:'环境音效' },
     particles: { on:true, label:'氛围粒子' },
-    views:     { on:true, label:'预设视角' },
     interact:  { on:true, label:'点击交互（门/篝火）' },
     daynight:  { on:true, label:'自动时序（昼夜轮转）' },
-    roam:      { on:false, label:'自动漫游（慢慢环游）' },
+    roam:      { on:false, label:'自动漫游（化身沿环屋路线散步）' },
     tone:      { on:true, label:'色调氛围' },
     hunt:      { on:true, label:'找一找（每日寻宝）' },
     lantern:   { on:true, label:'放河灯（池塘许愿）' },
@@ -11550,9 +11772,6 @@ const MODULE_HOOKS = {
         teardown(){ disposeParticles(); },
         update(dt, t){ updateParticles(dt, t); }
     },
-    views: {
-        teardown(){ viewIndex = 0; }
-    },
     interact: {
         teardown(){ setFire(false); setDoor(false, true); },
         update(dt){
@@ -11573,8 +11792,8 @@ const MODULE_HOOKS = {
         update(dt, t){ GClock.update(t); }
     },
     roam: {
-        teardown(){ roamT = 0; },
-        update(dt){ updateRoam(dt); }
+        teardown(){ avatarRoamOff(); },
+        update(dt){ updateAvatarRoam(dt); }
     },
     tone: {
         setup(){ applyTone(toneIndex); },
@@ -11647,14 +11866,8 @@ const BGM_SCALE = {    sunny: [0,4,7,9,12,16],
 };
 const BGM_GAP = { sunny:1.25, golden:1.55, mist:2.05, night:2.75, rain:1.75 };
 
-const VIEWS = [
-    { n:'全景', t:[0.22,0.34,40] },
-    { n:'门前', t:[0.00,0.42,13] },
-    { n:'花海', t:[0.62,0.30,18] },
-    { n:'水塘', t:[-0.55,0.32,22] },
-    { n:'仰望', t:[0.22,0.13,30] },
-    { n:'复位', t:[0.235,0.42,33] }   // #76：复位＝默认机位（草甸前景＋远山构图）
-];
+/* #100：预设视角（VIEWS）已随上帝视角取消——没有摆拍机位了，
+   想看哪里就以探索者身份走过去看；拍照模式里仍可用自由镜头取景 */
 
 const TONES = [
     { n:'自然', f:'none' },
@@ -11686,7 +11899,7 @@ let autoRotate=true;
    时钟不碰任何浏览器接口，时间由 animate 每帧喂进来（移植时换喂入源即可）。
 
    自动轮转规则（Issue #26，规则一字未改，只是改由时钟驱动）：
-   顶栏独立开关、与相机「自动巡游」是两回事；开关默认开，
+   顶栏独立开关、与化身「自动漫游」是两回事；开关默认开，
    每 CONFIG.autoRotateSec 秒沿 CONFIG.daySeq 换一个阶段；
    玩家手动选天气/拖滑杆即「接管」，开关自动关、轮转停下，随时可再打开。
    nextAt=-1 是哨兵：下一次 update 时按当前时刻重新排满一个间隔。
@@ -11716,8 +11929,7 @@ const GClock = {
     }
 };
 const AUTO_ROTATE_INTERVAL = CONFIG.autoRotateSec;   // 旧名保留，数值以配置区为准
-let toneIndex=0, viewIndex=0;
-let roamAngle=0.22*Math.PI, roamT=0;
+let toneIndex=0;
 let perfAcc=0, perfFrames=0, perfHold=0;
 const DPR_CAP = IS_MOBILE ? 1.5 : 2;
 /* WebGL 安全模式档位读取（0 关 / 1 低配 / 2 保命）：各建造点都在 init 期
@@ -12327,8 +12539,8 @@ function onSceneTap(ev){
 function setupTap(){
     const el = renderer.domElement;
     el.addEventListener('pointerdown', function(e){
-        // 手动一拖，漫游就让位给人
-        if(FEAT.roam.on){ FEAT.roam.on = false; refreshModUI(); }
+        /* #100：自动漫游的让位改由移动输入负责（按键/摇杆/点地面，见
+           stopAvatarRoam）——拖动转视角不再打断散步，免得想看风景就停 */
         tapState = { x:e.clientX, y:e.clientY, t:performance.now() };
     });
     el.addEventListener('pointerup', function(e){
@@ -13558,14 +13770,7 @@ function updateLanterns(dt,t){
     }
 }
 
-/* ---------- 视角 / 色调 / 自动时序 ---------- */
-function applyView(i){
-    const v = VIEWS[i];
-    if(!v || !controls || !controls.flyTo) return;
-    viewIndex = i;
-    controls.flyTo(v.t[0]*Math.PI, v.t[1]*Math.PI, v.t[2]);
-    refreshModUI();
-}
+/* ---------- 色调 / 自动时序 ---------- */
 function applyTone(i){
     toneIndex = i;
     const t = TONES[i];
@@ -13593,8 +13798,6 @@ function refreshModUI(){
         const cb = document.getElementById('feat_' + k);
         if(cb) cb.checked = FEAT[k].on;
     });
-    const vw = document.getElementById('mpViews');
-    if(vw) for(let i=0;i<vw.children.length;i++) vw.children[i].classList.toggle('on', i === viewIndex);
     const tw = document.getElementById('mpTones');
     if(tw) for(let i=0;i<tw.children.length;i++) tw.children[i].classList.toggle('on', i === toneIndex);
     refreshThemeUI();
@@ -13630,16 +13833,6 @@ function setupModules(){
             const lb = document.createElement('label');
             lb.htmlFor = 'feat_' + k; lb.textContent = FEAT[k].label;
             row.appendChild(cb); row.appendChild(lb); list.appendChild(row);
-        });
-    }
-    const vw = document.getElementById('mpViews');
-    if(vw){
-        vw.textContent = '';
-        VIEWS.forEach(function(v,i){
-            const b = document.createElement('button');
-            b.type = 'button'; b.textContent = v.n;
-            b.addEventListener('click', function(){ applyView(i); });
-            vw.appendChild(b);
         });
     }
     const tw = document.getElementById('mpTones');
@@ -13698,16 +13891,9 @@ function updateModules(dt, t){
     perfTick(dt);
 }
 
-/* ---------- 自动漫游（备选彩蛋，默认关） ---------- */
-function updateRoam(dt){
-    if(!FEAT.roam.on || !controls || !controls.flyTo) return;
-    roamT += dt;
-    roamAngle += dt * 0.095;
-    // 缓慢环游 + 轻微俯仰与远近呼吸，像人在院子里踱步
-    const phi = (0.26 + Math.sin(roamT*0.11)*0.05) * Math.PI;
-    const rad = 35 + Math.sin(roamT*0.08)*5;
-    controls.flyTo(roamAngle, phi, rad);
-}
+/* ---------- 自动漫游（#100 改版）：实现在小龙操控节的 updateAvatarRoam ----------
+   旧版是轨道镜头自己环游（上帝视角），已取消；现在是化身沿同一条
+   环屋路线自己散步，玩家任意移动操作即接管（见 stopAvatarRoam）。 */
 
 /* ---------- 自适应分辨率：掉帧就降像素比，流畅久了再慢慢升回来 ---------- */
 function perfTick(dt){
@@ -15384,6 +15570,10 @@ function setupGlobal(){
     /* 小龙少女化身（Issue #79）：首次选择卡（选过的存档不再弹） */
     setupAvatar();
 
+    /* 探索者视角（Issue #100）：视角选择卡 + 出生流程（选完化身/视角后在小屋门口以探索者身份进入） */
+    setupViewCard();
+    setupEntryFlow();
+
     /* 小龙成长（Issue #52）：升档庆祝 + 成长条目并入室内大事记板 */
     setupDragonGrowth();
 
@@ -15499,7 +15689,7 @@ function setupPanelConsolidation(){
     const ui = document.getElementById('ui');
     if(!panel || !ui) return;
     if(envBox){
-        // 顶栏设置行整体搬入「环境调节」：太阳高度/雾气滑杆行＋自动巡游/自动轮转/视角锁定开关行
+        // 顶栏设置行整体搬入「环境调节」：太阳高度/雾气滑杆行＋自动轮转开关行
         const rows = (ui.querySelectorAll && ui.querySelectorAll('.row')) || [];
         for(let i = 0; i < rows.length; i++) envBox.appendChild(rows[i]);
     }
@@ -15528,7 +15718,7 @@ function setupPanelConsolidation(){
     if(!app) return;
     var HIDE_MS = 3000, timer = null;
     function anyDialogOpen(){
-        var ids = ['modPanel','fbMask','ltMask','helpMask','voteMask','logMask','dragonMask','avatarMask','echoMask','codexMask','gbMask','chronMask','achMask'], i, el;
+        var ids = ['modPanel','fbMask','ltMask','helpMask','voteMask','logMask','dragonMask','avatarMask','viewMask','echoMask','codexMask','gbMask','chronMask','achMask'], i, el;
         for(i = 0; i < ids.length; i++){
             el = document.getElementById(ids[i]);
             if(el && el.classList.contains('on')) return true;
@@ -15546,7 +15736,7 @@ function setupPanelConsolidation(){
         app.classList.remove('bars-off');
         arm();
     }
-    ['ui','status','fbBtn','lanternBtn','modBtn','modPanel','fbMask','ltMask','helpMask','voteMask','logMask','dragonMask','avatarMask','echoMask','codexMask','gbMask','chronMask','achMask'].forEach(function(id){
+    ['ui','status','fbBtn','lanternBtn','modBtn','modPanel','fbMask','ltMask','helpMask','voteMask','logMask','dragonMask','avatarMask','viewMask','echoMask','codexMask','gbMask','chronMask','achMask'].forEach(function(id){
         var el = document.getElementById(id);
         if(!el) return;
         ['pointerdown','input','change','wheel'].forEach(function(ev){

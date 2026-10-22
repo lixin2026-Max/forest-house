@@ -102,6 +102,7 @@
 
 - 本地存储只准经 `store` 进出，不许在别处直接出现存储 API；键名仍是现有 14 个白名单键（ct2_scene 为场景中枢画质总档与渲染参数偏好，#75 新增；ct2_bag 为小龙背包/喂食计数，#17 新增；ct2_echo 为建议回音回执，#39 新增；ct2_dragon 为小龙自定义外观与个性，#41 新增；ct2_codex 为图鉴解锁集合，#23 新增；ct2_guest 为留言上墙本机副本，#20 新增；ct2_music 为自定义音乐偏好与歌名，#18 新增；ct2_ach 为成就徽章解锁集合与日期，#66 新增；登记规矩同前：新增键须同步登记 verify 与 security-audit 两处白名单）。
 - 化身形态（#79）：`ct2_dragon` 内扩 `avatar:{form:'dragon'|'girl', style:0|1|2, chosen}` 字段（不新增键，老存档缺失即小龙本体）；建模入口 `ModelKit.dragon` 走 `buildAvatarModel` 分发，两种形态共用同一 parts 契约（body/head/eyes/fin/arm/leg/wing/tail/armBase/bodyBaseY/grow），`dragonAnimate` 与状态机零分叉。少女造型一期走 `GIRL_STYLES` 声明式数据；二期自由搭配（#80）已扩为部件库 `GIRL_PARTS`/`GIRL_PRESETS`：13 类（发型/发色/发饰/耳饰/项链/上装/下装/袜/鞋/角/耳鳍/翅膀/尾巴）独立可选，每件在库里声明挂点 `mount`、叠放 `layer` 与遮挡 `hides`（帽子藏发顶团、袜盖小腿、靴筒盖袜口），存档只存部件 id 组合于 `avatar.parts`（仍不新增键，坏/缺 id 经 `girlPartsNormalize` 回落预设），官方三款即 `GIRL_PRESETS` 一键套用，`hornTip` 随角型部件从库里取坐标。少女专属接入点都挂在 parts 上、缺失即走小龙默认值：`hornTip`（小鸟停角的角尖头局部坐标）、`lieCal`（侧躺支点校准，Box3 实测贴地）、`walkFreq/legSwing/armSwing`（按腿长调的步频摆幅）；节日穿戴件挂少女时经 `girlFestAdapt` 适配组重映射锚点，换形态后 `refitFestivalWear` 整批重挂。
+- 探索者视角（#100）：`ct2_dragon` 内扩 `view:{fp, chosen}` 字段存人称偏好（不新增键，老存档缺失即第三人称未选）；进世界无观看态——出生点为小屋门口，化身传送走 `avatarTeleportTo`，自动巡游已改化身漫游（`updateAvatarRoam`）；轨道相机只在拍照模式内作自由镜头（`photoSuspendExplorer`/`photoResumeExplorer` 存/还原人称）。
 - 网络上报只准经现有唯一通道函数，不许新增请求出口（安全审计会拦）。
 - 可调参数（时间间隔、阈值、色板、比例）集中在 `CONFIG` / `PALETTE` / 性能守卫常量区，
   不散落魔法数字；新参数先问一句「将来要不要调」——要，就进配置区。
