@@ -466,6 +466,23 @@
         background:var(--mask);backdrop-filter:blur(2px);
         align-items:center;justify-content:center;padding:16px}
     #gbMask.on,#chronMask.on{display:flex}
+    /* ===== 龙蛋（Issue #67）：再孵一颗的二次确认弹窗 ===== */
+    #eggMask{display:none;position:absolute;inset:0;z-index:140;
+        background:var(--mask);backdrop-filter:blur(2px);
+        align-items:center;justify-content:center;padding:16px}
+    #eggMask.on{display:flex}
+    #eggBox{width:400px;max-width:100%;max-height:100%;overflow:auto;
+        background:var(--dlg);color:var(--dlg-txt);border:1px solid var(--dlg-line);
+        border-radius:14px;padding:16px 18px;box-shadow:var(--dlg-shadow);font-size:13px}
+    #eggBox h4{margin:0 0 4px;font-size:15px;color:var(--dlg-h)}
+    #eggBox p.sub{margin:0 0 10px;font-size:11.5px;color:var(--dlg-sub);line-height:1.6}
+    #eggRow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    #eggRow button{font-family:inherit;font-size:12.5px;padding:8px 14px;border-radius:8px;cursor:pointer;
+        border:1px solid var(--dlg-line);background:var(--btn);color:var(--btn-txt);transition:background .15s}
+    #eggRow button:hover{background:var(--btn-hov)}
+    #eggRow button.primary{background:var(--pri);border-color:var(--pri-line);color:var(--pri-txt);font-weight:600}
+    #eggRow button.primary:hover{background:var(--pri-hov)}
+    #eggRow button.ghost{background:transparent}
     #gbBox,#chronBox{width:440px;max-width:100%;max-height:100%;overflow:auto;
         background:var(--dlg);color:var(--dlg-txt);border:1px solid var(--dlg-line);
         border-radius:14px;padding:16px 18px;box-shadow:var(--dlg-shadow);font-size:13px}
@@ -823,6 +840,7 @@
     <button type="button" id="enterRoomBtn" style="display:none">🚪 进屋看看</button>
     <button type="button" id="exitRoomBtn" style="display:none">🌿 回到院子</button>
     <button type="button" id="feedFishBtn" style="display:none">🐟 投食喂鱼</button>
+    <button type="button" id="hatchBtn" style="display:none">🥚 孵化小龙</button>
 </div>
 <div id="fadeCover"></div>
 
@@ -892,6 +910,10 @@
     <div class="mpSub">季节（按真实日期自动定季）</div>
     <div class="mpViews" id="seasonBtns"></div>
     <div class="mpTip" id="seasonTip">手动切换只预览本机本次，不保存；刷新后回到真实日期的季节。</div>
+    <div class="mpSep"></div>
+    <div class="mpSub">小龙</div>
+    <button type="button" id="reEggBtn" class="mpVerBtn">🥚 再孵一颗蛋</button>
+    <div class="mpTip">让小龙变回一颗蛋，重新体验破壳：成长天数从头计，名字和外观保留，其它进度（寻宝 / 图鉴 / 农场 / 背包）都不动。</div>
     <div class="mpDisclaimer">
         本世界为开放式共创，访客提交的构想、命名与素材需经负责人审核后才会进入公共场景；
         你桌面上的私人调整只保存在本机浏览器，不影响他人。
@@ -978,6 +1000,19 @@
         </div>
     </div>
 </div>
+<div id="eggMask">
+    <div id="eggBox" role="dialog" aria-modal="true" aria-labelledby="eggTitle">
+        <div class="logHead">
+            <h4 id="eggTitle">🥚 再孵一颗蛋？</h4>
+            <button type="button" class="dlgX" id="eggX" aria-label="关闭">✕</button>
+        </div>
+        <p class="sub">小龙会变回一颗蛋，立在小屋门前等你重新孵化。<br>· 成长天数从头开始计<br>· 名字、性别和外观都保留，孵出来还是原来的它<br>· 寻宝、图鉴、农场、背包这些进度一律不动</p>
+        <div id="eggRow">
+            <button type="button" class="primary" id="eggYes">确认变回蛋</button>
+            <button type="button" class="ghost" id="eggNo">再想想</button>
+        </div>
+    </div>
+</div>
 <div id="helpMask">
     <div id="helpBox" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
         <div class="logHead">
@@ -997,6 +1032,7 @@
         <div class="hrow"><b>留言墙</b><span>屋里墙上贴着留言墙和大事记板：你写过的意见会变成小纸条贴在墙上（点开能看全文，自己写的还能撕下来），负责人精选的留言也会贴上来；大事记板记着这个世界一路长过来的大日子，齿轮面板里也能翻全本</span></div>
         <div class="hrow"><b>小龙互动</b><span>点小龙、或点底部「🤚 互动」：可以摸头、打招呼、让它转圈。收获的南瓜和玉米会进背包，用背包里的食物喂它，它会自己走过去吃；吃饱后它会开心地跟着你玩一阵（状态栏能看背包和喂食次数）</span></div>
         <div class="hrow"><b>小龙定制</b><span>底部「🎨 定制小龙」：给它改名字、性别、体色花纹、角和翅膀的样式，再配上围巾、铃铛、草帽这些小配饰，还能选性格（好奇 / 活泼 / 慵懒，散步和作息都不一样）。改动立刻生效，都只存本机</span></div>
+        <div class="hrow"><b>龙蛋开局</b><span>新来的朋友会先在小屋门前见到一颗龙蛋：点一点蛋、或点「🥚 孵化小龙」，就能看它破壳。想重温破壳，齿轮面板里有「🥚 再孵一颗蛋」（成长会从头计，名字和外观保留）</span></div>
         <div class="hrow"><b>篝火</b><span>点篝火堆可以点火、再点熄火</span></div>
         <div class="hrow"><b>每日寻宝</b><span>每天藏 5 件小物（橡果、蘑菇、羽毛、松果、彩蛋），走近点中即收集，集齐有祝贺</span></div>
         <div class="hrow"><b>种田</b><span>点农田里空着的地块播种，再点一下浇水（雨天自动浇），等昼夜轮转一圈、或到了第二天成熟后，再点一下收获</span></div>
@@ -4680,7 +4716,12 @@ function sanitizeDragonName(s){
 function drgLoadCfg(){
     const c = JSON.parse(JSON.stringify(DRG_DEFAULT_CFG));
     const raw = store.dragon.json(null);
-    if(!raw){ c.grow = drgGrowNormalize(null); c.stage = 0; return c; }
+    if(!raw){
+        // #67：全新存档（从没有过 ct2_dragon）＝还没孵化——门前一颗蛋，
+        // 成长从孵化日起算，加载时先按「蛋里第 1 天」冻结，孵化时正式起算
+        c.egg = {hatched:false, laid:drgTodayStr(), born:null};
+        c.grow = drgGrowNormalize(null); c.stage = 0; return c;
+    }
     for(const k of Object.keys(DRG_ENUMS)) if(DRG_ENUMS[k].indexOf(raw[k]) >= 0) c[k] = raw[k];
     if(raw.wingSize === 1.35 || raw.wingSize === 1) c.wingSize = raw.wingSize;
     if(raw.colors && drgIsHex(raw.colors.body) && drgIsHex(raw.colors.belly) && drgIsHex(raw.colors.accent))
@@ -4689,12 +4730,26 @@ function drgLoadCfg(){
     if(c.palette !== 'custom') c.colors = null;          // 预设与自由色二选一，预设优先
     if(raw.acc) for(const k of Object.keys(c.acc)) c.acc[k] = !!raw.acc[k];
     c.name = sanitizeDragonName(raw.name);
+    // #67：蛋状态——老存档没有 egg 字段一律视为已孵化（龙早就破壳了），
+    // 行为与 #67 之前逐项一致；只有明确写着 hatched:false 的才是蛋形态
+    c.egg = (raw.egg && typeof raw.egg.hatched === 'boolean')
+        ? {hatched:raw.egg.hatched, laid:raw.egg.laid || null, born:raw.egg.born || null}
+        : {hatched:true, laid:null, born:null};
     c.grow = drgGrowNormalize(raw.grow);   // #52：成长记录（跨天推进/升档登记都在这里发生）
+    if(!c.egg.hatched){
+        // 还在蛋里：陪伴天数不许偷跑——每天进来都还是「蛋里第 1 天」，
+        // last 锚到今天保证孵化当天就是成长第 1 天、次日才 +1
+        c.grow = {days:1, last:drgTodayStr(), stage:0, seen:0, events:[]};
+        drgGrowDirty = true;
+    }
     c.stage = c.grow.stage;
     return c;
 }
 let dragonCfg = drgLoadCfg();
 function dragonSaveCfg(){ store.dragon.save(dragonCfg); }
+/* #67：龙是否已破壳——没 egg 字段/没写 false 都算已孵化（老存档口径） */
+function dragonHatched(){ return !dragonCfg.egg || dragonCfg.egg.hatched !== false; }
+const EGG_HINT = '🥚 先把门前的蛋孵出来吧——点一点蛋，或者点「🥚 孵化小龙」';
 if(drgGrowDirty) dragonSaveCfg();          // #52：加载时天数/阶段有推进，立刻落盘
 function drgPers(){ return DRG_PERSONALITY[dragonCfg.personality] || DRG_PERSONALITY.curious; }
 /* 由配置算出本次建模用的全套颜色：预设整表取色；自由选色时翅膜由标志件
@@ -5478,6 +5533,7 @@ function createDragon(){
     });
 }
 function dragonStateLabel(){
+    if(!dragonHatched()) return '🥚 还在蛋里';
     if(!dragonAgent) return '-';
     const a = dragonAgent;
     if(a.mode === 'player') return DragonCtl.fp ? '操控·一人称' : '操控·三人称';
@@ -5647,6 +5703,10 @@ function dragonClickMove(e){
 function setupDragonControls(){
     const dom = renderer.domElement;
     document.getElementById('dragonBtn').addEventListener('click', ()=>{
+        if(!dragonAgent){   // #67：还是蛋的时候点操控——给一句提示，不许静默
+            if(!(typeof Interior !== 'undefined' && Interior.active)) showHuntToast(EGG_HINT);
+            return;
+        }
         if(DragonCtl.active) dragonRelease(); else dragonTakeover();
     });
     document.getElementById('viewBtn').addEventListener('click', dragonToggleView);
@@ -5951,6 +6011,7 @@ function hideDragonMenu(){
     if(m) m.style.display='none';
 }
 function toggleDragonMenu(){
+    if(!dragonAgent){ showHuntToast(EGG_HINT); return; }   // #67：蛋形态守卫
     const m=document.getElementById('dragonMenu'); if(!m) return;
     if(m.style.display==='none'){ refreshDragonMenu(); m.style.display=''; }
     else m.style.display='none';
@@ -6268,6 +6329,7 @@ window.FishSys = FishSys;
    避免打断输入；其余按钮式选项整刷无妨。 */
 let dgOpen = false;
 function openDragonCustom(){
+    if(!dragonHatched()){ showHuntToast(EGG_HINT); return; }   // #67：蛋形态守卫
     if(dgOpen) return;
     dgOpen = true;
     refreshDragonPanel();
@@ -6399,8 +6461,10 @@ function setupDragonCustom(){
     document.getElementById('dgCall').addEventListener('click', () => { audioEnsure(); dragonCall(); });
     document.getElementById('dgReset').addEventListener('click', () => {
         const keepGrow = dragonCfg.grow;   // #52：恢复默认只清外观/性格，成长是陪伴记录，不清
+        const keepEgg = dragonCfg.egg;     // #67：蛋状态同理不清（已破壳的事实别被重置吃掉）
         dragonCfg = JSON.parse(JSON.stringify(DRG_DEFAULT_CFG));
         if(keepGrow){ dragonCfg.grow = keepGrow; dragonCfg.stage = keepGrow.stage; }
+        if(keepEgg) dragonCfg.egg = keepEgg;
         applyDragonCfg(true); refreshDragonPanel();
     });
     dragonRefreshLabels();
@@ -6438,6 +6502,263 @@ function setupDragonGrowth(){
            dragonAgent.state !== 'sleep' && dragonAgent.state !== 'sleepGo')
             dragonGesture(st === 2 ? 'bow' : 'highfive');
     }, 2600);
+}
+
+/* ==================== 龙蛋开局（Issue #67 · v4.2） ====================
+   口径（与 #41/#52 的存档治理一脉）：
+   - 蛋状态存 ct2_dragon 的 egg 字段 {hatched, laid, born}，不新增存储键；
+     无此字段的老存档＝已孵化，行为与本件之前逐项一致（drgLoadCfg 归一）。
+   - 未孵化时龙本体不生成、dragonAgent 保持 null——全站读龙的钩子（动物
+     停角/蹭食、鱼群围观、图鉴目击、节日配饰、进屋带龙）原本就对 null
+     有守卫，天然安全跳过；玩家能碰到的入口（操控/互动/定制）另在各自
+     入口处给一句提示 toast，不许静默、更不许报错。
+   - 成长（#52）在蛋里冻结：grow 每天重置为「蛋里第 1 天」，孵化当天
+     正式起算第 1 天（finishHatch 落盘时重置 grow）。
+   - 「再孵一颗」只动龙自己：变回蛋 + 成长清零；名字/性别/外观保留（孵
+     出来还是原来的它——想连外观一起重置，定制面板里已有「恢复默认」），
+     寻宝/图鉴/农场/背包等其它进度一律不碰。 */
+let eggGroup = null, eggMesh = null, eggMat = null, eggShells = null;
+let eggTexWhole = null, eggTexCracked = null;
+let eggMode = 'none';            // none | egg | hatching | hatched
+let eggT = 0, eggCrackDone = false, eggRockT = 3, eggBtnT = 0, eggBaseY = 0;
+const EGG_LOCAL = {x:1.15, z:4.55};   // 小屋本地系：门（lx≈-0.65）右侧的门前空地
+function eggWorldPos(){
+    const w = houseLocal(EGG_LOCAL.x, EGG_LOCAL.z);
+    return {x:w[0], z:w[1], y:terrainH(w[0], w[1])};
+}
+/* 蛋壳贴图：奶油底 + 珊瑚/薄荷斑点，程序绘制；cracked 版多一圈锯齿裂纹。
+   斑点位置写死——同一颗蛋每次打开长一样。 */
+function eggTexture(cracked){
+    const c = makeCanvas(256, 256), g = c.getContext('2d');
+    const grad = g.createLinearGradient(0, 0, 0, 256);
+    grad.addColorStop(0, '#fdf6dd'); grad.addColorStop(0.55, '#f7e3ae'); grad.addColorStop(1, '#eecf92');
+    g.fillStyle = grad; g.fillRect(0, 0, 256, 256);
+    const spots = [[40,60,15,0],[95,38,10,1],[160,52,16,0],[215,80,11,1],[60,120,12,1],[120,100,9,0],
+                   [185,128,13,1],[30,180,14,0],[90,168,10,0],[150,185,15,1],[210,175,10,0],[55,225,11,1],
+                   [130,232,13,0],[200,228,12,1]];
+    for(const sp of spots){
+        g.fillStyle = sp[3] ? 'rgba(110,190,150,0.55)' : 'rgba(240,118,79,0.55)';
+        g.beginPath(); g.ellipse(sp[0], sp[1], sp[2], sp[2]*0.78, sp[0]*1.7, 0, 6.3); g.fill();
+    }
+    if(cracked){
+        g.strokeStyle = 'rgba(90,55,25,0.9)'; g.lineCap = 'round'; g.lineWidth = 3;
+        g.beginPath();
+        g.moveTo(0, 118);
+        for(let x = 0; x <= 256; x += 16) g.lineTo(x, 118 + ((x/16) % 2 ? 13 : -9));
+        g.stroke();
+        g.lineWidth = 2;
+        for(const bx of [52, 128, 204]){
+            g.beginPath(); g.moveTo(bx, 122); g.lineTo(bx + 8, 148); g.lineTo(bx + 2, 168); g.stroke();
+            g.beginPath(); g.moveTo(bx, 114); g.lineTo(bx - 6, 92); g.stroke();
+        }
+    }
+    return canvasTex(c);
+}
+function eggNestMesh(){
+    const geo = new THREE.TorusGeometry(0.52, 0.17, 8, 18);
+    geo.rotateX(Math.PI/2); geo.scale(1, 0.55, 1);
+    const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({color:0x9a7434, roughness:1}));
+    m.position.y = 0.06; m.castShadow = true;
+    return m;
+}
+function createEgg(){
+    if(eggGroup) return;
+    eggTexWhole = eggTexture(false); eggTexCracked = eggTexture(true);
+    eggMat = new THREE.MeshStandardMaterial({map:eggTexWhole, roughness:0.55, side:THREE.DoubleSide});
+    eggGroup = new THREE.Group();
+    eggGroup.add(eggNestMesh());
+    eggMesh = new THREE.Mesh(new THREE.SphereGeometry(0.55, 20, 16), eggMat);
+    eggMesh.scale.set(1, 1.22, 1);
+    eggMesh.position.y = 0.60;
+    eggMesh.castShadow = true;
+    eggGroup.add(eggMesh);
+    const p = eggWorldPos();
+    eggGroup.position.set(p.x, p.y, p.z);
+    eggGroup.rotation.y = 0.8;
+    eggBaseY = p.y;
+    scene.add(eggGroup);
+    eggMode = 'egg'; eggT = 0; eggCrackDone = false; eggRockT = 3 + Math.random()*3;
+}
+/* 破壳后的两半壳：下半留在窝里、上半翻倒在窝边，当个纪念摆着（静态低模） */
+function buildShells(){
+    const grp = new THREE.Group();
+    grp.add(eggNestMesh());
+    const bot = new THREE.Mesh(new THREE.SphereGeometry(0.55, 20, 10, 0, Math.PI*2, Math.PI*0.52, Math.PI*0.48), eggMat);
+    bot.scale.set(1, 1.22, 1); bot.position.y = 0.60; bot.castShadow = true;
+    grp.add(bot);
+    const top = new THREE.Mesh(new THREE.SphereGeometry(0.55, 20, 10, 0, Math.PI*2, 0, Math.PI*0.52), eggMat);
+    top.scale.set(1, 1.22, 1);
+    top.position.set(0.82, 0.10, 0.30); top.rotation.set(Math.PI*0.92, 0.4, 0.3);
+    top.castShadow = true;
+    grp.add(top);
+    const p = eggWorldPos();
+    grp.position.set(p.x, p.y, p.z);
+    grp.rotation.y = 0.8;
+    return grp;
+}
+function clearEggVisuals(){
+    for(const grp of [eggGroup, eggShells]){
+        if(!grp) continue;
+        if(grp.parent) grp.parent.remove(grp);
+        grp.traverse(o => {
+            if(o.geometry) o.geometry.dispose();
+            if(o.material) o.material.dispose();
+        });
+    }
+    if(eggTexWhole) eggTexWhole.dispose();
+    if(eggTexCracked) eggTexCracked.dispose();
+    eggGroup = null; eggMesh = null; eggMat = null; eggShells = null;
+    eggTexWhole = null; eggTexCracked = null;
+    if(eggMode !== 'hatching') eggMode = 'none';
+}
+function hatchEgg(){
+    if(eggMode !== 'egg' || dragonHatched()) return;
+    eggMode = 'hatching'; eggT = 0; eggCrackDone = false;
+    const btn = document.getElementById('hatchBtn'); if(btn) btn.style.display = 'none';
+    showHuntToast('🥚 蛋在动了……里面有小家伙要出来了！');
+}
+function finishHatch(){
+    eggMode = 'hatched';
+    // 先落盘：蛋破了；成长从今天正式起算第 1 天
+    const today = drgTodayStr();
+    dragonCfg.egg = {hatched:true, laid:(dragonCfg.egg && dragonCfg.egg.laid) || today, born:today};
+    dragonCfg.grow = {days:1, last:today, stage:0, seen:0, events:[]};
+    dragonCfg.stage = 0;
+    dragonSaveCfg();
+    // 整颗蛋收起（几何销毁；材质/贴图转给蛋壳继续用），壳两半留下当纪念
+    if(eggGroup){
+        if(eggGroup.parent) eggGroup.parent.remove(eggGroup);
+        eggGroup.traverse(o => { if(o.geometry) o.geometry.dispose(); });
+        eggGroup = null; eggMesh = null;
+    }
+    eggShells = buildShells();
+    scene.add(eggShells);
+    // 龙登场：就在蛋的位置破壳而出，面朝院子
+    createDragon();
+    if(dragonAgent){
+        const p = eggWorldPos();
+        dragonAgent.group.position.set(p.x, p.y, p.z);
+        dragonAgent.group.rotation.y = HOUSE_ROT;
+    }
+    dragonCall();
+    spawnHearts(10);
+    showHuntToast('🎉 破壳啦！' + dragonCfg.name + ' 来到这个世界了——点它、或者用底部按钮陪它玩吧');
+    updateStatus();
+    const btn = document.getElementById('hatchBtn'); if(btn) btn.style.display = 'none';
+}
+function updateEgg(dt, t){
+    if(eggMode === 'egg' && eggGroup){
+        // 呼吸晃动：常态轻摆；每隔几秒一阵小摇，像里面在动
+        eggRockT -= dt;
+        if(eggRockT < -0.9) eggRockT = 4 + Math.random()*5;
+        eggGroup.rotation.z = eggRockT < 0
+            ? Math.sin(t*16) * 0.09 * Math.min(1, (eggRockT + 0.9)/0.3)
+            : Math.sin(t*2.4) * 0.03;
+        eggGroup.rotation.x = Math.sin(t*1.9 + 1) * 0.015;
+        const bs = 1 + Math.sin(t*2.4) * 0.006;
+        eggGroup.scale.set(bs, 1, bs);
+    } else if(eggMode === 'hatching' && eggGroup){
+        eggT += dt;
+        const k = eggT < 0.85 ? eggT/0.85 : Math.min(1, (eggT - 0.85)/0.65);
+        eggGroup.rotation.z = Math.sin(eggT*34) * (0.05 + 0.11*k);
+        eggGroup.position.y = eggBaseY + Math.abs(Math.sin(eggT*17)) * 0.035 * (0.4 + k);
+        if(eggT >= 0.85 && !eggCrackDone){
+            eggCrackDone = true;
+            if(eggMat && eggTexCracked){ eggMat.map = eggTexCracked; eggMat.needsUpdate = true; }
+            if(typeof actx !== 'undefined' && actx && !audioMuted)
+                audioNote(140, 0.08, 0.05, 'square', 0, aAmb);   // 一声轻轻的「咔」
+        }
+        if(eggT >= 1.5) finishHatch();
+    }
+    // 「🥚 孵化小龙」钮显隐（低频）：蛋形态且不在屋里时常驻显示
+    eggBtnT -= dt;
+    if(eggBtnT <= 0){
+        eggBtnT = 0.25;
+        const btn = document.getElementById('hatchBtn');
+        if(btn){
+            const show = eggMode === 'egg' && !(typeof Interior !== 'undefined' && Interior && Interior.active);
+            btn.style.display = show ? '' : 'none';
+        }
+    }
+}
+/* ---------- 再孵一颗（设置里，二次确认后执行） ---------- */
+function openEggConfirm(){
+    if(!dragonHatched()){ showHuntToast('🥚 它已经是蛋啦，就在小屋门前等着孵化'); return; }
+    if(eggMode === 'hatching') return;
+    if(typeof Interior !== 'undefined' && Interior.active){ showHuntToast('🌿 先回到院子，再让它变回蛋吧'); return; }
+    document.getElementById('eggMask').classList.add('on');
+    const panel = document.getElementById('modPanel'); if(panel) panel.classList.remove('on');
+}
+function closeEggConfirm(){
+    const m = document.getElementById('eggMask'); if(m) m.classList.remove('on');
+}
+function eggResetToEgg(){
+    closeEggConfirm();
+    if(!dragonHatched() || eggMode === 'hatching') return;
+    if(typeof Interior !== 'undefined' && Interior.active){ showHuntToast('🌿 先回到院子，再让它变回蛋吧'); return; }
+    if(DragonCtl.active) dragonRelease();
+    if(foodMesh){ bagAdd(foodKind); removeFood(); }   // 没吃完的食物退回背包（与接管散场同口径）
+    hideDragonMenu();
+    if(dgOpen) closeDragonCustom();
+    // 摘掉 agent：从框架名单里除名 + 模型回收（节日挂在龙身上的节点随组一起回收，
+    // 节日系统重挂时有 !dragonAgent 守卫，不会往空处挂）
+    const a = dragonAgent; dragonAgent = null;
+    if(a){
+        const i1 = AgentKit.agents.indexOf(a); if(i1 >= 0) AgentKit.agents.splice(i1, 1);
+        const list = AgentKit._byDef.get(DRAGON_DEF);
+        if(list){ const i2 = list.indexOf(a); if(i2 >= 0) list.splice(i2, 1); }
+        if(a.group.parent) a.group.parent.remove(a.group);
+        a.group.traverse(o => { if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); });
+    }
+    clearEggVisuals();
+    const today = drgTodayStr();
+    dragonCfg.egg = {hatched:false, laid:today, born:null};
+    dragonCfg.grow = {days:1, last:today, stage:0, seen:0, events:[]};
+    dragonCfg.stage = 0;
+    dragonSaveCfg();
+    applyGrowthChronicle();   // 成长条目随 grow 清零，大事记板跟着归位
+    createEgg();
+    dragonRefreshLabels();
+    updateStatus();
+    showHuntToast('🥚 它变回一颗蛋啦——就在小屋门前，点一点就能重新孵化');
+}
+function setupEgg(){
+    const hb = document.getElementById('hatchBtn');
+    if(hb) hb.addEventListener('click', hatchEgg);
+    const rb = document.getElementById('reEggBtn');
+    if(rb) rb.addEventListener('click', openEggConfirm);
+    const mask = document.getElementById('eggMask');
+    if(mask){
+        document.getElementById('eggYes').addEventListener('click', eggResetToEgg);
+        document.getElementById('eggNo').addEventListener('click', closeEggConfirm);
+        document.getElementById('eggX').addEventListener('click', closeEggConfirm);
+        mask.addEventListener('click', e => { if(e.target === mask) closeEggConfirm(); });
+        document.addEventListener('keydown', e => {
+            if(e.key === 'Escape' && mask.classList.contains('on')){ closeEggConfirm(); e.stopPropagation(); }
+        }, true);
+    }
+    bindEggTap();
+}
+/* 点蛋孵化：与点龙/点立牌同款轻点判定（位移 <6px、时长 <500ms 才算点按） */
+let eggTapState = null;
+function bindEggTap(){
+    if(!renderer) return;
+    const el = renderer.domElement;
+    el.addEventListener('pointerdown', e => { eggTapState = {x:e.clientX, y:e.clientY, t:performance.now()}; });
+    el.addEventListener('pointerup', e => {
+        if(!eggTapState) return;
+        const dx = e.clientX - eggTapState.x, dy = e.clientY - eggTapState.y;
+        const dur = performance.now() - eggTapState.t;
+        eggTapState = null;
+        if(dx*dx + dy*dy >= 36 || dur >= 500) return;
+        if(eggMode !== 'egg' || !eggGroup) return;
+        if(typeof Interior !== 'undefined' && Interior.active) return;
+        if(typeof DragonCtl !== 'undefined' && DragonCtl.active) return;
+        const r = el.getBoundingClientRect();
+        _dgNdc.set(((e.clientX - r.left)/r.width)*2 - 1, -((e.clientY - r.top)/r.height)*2 + 1);
+        _dgRay.setFromCamera(_dgNdc, camera);
+        if(_dgRay.intersectObject(eggGroup, true).length) hatchEgg();
+    });
 }
 
 /* ==================== 天气系统 ==================== */
@@ -7063,6 +7384,7 @@ function animate(){
     updateModules(dt, t);
     farmRainCheck();
     updateDragonFx(dt, t);
+    updateEgg(dt, t);   // #67：蛋的呼吸晃动、孵化演出、孵化钮显隐
 
     // 风吹摆动：统一走环境风场（树/花/草共用一阵风，见 Env）
     swayGroups.forEach(sg=>{
@@ -10346,7 +10668,7 @@ function init(){
     createFlowerBands();
     createOutskirts();
     createInsects();
-    createDragon();
+    if(dragonHatched()) createDragon(); else createEgg();   // #67：新玩家开局先见蛋
 
     controls=makeOrbitControls(camera,renderer.domElement);
     buildWeatherButtons();
@@ -10359,6 +10681,7 @@ function init(){
     setupSnapshot();
     setupVote();
     setupDragonControls();
+    setupEgg();   // #67：点蛋孵化 / 孵化钮 / 设置里「再孵一颗蛋」
     setupModules();
     createInterior();
     setupWalls();
@@ -10690,7 +11013,7 @@ function setupGlobal(){
     if(!app) return;
     var HIDE_MS = 3000, timer = null;
     function anyDialogOpen(){
-        var ids = ['modPanel','fbMask','ltMask','helpMask','voteMask','logMask','dragonMask','echoMask','codexMask','gbMask','chronMask'], i, el;
+        var ids = ['modPanel','fbMask','ltMask','helpMask','voteMask','logMask','dragonMask','echoMask','codexMask','gbMask','chronMask','eggMask'], i, el;
         for(i = 0; i < ids.length; i++){
             el = document.getElementById(ids[i]);
             if(el && el.classList.contains('on')) return true;
@@ -10708,7 +11031,7 @@ function setupGlobal(){
         app.classList.remove('bars-off');
         arm();
     }
-    ['ui','status','fbBtn','lanternBtn','modBtn','modPanel','fbMask','ltMask','helpMask','voteMask','logMask','dragonMask','echoMask','codexMask','gbMask','chronMask'].forEach(function(id){
+    ['ui','status','fbBtn','lanternBtn','modBtn','modPanel','fbMask','ltMask','helpMask','voteMask','logMask','dragonMask','echoMask','codexMask','gbMask','chronMask','eggMask'].forEach(function(id){
         var el = document.getElementById(id);
         if(!el) return;
         ['pointerdown','input','change','wheel'].forEach(function(ev){
