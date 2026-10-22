@@ -301,12 +301,12 @@ test('FB 提交：先复制兜底，再只回传到白名单地址', ()=>{    mu
     const outside = abs.filter(u => !/^https:\/\/formsubmit\.co\//.test(u));
     must(outside.length===0,'出现白名单外的绝对 URL：'+outside.join(', '));
     must(!/XMLHttpRequest|sendBeacon|WebSocket/.test(inlineJs),'出现其他网络通道');
-    // 全页只允许十三个具名本地键：ct2_visits（访问计数）、ct2_hunt（寻宝进度）、ct2_help（帮助已提示标记）、ct2_farm（种田存档）、ct2_vote（投票已投标记）、ct2_theme（界面深浅主题偏好）、ct2_echo（建议回音回执）、ct2_bag（小龙背包与喂食计数）、ct2_dragon（小龙自定义外观与个性）、ct2_codex（图鉴解锁集合）、ct2_guest（留言上墙本机副本）、ct2_music（自定义音乐偏好与歌名）与 ct2_scene（场景中枢画质总档与渲染参数偏好），都不上传
+    // 全页只允许十四个具名本地键：ct2_visits（访问计数）、ct2_hunt（寻宝进度）、ct2_help（帮助已提示标记）、ct2_farm（种田存档）、ct2_vote（投票已投标记）、ct2_theme（界面深浅主题偏好）、ct2_echo（建议回音回执）、ct2_bag（小龙背包与喂食计数）、ct2_dragon（小龙自定义外观与个性）、ct2_codex（图鉴解锁集合）、ct2_guest（留言上墙本机副本）、ct2_music（自定义音乐偏好与歌名）、ct2_scene（场景中枢画质总档与渲染参数偏好）与 ct2_ach（成就徽章解锁集合与日期），都不上传
     must(!/sessionStorage|document\.cookie/.test(inlineJs),'出现未授权的存储');
     const lsKeys = [...inlineJs.matchAll(/localStorage\.(?:getItem|setItem)\('([^']+)'/g)].map(m=>m[1]);
-    const badKeys = lsKeys.filter(k => k !== 'ct2_visits' && k !== 'ct2_hunt' && k !== 'ct2_help' && k !== 'ct2_farm' && k !== 'ct2_vote' && k !== 'ct2_theme' && k !== 'ct2_echo' && k !== 'ct2_bag' && k !== 'ct2_dragon' && k !== 'ct2_codex' && k !== 'ct2_guest' && k !== 'ct2_music' && k !== 'ct2_scene');
+    const badKeys = lsKeys.filter(k => k !== 'ct2_visits' && k !== 'ct2_hunt' && k !== 'ct2_help' && k !== 'ct2_farm' && k !== 'ct2_vote' && k !== 'ct2_theme' && k !== 'ct2_echo' && k !== 'ct2_bag' && k !== 'ct2_dragon' && k !== 'ct2_codex' && k !== 'ct2_guest' && k !== 'ct2_music' && k !== 'ct2_scene' && k !== 'ct2_ach');
     must(badKeys.length===0,'出现未授权的本地存储键：'+badKeys.join(', '));
-    // 动态键只允许具名常量 HUNT_KEY / HELP_KEY / FARM_KEY / VOTE_KEY / THEME_KEY / ECHO_KEY / BAG_KEY / DRAGON_KEY / CODEX_KEY / GUEST_KEY / MUSIC_KEY，且它们的取值必须写死
+    // 动态键只允许具名常量 HUNT_KEY / HELP_KEY / FARM_KEY / VOTE_KEY / THEME_KEY / ECHO_KEY / BAG_KEY / DRAGON_KEY / CODEX_KEY / GUEST_KEY / MUSIC_KEY / SCENE_KEY / ACH_KEY，且它们的取值必须写死
     must(/const HUNT_KEY='ct2_hunt'/.test(inlineJs),'HUNT_KEY 必须写死为 ct2_hunt');
     must(/const HELP_KEY='ct2_help'/.test(inlineJs),'HELP_KEY 必须写死为 ct2_help');
     must(/const FARM_KEY='ct2_farm'/.test(inlineJs),'FARM_KEY 必须写死为 ct2_farm');
@@ -319,7 +319,8 @@ test('FB 提交：先复制兜底，再只回传到白名单地址', ()=>{    mu
     must(/const CODEX_KEY='ct2_codex'/.test(inlineJs),'CODEX_KEY 必须写死为 ct2_codex');
     must(/const MUSIC_KEY='ct2_music'/.test(inlineJs),'MUSIC_KEY 必须写死为 ct2_music');
     must(/const SCENE_KEY='ct2_scene'/.test(inlineJs),'SCENE_KEY 必须写死为 ct2_scene');
-    must(!/localStorage\.(?:getItem|setItem)\((?!'ct2_visits'|HUNT_KEY|HELP_KEY|FARM_KEY|VOTE_KEY|THEME_KEY|ECHO_KEY|BAG_KEY|DRAGON_KEY|CODEX_KEY|GUEST_KEY|MUSIC_KEY|SCENE_KEY)/.test(inlineJs),'存在动态拼接的存储键');
+    must(/const ACH_KEY='ct2_ach'/.test(inlineJs),'ACH_KEY 必须写死为 ct2_ach');
+    must(!/localStorage\.(?:getItem|setItem)\((?!'ct2_visits'|HUNT_KEY|HELP_KEY|FARM_KEY|VOTE_KEY|THEME_KEY|ECHO_KEY|BAG_KEY|DRAGON_KEY|CODEX_KEY|GUEST_KEY|MUSIC_KEY|SCENE_KEY|ACH_KEY)/.test(inlineJs),'存在动态拼接的存储键');
     // 顺序保证：先复制，后发送
     const iCopy = inlineJs.indexOf('copyToClipboard(text).then(');
     const iSend = inlineJs.indexOf('sendFeedback({');
@@ -420,6 +421,19 @@ test('世界图鉴：声明式条目、本机解锁存档与判定挂点（Issue
     // 条目数与六大类齐全（植物/作物/宝物/天气/地点/动物）
     const defs = inlineJs.match(/cat:'(plant|crop|treasure|weather|place|animal)'/g) || [];
     must(defs.length>=30,'图鉴条目过少：'+defs.length);
+});
+test('成就徽章：声明式条目、本机存档与判定挂点（Issue #66）', ()=>{
+    must(/const ACH_KEY='ct2_ach'/.test(inlineJs),'ACH_KEY 必须写死为 ct2_ach');
+    must(/const ACH_DEFS\s*=\s*\[/.test(inlineJs),'缺少声明式成就条目 ACH_DEFS');
+    must(/function setupAch\(/.test(inlineJs),'缺少 setupAch');
+    must(/function achTick\(/.test(inlineJs),'缺少成就巡检 achTick');
+    must(/function achState\(/.test(inlineJs),'缺少成就状态快照 achState');
+    must(/ach:\s*mkSlot\(\(\)=>localStorage\.getItem\(ACH_KEY\)/.test(inlineJs),'store 缺 ach 槽');
+    must(/id="achBtn"/.test(html) && /id="achMask"/.test(html) && /id="achBody"/.test(html),
+        '成就入口/弹窗缺一');
+    const blk = inlineJs.slice(inlineJs.indexOf('const ACH_DEFS'), inlineJs.indexOf('];', inlineJs.indexOf('const ACH_DEFS')));
+    const n = (blk.match(/\{ id:'/g) || []).length;
+    must(n>=14,'成就条目过少：'+n);
 });
 test('FB 回传必须显式带 Referer（FormSubmit 靠它判来源）', ()=>{
     // 线上曾因 <meta name="referrer" content="no-referrer"> 被抹掉 Referer，
