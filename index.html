@@ -7,6 +7,55 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src data: blob:; connect-src 'self' https://formsubmit.co blob:; font-src 'none'; media-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <title>楚门的2.0世界 · Three.js 场景</title>
+<script>
+/* 小版本不停机更新自检（发版纪律见 README「发版清单」）：本页构建号与站点 version.json 比对。
+   线上更新时：未进世界→整页换新一次（带 _v 参数绕开页面缓存，资源照常走缓存）；
+   已在世界→只给角落小字提示，绝不中途重载。指针拉不到就当作无更新，静默放行。 */
+window.__BUILD__ = '2026-1022-1935';
+(function(){
+    const UPD_TRY_KEY='ct2_upd_try';
+    let hintedBuild = '';
+    function updInWorld(){
+        try { return !!(window.__worldEntered96 || (typeof enteredWorld !== 'undefined' && enteredWorld)); }
+        catch(e){ return !!window.__worldEntered96; }
+    }
+    function updShowHint(){
+        if(document.getElementById('updHint')) return;
+        const el = document.createElement('div');
+        el.id = 'updHint';
+        el.textContent = '✨ 有新版本，下次打开就是新的';
+        el.style.cssText = 'position:fixed;left:10px;bottom:calc(env(safe-area-inset-bottom,0px) + 12px);z-index:900;font-size:12px;line-height:1.5;color:#ffe9a8;background:rgba(14,26,14,.92);border:1px solid rgba(255,210,100,.5);border-radius:999px;padding:5px 12px;pointer-events:none;box-shadow:0 10px 30px rgba(0,0,0,.4)';
+        (document.body || document.documentElement).appendChild(el);
+        setTimeout(function(){ el.remove(); }, 6500);
+    }
+    function updCheck(){
+        if(typeof fetch !== 'function') return;
+        fetch('version.json?ts='+Date.now(),{cache:'no-store'}).then(function(r){
+            if(!r.ok) throw new Error('ptr');
+            return r.json();
+        }).then(function(d){
+            const b = d && typeof d.build === 'string' ? d.build : '';
+            if(!b || b <= window.__BUILD__) return;
+            if(updInWorld()){
+                if(hintedBuild !== b){ hintedBuild = b; updShowHint(); }
+                return;
+            }
+            const u = new URL(location.href);
+            if(u.searchParams.get('_v') === b) return;
+            let tried = '';
+            try { tried = sessionStorage.getItem(UPD_TRY_KEY) || ''; } catch(e){}
+            if(tried === b) return;
+            try { sessionStorage.setItem(UPD_TRY_KEY, b); } catch(e){}
+            u.searchParams.set('_v', b);
+            location.replace(u.toString());
+        }).catch(function(){});
+    }
+    updCheck();
+    document.addEventListener('visibilitychange', function(){
+        if(document.visibilityState === 'visible') updCheck();
+    });
+})();
+</script>
 <style>
     /* ===== UI 深浅主题变量（Issue #10 回补） =====
        全部 DOM 界面（顶栏/状态栏/弹窗/齿轮面板/浮动钮）的颜色只从这里取值：
