@@ -9201,6 +9201,17 @@ function chooseAvatar(form, style, silent){
     if(form === 'girl'){ dragonCfg.avatar.style = style || 0;
         dragonCfg.avatar.parts = Object.assign({}, GIRL_PRESETS[dragonCfg.avatar.style].parts); }   // #80：选择卡=预设一键套用
     dragonCfg.avatar.chosen = true;
+    if(form === 'girl' && !dragonHatched()){
+        /* #67 × #100 适配：选少女不触发龙蛋序章——蛋在账面上视为今日破壳
+           （成长同日起算，与 finishHatch 同口径），门前蛋摆设收起；世界已
+           建起（序章中）就当场把化身生成出来，交给进入流程接管出生；
+           世界还没建（保命推迟路径）只落账，init 时自然按已孵化建化身 */
+        const eggToday = drgTodayStr();
+        dragonCfg.egg = {hatched:true, laid:(dragonCfg.egg && dragonCfg.egg.laid) || eggToday, born:eggToday};
+        dragonCfg.grow = {days:1, last:eggToday, stage:0, seen:0, events:[]};
+        dragonCfg.stage = 0;
+        if(eggMode !== 'none'){ clearEggVisuals(); if(!dragonAgent) createDragon(); }
+    }
     applyDragonCfg(true);
     closeAvatarCard();
     if(!silent && typeof showHuntToast === 'function')
@@ -9317,14 +9328,22 @@ function setupEntryFlow(){
         if(!(dragonCfg.view && dragonCfg.view.chosen)){ openViewCard(); return; }
         enterWorldNow();
     }, 400);
-    /* 安全阀：等得太久（异常叠层等）就按存档/默认直接进世界，不把人挡在门外 */
-    setTimeout(() => {
+    /* 安全阀：等得太久（异常叠层等）就按存档/默认直接进世界，不把人挡在门外；
+       #67：蛋序章是正当等待态，阀门不强进——只有限次守望（40 次×30 秒），
+       次数用完安静退出，进入轮询会继续守着，孵化后照常走选视角→出生流程 */
+    let entryValveWaits = 0;
+    const entrySafetyValve = () => {
         if(enteredWorld) return;
+        if(typeof dragonHatched === 'function' && !dragonHatched()){
+            if(++entryValveWaits <= 40) setTimeout(entrySafetyValve, 30000);
+            return;
+        }
         clearInterval(wait);
         if(avOpen) chooseAvatar('dragon', 0, true);
         if(viewOpen) chooseView(false, true);
         if(dragonAgent) enterWorldNow();
-    }, 90000);
+    };
+    setTimeout(entrySafetyValve, 90000);
 }
 
 function setupDragonGrowth(){
@@ -9480,7 +9499,17 @@ function finishHatch(){
         dragonAgent.group.position.set(p.x, p.y, p.z);
         dragonAgent.group.rotation.y = HOUSE_ROT;
     }
-    dragonCall();
+    if(enteredWorld){
+        /* #67 × #100：老玩家「再孵一颗」孵化完成——enterWorldNow 已执行过
+           不会再跑，这里在破壳处直接重新接管：人称按存档恢复，接管自带
+           迎接叫声（dragonTakeover 内含 dragonCall），不再另叫一遍 */
+        dragonCfg.view = drgViewNormalize(dragonCfg.view);
+        DragonCtl.fp = !!dragonCfg.view.fp;
+        if(dragonAgent) dragonAgent.parts.head.visible = !DragonCtl.fp;
+        dragonTakeover();
+    } else {
+        dragonCall();
+    }
     spawnHearts(10);
     showHuntToast('🎉 破壳啦！' + dragonCfg.name + ' 来到这个世界了——点它、或者用底部按钮陪它玩吧');
     updateStatus();
