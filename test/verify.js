@@ -631,6 +631,21 @@ test('v5.1 聪明自适应 档位记成绩：可信档＋嫌疑累计＋试升�
     must(/clearGlSuspicion/.test(inlineJs), '缺致命层重试用的清嫌疑入口');
 });
 
+test('v5.1 #98 保命特效逐个放回：特效嫌疑账 gx＋五件恢复闸门＋水体钉死 lite', ()=>{
+    must(/const GL_FX/.test(inlineJs) && /GL_FX_KEYS = \['sky', 'water', 'sway', 'cloud', 'bloom'\]/.test(inlineJs), '缺特效嫌疑账 GL_FX/GL_FX_KEYS');
+    must(/gx: GL_FX\.fails/.test(inlineJs), 'gx 未随 ct2_scene 落盘（同键扩字段）');
+    must(/GL_FX\.fails = __fxCounts\(sv\.gx\)/.test(inlineJs), 'gx 未在读档时恢复');
+    must(/function glFxOn\(/.test(inlineJs) && /function glFxMark\(/.test(inlineJs), '缺特效闸门 glFxOn/glFxMark');
+    must(/glNoteFxFailure/.test(inlineJs), '缺特效记账 glNoteFxFailure');
+    must(/glSafeLv\(\) >= 2 && !glFxOn\('sky'\)/.test(inlineJs), '天空穹顶未挂 sky 嫌疑闸');
+    must(/glSafeLv\(\) >= 2 && !glFxOn\('water'\)/.test(inlineJs), '水体未挂 water 嫌疑闸');
+    must(/glFxOn\('sway'\)/.test(inlineJs), '草/花/蒲公英风摆未挂 sway 嫌疑闸');
+    must(/glFxOn\('cloud'\)/.test(inlineJs), '云影未挂 cloud 嫌疑闸');
+    must(/glFxOn\('bloom'\)/.test(inlineJs), 'Bloom 未挂 bloom 嫌疑闸');
+    must(/name === 'ultra' && glSafeLv\(\) < 2/.test(inlineJs), '保命档水体未钉死 lite（__waterTier 可被切回 ultra）');
+    must(/\(GL_FX\.fails\[key\] \|\| 0\) < 2/.test(inlineJs), '特效关停门槛不是累计 2 次');
+});
+
 test('v5.1 聪明自适应 帧率微调：5 秒窗＋25/50 阈值＋10 秒宽限＋4 秒冷却＋钩子', ()=>{
     must(/window\.__fpsTune/.test(inlineJs), '缺 FPS 微调断言钩子 __fpsTune');
     must(/T\.win < 5/.test(inlineJs), 'FPS 窗口不是 5 秒');
