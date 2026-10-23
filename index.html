@@ -11,7 +11,7 @@
 /* 小版本不停机更新自检（发版纪律见 README「发版清单」）：本页构建号与站点 version.json 比对。
    线上更新时：未进世界→整页换新一次（带 _v 参数绕开页面缓存，资源照常走缓存）；
    已在世界→只给角落小字提示，绝不中途重载。指针拉不到就当作无更新，静默放行。 */
-window.__BUILD__ = '2026-1023-1735';
+window.__BUILD__ = '2026-1023-1833';
 (function(){
     const UPD_TRY_KEY='ct2_upd_try';
     let hintedBuild = '';
@@ -950,7 +950,7 @@ window.__BUILD__ = '2026-1023-1735';
     #app.bars-off #fbBtn,#app.bars-off #lanternBtn,#app.bars-off #modBtn{opacity:0;pointer-events:none;transform:translateY(12px)}
     /* #96 补齐：底部操控条 / 进出屋条 / 提示条 / 回程钮 / 小龙菜单也纳入自动隐藏（只淡出，不动各自的位移动画与显隐逻辑） */
     #dragonBar,#roomBar,#appBar,#echoHomeBtn,#dragonMenu{transition:opacity .35s ease}
-    #app.bars-off #dragonBar,#app.bars-off #roomBar,#app.bars-off #appBar,#app.bars-off #echoHomeBtn,#app.bars-off #dragonMenu,#app.bars-off #voiceBar,#app.bars-off #stamBar{opacity:0;pointer-events:none}
+    #app.bars-off #dragonBar,#app.bars-off #roomBar,#app.bars-off #appBar,#app.bars-off #echoHomeBtn,#app.bars-off #dragonMenu,#app.bars-off #voiceBar,#app.bars-off #stamBar,#app.bars-off #ctxBtn{opacity:0;pointer-events:none}
     #wakeBtn{position:absolute;right:10px;top:50%;z-index:119;width:34px;height:34px;border-radius:50%;
         transform:translateY(-50%);display:flex;align-items:center;justify-content:center;
         background:var(--wake-bg);color:var(--wake-txt);border:1px solid var(--ghost-line);
@@ -1001,7 +1001,7 @@ window.__BUILD__ = '2026-1023-1735';
     #app.photo-on #fbMask,#app.photo-on #ltMask,#app.photo-on #helpMask,#app.photo-on #voteMask,
     #app.photo-on #logMask,#app.photo-on #dragonMask,#app.photo-on #avatarMask,#app.photo-on #viewMask,#app.photo-on #echoMask,#app.photo-on #codexMask,#app.photo-on #achMask,
     #app.photo-on #gbMask,#app.photo-on #chronMask,#app.photo-on #huntToast,#app.photo-on #helpTip,#app.photo-on #appBar,
-    #app.photo-on #wishBubble,#app.photo-on #sdBubble,#app.photo-on #codexToast,#app.photo-on #achToast,#app.photo-on #rotGuide,#app.photo-on #miniMap,#app.photo-on #voiceBar,#app.photo-on #stamBar{display:none !important}
+    #app.photo-on #wishBubble,#app.photo-on #sdBubble,#app.photo-on #codexToast,#app.photo-on #achToast,#app.photo-on #rotGuide,#app.photo-on #miniMap,#app.photo-on #voiceBar,#app.photo-on #stamBar,#app.photo-on #ctxBtn{display:none !important}
     #photoUI{display:none;position:absolute;inset:0;z-index:140;pointer-events:none}
     #photoGrid{position:absolute;inset:0;pointer-events:none;
         background:
@@ -1071,6 +1071,20 @@ window.__BUILD__ = '2026-1023-1735';
     #dragonMenu button:hover:not(:disabled){background:var(--warm-float-hov)}
     #dragonMenu button:disabled{opacity:.42;cursor:default}
     #dragonMenu .dmHint{color:var(--panel-hint);font-size:11px;margin-top:6px;min-height:14px}
+    /* ===== 上下文互动键（技能期 Build 2）：键簇上方的主动作胶囊钮，与互动
+       主钮同色系；E 角标只在细指针（桌面）露面，触屏只显示文案 ===== */
+    #ctxBtn{position:absolute;right:calc(14px + env(safe-area-inset-right, 0px));
+        bottom:calc(96px + env(safe-area-inset-bottom, 0px));z-index:121;
+        align-items:center;gap:8px;max-width:calc(100vw - 28px);
+        background:var(--warm-pri);color:#fff;border:1px solid var(--warm-pri-line);
+        border-radius:999px;padding:12px 18px;font-family:inherit;font-size:14.5px;font-weight:600;
+        cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.28);backdrop-filter:blur(6px);
+        -webkit-tap-highlight-color:transparent;transition:opacity .35s ease,transform .1s,background .15s}
+    #ctxBtn:hover{background:var(--warm-pri-hov)}
+    #ctxBtn:active{transform:scale(.96)}
+    #ctxBtn .ctxE{display:none;font-size:10.5px;font-weight:700;line-height:1.3;
+        border:1px solid rgba(255,255,255,.65);border-radius:5px;padding:1px 5px}
+    @media (pointer:fine){ #ctxBtn .ctxE{display:inline-block} }
     /* 动态原点摇杆：底盘只是视觉层（pointer-events:none），位置由 JS 按触点
        写 left/top 并以 translate(-50%,-50%) 对心；触摸进行中才 .live 露脸，
        抬手淡出。输入由 #joyZone 手势区接管（见下）。 */
@@ -1171,6 +1185,8 @@ window.__BUILD__ = '2026-1023-1735';
     </div>
     <div class="dmHint" id="dmHint"></div>
 </div>
+<!-- 上下文互动键（技能期 Build 2）：走近可互动对象时浮出，文案与目标由 CtxKey 填 -->
+<button type="button" id="ctxBtn" style="display:none"><span class="ctxTxt"></span><span class="ctxE">E</span></button>
 <div id="joy"><div id="joyKnob"></div></div>
 <div id="joyZone"></div>
 <div id="roomBar">
@@ -13302,6 +13318,7 @@ const FEAT = {
     skillMove: { on:true, label:'🏃 技能·跳跃与疾跑' },
     farmSeason:{ on:true, label:'🌾 季节影响农场' },
     voice:     { on:true, label:'🗣️ 世界之声' },
+    skillContext:{ on:true, label:'🎯 技能·上下文互动键' },
     atmoFog:   { on:true, label:'沉浸·分层雾' },
     atmoLight: { on:true, label:'沉浸·柔和天光' },
     atmoWind:  { on:true, label:'沉浸·微风植被' },
@@ -13431,6 +13448,13 @@ const MODULE_HOOKS = {
         setup(){ VoiceSys.arm(); },
         teardown(){ VoiceSys.disarm(); },
         update(dt, t){ VoiceSys.update(dt, t); }
+    },
+    /* 上下文互动键（技能期 Build 2）：实现全在 CtxKey 一节；钩子只负责
+       绑定（setup 一次）与驱动轮询、关掉时立刻收键 */
+    skillContext: {
+        setup(){ CtxKey.bind(); },
+        teardown(){ CtxKey.hide(); },
+        update(dt){ CtxKey.update(dt); }
     },
     /* 沉浸氛围五件（Issue #81）：实现全在 AtmoSys 一节，钩子只转发开关，
        各件互不调用——关掉哪件只有哪件停摆/复原，详见 AtmoSys 头注的开关清单 */
@@ -16702,6 +16726,233 @@ const VoiceSys = {
 };
 window.__voice = VoiceSys;   // 验收钩子（与 __npc / __fpsTune 同例）
 
+/* ==================== 上下文互动键（技能期 Build 2） ====================
+   走近可互动对象，右下键簇上方浮出一颗「上下文键」，写着最近目标的主
+   动作；点它（或桌面按 E）＝执行与直接点该对象完全相同的既有处理器。
+   本节只做「选谁、显不显、按下去转交谁」，不实现任何互动本身。
+
+   审计结论（2026-10-23，逐个核过现有点击路径后登记）：
+   - 小屋门   onSceneTap → 关着 setDoor(true)（敲门开门）／开着 enterRoom()
+              （与「🚪 进屋看看」钮、点门洞暖光同一入口）        类别 pass
+   - 篝火     onSceneTap → setFire(!fireOn)                       类别 task
+   - 农田地块 onFarmCellTap(cell)：空地播种／未浇浇水／成熟收获，
+              标签随地块状态走；已浇未熟只是回话、无动作，不登记 类别 task
+   - 寻宝宝物 onHuntTap → collectHuntItem(item)                   类别 gather
+   - 玩家立牌 onStandeeTap → showStandeeBubble(entry, mesh)       类别 talk
+   - 小龙     点龙／🤚钮 → toggleDragonMenu()；仅小龙自主态
+              （!DragonCtl.active）登记——操控态下玩家就是小龙本人 类别 talk
+   - 留言墙   室内 guestBoardTap → openGbNote(idx)：键按当前页第一
+              张纸条转交（点墙本是点中哪张看哪张，键取「看留言墙」
+              的主动作）；无纸条不登记                            类别 talk
+   未登记（附理由，别后人再猜）：
+   - 村民对话：活世界一期只有作息与旁白，村民没有任何既有点击处理
+     器——不新造对话；talk 类别与最高优先级已留位，对话功能落地后
+     在 scan() 里加一段即可接入。
+   - 信箱：世界里不存在此物。图鉴石：无实体石，图鉴是顶栏常驻钮
+     openCodex，无近接语义。回小屋：dragonBtn 常驻钮 avatarGoHome，
+     同理。龙蛋：序章期本键全局隐藏（见 blocked），且尚无化身坐标。
+
+   选取规则：半径内候选先比距离，最近者胜；与最近者在 tieWin（0.6）
+   距离内并列时按类别优先级 对话＞任务＞采集＞通行 决胜。
+   显隐：FEAT.skillContext 关／未进世界／龙蛋序章／日志、面板、任一
+   弹窗打开／拍照模式／小龙菜单已开——一律隐藏（门控与世界之声同源
+   口径）；键钮已进 HUD 自动隐藏名单（bars-off 随栏淡出、photo-on
+   强隐、操作唤醒名单），且「新目标出现」本身算一次唤醒：目标身份
+   由无到有或换人且当时正处 bars-off 时，发 ctxwake 事件唤回整簇
+   并重计 3 秒——走着走着路边亮起一颗键，不怕它睡过去。
+   两路防双触发：键是 DOM 钮、直点是画布射线，事件路径本就不相交；
+   fire() 执行后立刻置满轮询计时，下一帧按新状态复核标签/目标。
+   零新增存档键：候选与当前目标只放内存。 */
+const CTX_CFG = { poll: 0.12, tieWin: 0.6 };
+const CTX_PRIO = { talk: 0, task: 1, gather: 2, pass: 3 };
+const _ctxV = new THREE.Vector3();
+const CtxKey = {
+    cur: null, pollT: 0, lastCands: [], _bound: false,
+    btn(){ return document.getElementById('ctxBtn'); },
+    on(){ return (typeof FEAT === 'undefined' || !FEAT.skillContext || FEAT.skillContext.on); },
+    blocked(){
+        if(!this.on()) return true;
+        if(typeof enteredWorld === 'undefined' || !enteredWorld) return true;
+        if(typeof eggMode !== 'undefined' && (eggMode === 'egg' || eggMode === 'hatching')) return true;
+        if(typeof logOpen !== 'undefined' && logOpen) return true;
+        const app = document.getElementById('app');
+        if(app && app.classList.contains('photo-on')) return true;
+        const panel = document.getElementById('modPanel');
+        if(panel && panel.classList.contains('on')) return true;
+        if(document.querySelector('[id$="Mask"].on')) return true;
+        const dm = document.getElementById('dragonMenu');
+        if(dm && dm.style.display !== 'none') return true;
+        return false;
+    },
+    /* 玩家「所在点」：操控态＝化身本体；室内＝龙身或参观焦点；
+       轨道态（小龙自主散步）＝镜头注视点，与该态下点按的落点同源 */
+    refPos(){
+        if(typeof Interior !== 'undefined' && Interior.active){
+            if(Interior.dragonIn && typeof dragonAgent !== 'undefined' && dragonAgent && dragonAgent.group)
+                return dragonAgent.group.position;
+            return Interior.tgt || null;
+        }
+        if(typeof DragonCtl !== 'undefined' && DragonCtl.active
+           && typeof dragonAgent !== 'undefined' && dragonAgent && dragonAgent.group)
+            return dragonAgent.group.position;
+        if(typeof controls !== 'undefined' && controls && controls.target) return controls.target;
+        if(typeof dragonAgent !== 'undefined' && dragonAgent && dragonAgent.group)
+            return dragonAgent.group.position;
+        return null;
+    },
+    scan(rp){
+        const out = [];
+        const inRoom = (typeof Interior !== 'undefined' && Interior.active);
+        const dist = (x, z) => Math.hypot(rp.x - x, rp.z - z);
+        if(inRoom){
+            // 留言墙：当前页第一张纸条
+            if(Interior.gbMesh && typeof gbNoteRects !== 'undefined' && typeof openGbNote === 'function'){
+                let idx = -1;
+                for(const r of gbNoteRects){ if(r.idx >= 0){ idx = r.idx; break; } }
+                if(idx >= 0){
+                    Interior.gbMesh.getWorldPosition(_ctxV);
+                    const d = dist(_ctxV.x, _ctxV.z);
+                    if(d < 3.6) out.push({ id:'guest', cat:'talk', d:d, label:'📖 看留言墙',
+                        act(){ openGbNote(idx); } });
+                }
+            }
+            return out;
+        }
+        // 小屋门（FEAT.interact 管辖，与点按同一开关）
+        if(typeof FEAT !== 'undefined' && FEAT.interact.on && typeof doorMesh !== 'undefined' && doorMesh){
+            doorMesh.getWorldPosition(_ctxV);
+            const d = dist(_ctxV.x, _ctxV.z);
+            if(d < 3.4) out.push({ id:'door', cat:'pass', d:d,
+                label: doorOpen ? '🚪 进屋看看' : '🚪 敲敲门',
+                act(){ if(doorOpen) enterRoom(); else setDoor(true); } });
+        }
+        // 篝火
+        if(typeof FEAT !== 'undefined' && FEAT.interact.on && typeof campfire !== 'undefined' && campfire){
+            const d = dist(campfire.position.x, campfire.position.z);
+            if(d < 3.4) out.push({ id:'fire', cat:'task', d:d,
+                label: fireOn ? '🔥 熄掉篝火' : '🔥 点燃篝火',
+                act(){ setFire(!fireOn); } });
+        }
+        // 农田：最近的一块「有事可做」的地
+        if(typeof farmState !== 'undefined' && farmState && typeof farmGrid !== 'undefined'){
+            let bc = null, bd = 2.6;
+            for(const cell of farmGrid){
+                if(!cell.playable) continue;
+                const d = dist(cell.x, cell.z);
+                if(d >= bd) continue;
+                const st = farmState.cells[cell.row + ',' + cell.col];
+                let label = null;
+                if(!st || !st.crop) label = '🌱 在这块地播种';
+                else if(st.mature) label = '🎉 收获' + ((typeof FARM_CROP_NAMES !== 'undefined' && FARM_CROP_NAMES[st.crop]) || '作物');
+                else if(!st.watered) label = '💧 给这块地浇水';
+                if(!label) continue;
+                bc = { cell:cell, label:label }; bd = d;
+            }
+            if(bc) out.push({ id:'farm', cat:'task', d:bd, label:bc.label,
+                act(){ onFarmCellTap(bc.cell); } });
+        }
+        // 寻宝宝物
+        if(typeof FEAT !== 'undefined' && FEAT.hunt.on && typeof huntItems !== 'undefined'){
+            for(const it of huntItems){
+                if(!it.visible || it.userData.done) continue;
+                const d = dist(it.position.x, it.position.z);
+                if(d < 2.8) out.push({ id:'hunt:' + it.userData.huntId, cat:'gather', d:d,
+                    label:'✨ 拾起' + (it.userData.huntName || '宝物'),
+                    act(){ collectHuntItem(it); } });
+            }
+        }
+        // 玩家立牌
+        if(typeof standeeList !== 'undefined'){
+            for(const m of standeeList){
+                const d = dist(m.position.x, m.position.z);
+                if(d < 3.0) out.push({ id:'standee', cat:'talk', d:d,
+                    label:'🧍 看看' + ((m.userData.sdEntry && m.userData.sdEntry.name) || '立牌') + '的立牌',
+                    act(){ showStandeeBubble(m.userData.sdEntry, m); } });
+            }
+        }
+        // 小龙（仅自主态：操控态下玩家即小龙本人，不给自己发键）
+        if(typeof dragonAgent !== 'undefined' && dragonAgent && dragonAgent.group
+           && typeof DragonCtl !== 'undefined' && !DragonCtl.active
+           && typeof dragonHatched === 'function' && dragonHatched()){
+            const p = dragonAgent.group.position;
+            const d = dist(p.x, p.z);
+            if(d < 3.2) out.push({ id:'dragon', cat:'talk', d:d, label:'🐉 和小龙玩',
+                act(){ toggleDragonMenu(); } });
+        }
+        return out;
+    },
+    pick(cands){
+        let best = null;
+        for(const c of cands){
+            if(!best || c.d < best.d - CTX_CFG.tieWin
+               || (Math.abs(c.d - best.d) <= CTX_CFG.tieWin && CTX_PRIO[c.cat] < CTX_PRIO[best.cat]))
+                best = c;
+        }
+        return best;
+    },
+    setCur(c){
+        const prevId = this.cur ? this.cur.id : null;
+        this.cur = c;
+        const btn = this.btn();
+        if(!btn) return;
+        if(!c){ btn.style.display = 'none'; return; }
+        const txt = btn.querySelector('.ctxTxt');
+        if(txt && txt.textContent !== c.label) txt.textContent = c.label;
+        btn.style.display = 'flex';
+        if(prevId !== c.id){
+            const app = document.getElementById('app');
+            if(app && app.classList.contains('bars-off'))
+                window.dispatchEvent(new Event('ctxwake'));
+        }
+    },
+    refresh(){
+        if(this.blocked()){ this.lastCands = []; this.setCur(null); return; }
+        const rp = this.refPos();
+        if(!rp){ this.lastCands = []; this.setCur(null); return; }
+        const cands = this.scan(rp);
+        this.lastCands = cands.map(c => ({ id:c.id, cat:c.cat, label:c.label, d:+c.d.toFixed(2) }));
+        this.setCur(this.pick(cands));
+    },
+    update(dt){
+        if(!this.on()){ this.hide(); return; }
+        this.pollT += dt;
+        if(this.pollT < CTX_CFG.poll) return;
+        this.pollT = 0;
+        this.refresh();
+    },
+    hide(){
+        this.pollT = 0;
+        this.lastCands = [];
+        this.setCur(null);
+    },
+    fire(){
+        const c = this.cur;
+        if(!c || this.blocked()) return;
+        c.act();
+        this.pollT = CTX_CFG.poll;   // 下一帧立即按新状态复核
+    },
+    bind(){
+        if(this._bound) return;
+        this._bound = true;
+        const btn = this.btn();
+        if(btn) btn.addEventListener('click', () => this.fire());
+        window.addEventListener('keydown', e => {
+            if(e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+            if(e.key !== 'e' && e.key !== 'E') return;
+            const tag = (e.target && e.target.tagName) || '';
+            if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+            if(this.cur) this.fire();
+        });
+    }
+};
+window.__ctxKey = {   // 验收钩子（与 __npc / __voice 同例）
+    snap(){ return { on: CtxKey.on(), blocked: CtxKey.blocked(),
+        cur: CtxKey.cur ? { id:CtxKey.cur.id, label:CtxKey.cur.label } : null,
+        cands: CtxKey.lastCands }; },
+    pump(){ CtxKey.pollT = 1; CtxKey.update(0.2); },
+    fire(){ CtxKey.fire(); }
+};
+
 /* ---------------- 村舍小屋（合并进静态件） ---------------- */
 function cottageGeos(list, x, z, yaw, s, bodyCol, roofCol){
     const baseY=outerGroundY(x,z);
@@ -18690,7 +18941,7 @@ window.addEventListener('orientationchange', __refreshRotGuide);
         app.classList.remove('bars-off');
         arm();
     }
-    ['ui','status','fbBtn','lanternBtn','modBtn','modPanel','fbMask','ltMask','helpMask','voteMask','logMask','dragonMask','avatarMask','viewMask','echoMask','codexMask','gbMask','chronMask','achMask','dragonBar','roomBar','appBar','echoHomeBtn','dragonMenu','rotGuide','miniMap','eggMask','joyZone'].forEach(function(id){
+    ['ui','status','fbBtn','lanternBtn','modBtn','modPanel','fbMask','ltMask','helpMask','voteMask','logMask','dragonMask','avatarMask','viewMask','echoMask','codexMask','gbMask','chronMask','achMask','dragonBar','roomBar','appBar','echoHomeBtn','dragonMenu','rotGuide','miniMap','eggMask','joyZone','ctxBtn'].forEach(function(id){
         var el = document.getElementById(id);
         if(!el) return;
         ['pointerdown','input','change','wheel'].forEach(function(ev){
@@ -18699,6 +18950,8 @@ window.addEventListener('orientationchange', __refreshRotGuide);
     });
     var wake = document.getElementById('wakeBtn');
     if(wake) wake.addEventListener('click', poke);
+    // 上下文互动键（Build 2）：新目标浮出时经 ctxwake 事件唤回整簇并重计 3 秒
+    window.addEventListener('ctxwake', poke);
     poke();
     window.addEventListener('load', poke);
     // 加载层还盖着时不算倒计时：等它收起后再重新计满 3 秒，保证刚打开先看清界面
