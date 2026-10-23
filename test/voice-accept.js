@@ -124,6 +124,16 @@ async function main() {
             document.querySelectorAll('[id$="Mask"].on').forEach(e => e.classList.remove('on'));
             const p = document.getElementById('modPanel'); if (p) p.classList.remove('on');
             const app = document.getElementById('app'); if (app) app.classList.remove('photo-on');
+            /* 守护：新玩家进入流程的延迟初始化/轮询会在清完后又把龙蛋序章、
+               化身卡、更新日志重新打开（真机上玩家点选后自然走完，测试里无人
+               点选）——每 300ms 把已归位的门禁输入钉住，只钉这几样，不碰
+               面板开关与拍照相位（⑥⑦ 要用它们测门禁本身）。 */
+            window.__vGateKeep = setInterval(function(){
+                enteredWorld = true;
+                if (typeof eggMode !== 'undefined' && (eggMode === 'egg' || eggMode === 'hatching')) eggMode = 'hatched';
+                if (typeof logOpen !== 'undefined') logOpen = false;
+                document.querySelectorAll('[id$="Mask"].on').forEach(e => e.classList.remove('on'));
+            }, 300);
             __vPump(2);
             __vClear();
             return __voice.snapshot();
