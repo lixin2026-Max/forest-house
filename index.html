@@ -11,7 +11,7 @@
 /* 小版本不停机更新自检（发版纪律见 README「发版清单」）：本页构建号与站点 version.json 比对。
    线上更新时：未进世界→整页换新一次（带 _v 参数绕开页面缓存，资源照常走缓存）；
    已在世界→只给角落小字提示，绝不中途重载。指针拉不到就当作无更新，静默放行。 */
-window.__BUILD__ = '2026-1023-1315';
+window.__BUILD__ = '2026-1023-1405';
 (function(){
     const UPD_TRY_KEY='ct2_upd_try';
     let hintedBuild = '';
@@ -662,6 +662,17 @@ window.__BUILD__ = '2026-1023-1315';
         #huntToast{font-size:12.5px;top:15%}
     }
 
+    /* ===== 世界之声（Issue #71）：屏幕下方旁白字幕条，与系统 toast 分工——
+       toast 报事，这条是世界在轻声说话：无边框、慢淡入淡出、不挡操作 ===== */
+    #voiceBar{position:absolute;left:50%;bottom:calc(118px + env(safe-area-inset-bottom, 0px));z-index:118;pointer-events:none;
+        transform:translate(-50%,6px);opacity:0;transition:opacity 1.1s ease,transform 1.1s ease;
+        max-width:min(86vw,560px);text-align:center;font-size:14.5px;letter-spacing:.14em;line-height:1.7;
+        color:#fdf3d8;text-shadow:0 1px 10px rgba(20,26,12,.85),0 0 2px rgba(20,26,12,.9)}
+    #voiceBar.on{opacity:.96;transform:translate(-50%,0)}
+    @media (max-width:600px),(pointer:coarse){
+        #voiceBar{font-size:13px;bottom:calc(128px + env(safe-area-inset-bottom, 0px))}
+    }
+
     /* ===== 功能面板 ===== */
     #modBtn{position:absolute;right:15px;bottom:calc(92px + env(safe-area-inset-bottom, 0px));z-index:121;width:38px;height:38px;border-radius:10px;
         display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:17px;
@@ -872,7 +883,7 @@ window.__BUILD__ = '2026-1023-1315';
     #app.bars-off #fbBtn,#app.bars-off #lanternBtn,#app.bars-off #modBtn{opacity:0;pointer-events:none;transform:translateY(12px)}
     /* #96 补齐：底部操控条 / 进出屋条 / 提示条 / 回程钮 / 小龙菜单也纳入自动隐藏（只淡出，不动各自的位移动画与显隐逻辑） */
     #dragonBar,#roomBar,#appBar,#echoHomeBtn,#dragonMenu{transition:opacity .35s ease}
-    #app.bars-off #dragonBar,#app.bars-off #roomBar,#app.bars-off #appBar,#app.bars-off #echoHomeBtn,#app.bars-off #dragonMenu{opacity:0;pointer-events:none}
+    #app.bars-off #dragonBar,#app.bars-off #roomBar,#app.bars-off #appBar,#app.bars-off #echoHomeBtn,#app.bars-off #dragonMenu,#app.bars-off #voiceBar{opacity:0;pointer-events:none}
     #wakeBtn{position:absolute;right:10px;top:50%;z-index:119;width:34px;height:34px;border-radius:50%;
         transform:translateY(-50%);display:flex;align-items:center;justify-content:center;
         background:var(--wake-bg);color:var(--wake-txt);border:1px solid var(--ghost-line);
@@ -923,7 +934,7 @@ window.__BUILD__ = '2026-1023-1315';
     #app.photo-on #fbMask,#app.photo-on #ltMask,#app.photo-on #helpMask,#app.photo-on #voteMask,
     #app.photo-on #logMask,#app.photo-on #dragonMask,#app.photo-on #avatarMask,#app.photo-on #viewMask,#app.photo-on #echoMask,#app.photo-on #codexMask,#app.photo-on #achMask,
     #app.photo-on #gbMask,#app.photo-on #chronMask,#app.photo-on #huntToast,#app.photo-on #helpTip,#app.photo-on #appBar,
-    #app.photo-on #wishBubble,#app.photo-on #sdBubble,#app.photo-on #codexToast,#app.photo-on #achToast,#app.photo-on #rotGuide,#app.photo-on #miniMap{display:none !important}
+    #app.photo-on #wishBubble,#app.photo-on #sdBubble,#app.photo-on #codexToast,#app.photo-on #achToast,#app.photo-on #rotGuide,#app.photo-on #miniMap,#app.photo-on #voiceBar{display:none !important}
     #photoUI{display:none;position:absolute;inset:0;z-index:140;pointer-events:none}
     #photoGrid{position:absolute;inset:0;pointer-events:none;
         background:
@@ -1543,6 +1554,7 @@ window.__BUILD__ = '2026-1023-1315';
 <div id="wishBubble"></div>
 <div id="sdBubble"><button type="button" id="sdBubbleX" aria-label="关闭">✕</button><div class="sdName"></div><div class="sdIntro"></div><div class="sdBy"></div></div>
 <div id="huntToast"></div>
+<div id="voiceBar"></div>
 <div id="helpTip">👋 第一次来？点顶栏里的「❓ 操作帮助」，玩法都在里面</div>
 <button id="wakeBtn" type="button" title="显示操作界面" aria-label="显示操作界面">‹</button>
 <div id="miniMap" title="小地图"><canvas id="miniMapCv" width="296" height="296"></canvas><button type="button" id="miniMapX" aria-label="关闭小地图">✕</button></div>
@@ -12471,6 +12483,7 @@ const FEAT = {
     minimap:   { on:true, label:'小地图' },
     achieve:   { on:true, label:'成就徽章' },
     npc:       { on:true, label:'👥 村民作息' },
+    voice:     { on:true, label:'🗣️ 世界之声' },
     atmoFog:   { on:true, label:'沉浸·分层雾' },
     atmoLight: { on:true, label:'沉浸·柔和天光' },
     atmoWind:  { on:true, label:'沉浸·微风植被' },
@@ -12575,6 +12588,13 @@ const MODULE_HOOKS = {
         setup(){ NPCSys.build(); NPCSys.snap(); },
         teardown(){ NPCSys.allHome(); },
         update(dt, t){ NPCSys.update(dt, t); }
+    },
+    /* 世界之声（Issue #71）：旁白字幕——实现全在 VoiceSys 一节；
+       关掉时字幕条立即收起、待播清零，彻底不弹 */
+    voice: {
+        setup(){ VoiceSys.arm(); },
+        teardown(){ VoiceSys.disarm(); },
+        update(dt, t){ VoiceSys.update(dt, t); }
     },
     /* 沉浸氛围五件（Issue #81）：实现全在 AtmoSys 一节，钩子只转发开关，
        各件互不调用——关掉哪件只有哪件停摆/复原，详见 AtmoSys 头注的开关清单 */
@@ -13865,6 +13885,7 @@ function minimapMarkSeen(id){
     const seen = minimapSeenLoad();
     if(seen.indexOf(id) >= 0) return;
     seen.push(id);
+    if(typeof VoiceSys !== 'undefined') VoiceSys.onArrive(id);   // 世界之声（#71）：抵达旁白与抵达记录同源、同一时刻
     try{
         const s = store.codex.json({ u:[] });
         s.m = seen.slice();            // 整对象回存，图鉴的 u 字段原样保留
@@ -15581,6 +15602,243 @@ const NPCSys = {
     }
 };
 window.__npc = NPCSys;   // 验收钩子（与 __glProbeStats / __fpsTune 同例）
+
+/* ==================== 世界之声（Issue #71 · v4.3） ====================
+   给世界加一层「会说话」的氛围旁白：声明式文案表 VOICE_LINES 集中一处，
+   日后世界观/故事线设计直接往表里填，引擎不用改。触发六类：
+   - arrive 地点抵达：与小地图抵达记录同源——minimapMarkSeen 落盘的同一
+     时刻经 onArrive 通知本节，一区一句、天然一次性（记录在 ct2_codex.m）；
+   - tod 时段：清晨（mist）/夜（night）进入时至多一句，同段不重复；
+   - wx 天气：雨（rain；冬季的雨即雪）、金色时刻（golden）进入时一句；
+   - season 季节：Season.name 变化时一句；
+   - npc 村民作息事件：轮询 NPCSys 状态边沿（阿山清晨出门劳作、阿云黄昏
+     还在收衣、入夜归家）——且只在玩家不在该村民近旁（> NPC_CFG.nearR）
+     时才用旁白提及：人在跟前，故事自己会说话，旁白不抢角色的戏；
+   - dragon 小龙状态：化身状态边沿（进食/玩耍/入睡）各一句。
+   呈现与分工：屏幕下方 #voiceBar 旁白字幕条，慢淡入淡出、pointer-events
+   为 none 不挡操作；系统提示（找没找到、浇没浇水）归上方 huntToast
+   播报，世界之声只管「世界在轻声说话」。角色头顶气泡（立牌/愿望/看鱼）
+   归近距离互动，与本旁白互不抢同一事件。
+   节流铁律（本件成败在此）：同屏永远只一条；情境类全局间隔 ≥90 秒；
+   地点类一次性、时段类每时段至多一条；待播在出队时复验语境（时段/
+   天气/季节已变的旧句直接作废，村民/小龙的旧句超 4 分钟作废）；
+   玩家在菜单面板/弹窗/拍照/龙蛋序章/未进世界时一律不弹（待播保留、
+   等空窗）。冷却与待播只放内存，零新增存档键。 */
+const VOICE_CFG = { gap: 90, showFor: 6.5, staleAfter: 240, npcPoll: 1.0 };
+const VOICE_LINES = {
+    arrive: {
+        wheat:   ['风过麦田，一层金浪推向很远的地方。'],
+        orchard: ['果香先一步到了。树上的人间烟火，红得正好。'],
+        pasture: ['草坡缓缓，牛羊散淡——这里的日子，是按云的速度过的。'],
+        village: ['炊烟起处，有人家。村口的路，认得每一个归人。'],
+        windmill:['登高才知风有多大。风车转着，把云朵慢慢碾成絮。']
+    },
+    tod: {
+        mist: ['晨雾未散，江湖还睡着，只有早起的人先醒了。',
+               '露水打湿鞋尖的时候，世界是新的。'],
+        night:['灯一盏盏亮起来，夜就有了落脚的地方。',
+               '星子落满天，该赶路的赶路，该归家的归家。']
+    },
+    wx: {
+        rain:  ['雨落湖面，涟漪是世界写了一半又揉掉的字。',
+                '躲雨也是一种抵达。檐下听雨，江湖暂歇。'],
+        snow:  ['雪落无声，山川把嗓门都放轻了。',
+                '天地留白处，自有回声。'],
+        golden:['夕阳把影子拉得很长，长到能盖住半生的忙碌。',
+                '金色的时刻最短，所以显得格外郑重。']
+    },
+    season: {
+        spring:['春水初生，万物都在伸懒腰。'],
+        summer:['蝉声起时，夏天把影子缩到最短。'],
+        autumn:['叶落知秋，山里的颜色开始讲故事。'],
+        winter:['湖面结了冰，世界安静得能听见雪。']
+    },
+    npc: {
+        ashan_out: ['天才蒙蒙亮，阿山已经扛着斧头出了门。'],
+        ayun_dusk: ['暮色里，阿云还在晾衣绳边收最后一件衣裳。'],
+        home_night:['村里的人家陆续归了屋，灯火次第熄下去。']
+    },
+    dragon: {
+        eat:  ['吃饱了就追得上风了——它眼里的光都亮了些。'],
+        sleep:['它困了。江湖再大，也大不过一个好觉。'],
+        play: ['玩兴正浓的时候，影子都追不上它。']
+    }
+};
+const VoiceSys = {
+    clock: 0, lastShownAt: -1e9, showing: false, showT: 0,
+    pending: { arrive:[], npc:[], dragon:[], wx:[], season:[], tod:[] },
+    baselined: false, prevMode: null, prevSeason: null, prevDragon: null,
+    prevNpc: {}, npcPollT: 0, nightHomeDone: false, lastPick: {},
+    modeNow(){ return (typeof weatherModes !== 'undefined') ? weatherModes[weatherIndex] : 'sunny'; },
+    seasonNow(){ return (typeof Season !== 'undefined' && Season) ? Season.name : null; },
+    pick(cls, key){
+        const arr = (VOICE_LINES[cls] && VOICE_LINES[cls][key]) || [];
+        if(!arr.length) return null;
+        let i = Math.floor(Math.random() * arr.length);
+        const lk = cls + ':' + key;
+        if(arr.length > 1 && this.lastPick[lk] === i) i = (i + 1) % arr.length;
+        this.lastPick[lk] = i;
+        return arr[i];
+    },
+    queue(cls, item){   // 每类一条小队列（上限 3）：单槽会把后来的事件边沿挤掉、且边沿不重来
+        if(item && this.pending[cls].length < 3) this.pending[cls].push(item);
+    },
+    onArrive(id){   // 抵达通知：minimapMarkSeen 落盘同一时刻调用，一区一次
+        const text = this.pick('arrive', id);
+        if(text) this.queue('arrive', { text:text, at:this.clock });
+    },
+    blocked(){
+        if(typeof enteredWorld === 'undefined' || !enteredWorld) return true;
+        if(typeof eggMode !== 'undefined' && (eggMode === 'egg' || eggMode === 'hatching')) return true;
+        if(typeof logOpen !== 'undefined' && logOpen) return true;
+        const app = document.getElementById('app');
+        if(app && app.classList.contains('photo-on')) return true;
+        const panel = document.getElementById('modPanel');
+        if(panel && panel.classList.contains('on')) return true;
+        if(document.querySelector('[id$="Mask"].on')) return true;
+        return false;
+    },
+    arm(){ this.baselined = false; this.lastShownAt = this.clock - VOICE_CFG.gap; },
+    disarm(){
+        this.showing = false; this.showT = 0;
+        for(const k in this.pending) this.pending[k] = [];
+        const el = document.getElementById('voiceBar');
+        if(el) el.classList.remove('on');
+    },
+    show(item){
+        const el = document.getElementById('voiceBar');
+        if(!el) return;
+        el.textContent = item.text;
+        el.classList.add('on');
+        this.showing = true; this.showT = VOICE_CFG.showFor;
+        this.lastShownAt = this.clock;
+    },
+    fresh(item, cls){
+        const mode = this.modeNow();
+        if(cls === 'tod') return item.modeKey === mode;
+        if(cls === 'wx') return item.modeKey === mode;
+        if(cls === 'season') return item.seasonKey === this.seasonNow();
+        if(cls === 'npc'){   // 村民句还要对得上当下时段：归家的话不能留到天亮再说
+            if(item.vKey === 'ashan_out' && mode !== 'mist') return false;
+            if(item.vKey === 'ayun_dusk' && mode !== 'golden') return false;
+            if(item.vKey === 'home_night' && mode !== 'night') return false;
+            return (this.clock - item.at) <= VOICE_CFG.staleAfter;
+        }
+        if(cls === 'dragon') return (this.clock - item.at) <= VOICE_CFG.staleAfter;
+        return true;   // arrive 不过期：抵达的那句话，迟些说也成立
+    },
+    detectNpc(){
+        if(typeof NPCSys === 'undefined' || !NPCSys.built) return;
+        const mode = this.modeNow();
+        if(mode !== 'night') this.nightHomeDone = false;
+        const snap = NPCSys.snapshot();
+        const p = (typeof dragonAgent !== 'undefined' && dragonAgent && dragonAgent.group)
+            ? dragonAgent.group.position : null;
+        for(const s of snap){
+            const prev = this.prevNpc[s.id];
+            this.prevNpc[s.id] = s.dest;
+            if(prev === undefined || prev === s.dest) continue;
+            const far = !p || Math.hypot(p.x - s.x, p.z - s.z) > ((typeof NPC_CFG !== 'undefined') ? NPC_CFG.nearR : 26);
+            if(!far) continue;   // 玩家就在近旁：不点名，让现场自己说话
+            if(s.id === 'ashan' && s.dest === 'work' && mode === 'mist'){
+                const t = this.pick('npc', 'ashan_out');
+                if(t) this.queue('npc', { text:t, at:this.clock, vKey:'ashan_out' });
+            }
+            if(s.id === 'ayun' && s.dest === 'work' && mode === 'golden'){
+                const t = this.pick('npc', 'ayun_dusk');
+                if(t) this.queue('npc', { text:t, at:this.clock, vKey:'ayun_dusk' });
+            }
+            if(s.dest === 'home' && mode === 'night' && !this.nightHomeDone){
+                this.nightHomeDone = true;
+                const t = this.pick('npc', 'home_night');
+                if(t) this.queue('npc', { text:t, at:this.clock, vKey:'home_night' });
+            }
+        }
+    },
+    detectDragon(){
+        const st = (typeof dragonAgent !== 'undefined' && dragonAgent) ? dragonAgent.state : null;
+        const prev = this.prevDragon;
+        this.prevDragon = st;
+        if(!st || st === prev) return;
+        const sleepish = s => s === 'sleep' || s === 'sleepGo';
+        let key = null;
+        if(st === 'eat') key = 'eat';
+        else if(st === 'play') key = 'play';
+        else if(sleepish(st) && !sleepish(prev)) key = 'sleep';
+        if(key){
+            const t = this.pick('dragon', key);
+            if(t) this.queue('dragon', { text:t, at:this.clock });
+        }
+    },
+    update(dt){
+        this.clock += dt;
+        if(this.showing){
+            this.showT -= dt;
+            if(this.showT <= 0){
+                this.showing = false;
+                const el = document.getElementById('voiceBar');
+                if(el) el.classList.remove('on');
+            }
+        }
+        const mode = this.modeNow(), season = this.seasonNow();
+        if(!this.baselined){   // 首帧只对齐基线，绝不补弹开局前积压的边沿
+            this.baselined = true;
+            this.prevMode = mode; this.prevSeason = season;
+            this.prevDragon = (typeof dragonAgent !== 'undefined' && dragonAgent) ? dragonAgent.state : null;
+            if(typeof NPCSys !== 'undefined' && NPCSys.built)
+                NPCSys.snapshot().forEach(s => { this.prevNpc[s.id] = s.dest; });
+            return;
+        }
+        if(mode !== this.prevMode){
+            const from = this.prevMode; this.prevMode = mode;
+            if(from !== null){
+                if(VOICE_LINES.tod[mode]){
+                    const t = this.pick('tod', mode);
+                    if(t) this.queue('tod', { text:t, at:this.clock, modeKey:mode });
+                }
+                if(mode === 'rain'){
+                    const key = (season === 'winter') ? 'snow' : 'rain';
+                    const t = this.pick('wx', key);
+                    if(t) this.queue('wx', { text:t, at:this.clock, modeKey:mode });
+                }
+                if(mode === 'golden'){
+                    const t = this.pick('wx', 'golden');
+                    if(t) this.queue('wx', { text:t, at:this.clock, modeKey:mode });
+                }
+            }
+        }
+        if(season && season !== this.prevSeason){
+            const fromS = this.prevSeason; this.prevSeason = season;
+            if(fromS !== null){
+                const t = this.pick('season', season);
+                if(t) this.queue('season', { text:t, at:this.clock, seasonKey:season });
+            }
+        }
+        this.npcPollT -= dt;
+        if(this.npcPollT <= 0){ this.npcPollT = VOICE_CFG.npcPoll; this.detectNpc(); }
+        this.detectDragon();
+        if(this.showing) return;
+        if(this.clock - this.lastShownAt < VOICE_CFG.gap) return;
+        if(this.blocked()) return;
+        for(const cls of ['arrive', 'npc', 'dragon', 'wx', 'season', 'tod']){
+            const arr = this.pending[cls];
+            while(arr.length && !this.fresh(arr[0], cls)) arr.shift();   // 语境已变的旧句作废
+            if(!arr.length) continue;
+            this.show(arr.shift());
+            break;
+        }
+    },
+    snapshot(){
+        const el = document.getElementById('voiceBar');
+        return { on: (typeof FEAT !== 'undefined' && FEAT.voice) ? !!FEAT.voice.on : null,
+            showing: this.showing, text: el ? el.textContent : '',
+            barOn: el ? el.classList.contains('on') : false,
+            pending: Object.keys(this.pending).filter(k => this.pending[k].length),
+            clock: +this.clock.toFixed(1), sinceShow: +(this.clock - this.lastShownAt).toFixed(1),
+            blocked: this.blocked() };
+    }
+};
+window.__voice = VoiceSys;   // 验收钩子（与 __npc / __fpsTune 同例）
 
 /* ---------------- 村舍小屋（合并进静态件） ---------------- */
 function cottageGeos(list, x, z, yaw, s, bodyCol, roofCol){
