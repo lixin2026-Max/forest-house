@@ -11,7 +11,7 @@
 /* 小版本不停机更新自检（发版纪律见 README「发版清单」）：本页构建号与站点 version.json 比对。
    线上更新时：未进世界→整页换新一次（带 _v 参数绕开页面缓存，资源照常走缓存）；
    已在世界→只给角落小字提示，绝不中途重载。指针拉不到就当作无更新，静默放行。 */
-window.__BUILD__ = '2026-1023-1410';
+window.__BUILD__ = '2026-1023-1502';
 (function(){
     const UPD_TRY_KEY='ct2_upd_try';
     let hintedBuild = '';
@@ -1267,6 +1267,7 @@ window.__BUILD__ = '2026-1023-1410';
     <div class="mpSub">季节（按真实日期自动定季）</div>
     <div class="mpViews" id="seasonBtns"></div>
     <div class="mpTip" id="seasonTip">手动切换只预览本机本次，不保存；刷新后回到真实日期的季节。</div>
+    <div class="mpTip" id="farmSeasonTip"></div>
     <div class="mpSep"></div>
     <div class="mpSub">小龙</div>
     <button type="button" id="reEggBtn" class="mpVerBtn">🥚 再孵一颗蛋</button>
@@ -1781,7 +1782,7 @@ function buildRiverPts(){
 const SCENE_KEY='ct2_scene';
 const SCENE = {
     quality: { mode: 'auto' },
-    glSafe: 0,   // WebGL 安全模式档位（ct2_scene 的 glSafe 字段存档位，不新增键）：0 关 / 1 低配（最稳参数＋DPR 1.25＋关 Bloom）/ 2 保命（再剥离水体・草地・天空的自定义 shader 与风摆云影、程序贴图封顶 512、渲染器推迟到点「开始游玩」后才建）；面板可一键恢复默认
+    glSafe: 0,   // WebGL 安全模式档位（ct2_scene 的 glSafe 字段存档位，不新增键）：0 关 / 1 低配（最稳参数＋DPR 1.25）/ 2 保命（程序贴图封顶 512、渲染器推迟到点「开始游玩」后才建）；被剥离的着色特效（水体/天空/风摆/云影/Bloom）已由 #98 逐个恢复，改由 ct2_scene.gx 特效嫌疑账单独记账关停；面板可一键恢复默认
     render: {
         bgBrightness: 1,      // 背景亮度：远山环明暗倍率（skyBackdropTick 每帧读）
         grassDensity: 1,      // 草簇密度倍率（GrassSys.applyCounts 每帧读）
@@ -1966,8 +1967,8 @@ void main(){
 }`;
 let WATER_U = null;   // 水体共享 uniforms（pondMesh 与远河潭 disc 同一材质实例）
 function makeWaterMaterial(){
-    if(glSafeLv() >= 2){
-        // 保命模式：水体不用自定义 ShaderMaterial，换朴素 Phong（半透明＋
+    if(glSafeLv() >= 2 && !glFxOn('water')){
+        // 保命模式且水体嫌疑关停：水体不用自定义 ShaderMaterial，换朴素 Phong（半透明＋
         // 高光），几何与 aFlow/aCoord 附加属性原样保留、Phong 自动忽略；
         // WATER_U 置 null，animate/中枢对水面 uniforms 的写入都有守卫。
         WATER_U = null;
@@ -2001,8 +2002,9 @@ function makeWaterMaterial(){
         const small = Math.min(window.screen.width || 9999, window.screen.height || 9999) < 760;
         if (coarse || small) tier = 0;
     } catch(e) {}
+    if(glSafeLv() >= 2){ tier = 0; glFxMark('water'); }   // #98：保命档只恢复 lite 形态（单层纹理＋两层波纹），ultra 保持剥离
     uniforms.uTier.value = tier;
-    window.__waterTier = function(name){ if (WATER_U) WATER_U.uTier.value = (name === 'ultra') ? 1 : 0; };
+    window.__waterTier = function(name){ if (WATER_U) WATER_U.uTier.value = (name === 'ultra' && glSafeLv() < 2) ? 1 : 0; };   // 保命档钉死 lite，不许中枢/面板切回 ultra
     return mat;
 }
 /* 径向水面属性烘焙（湖/河尾小潭）：切向慢漂流向＋径向岸距 */
@@ -2394,6 +2396,29 @@ function __tierCounts(o){
     }
     return out;
 }
+/* ---------- 特效嫌疑账（#98 保命特效逐个放回，2026-10-23） ----------
+   保命档剥离的着色特效逐个恢复，但每个恢复特效单独记账（ct2_scene
+   同键扩字段 gx，不新增键）：某特效在本会话启用中发生上下文丢失，
+   与档位记账并行 +1；累计 ≥2 次该特效单独关停、回落剥离态，不连坐
+   档位与其他特效；连续稳定 3 分钟（glNoteStable）洗清本会话启用特效
+   的计数，被关停的特效由面板「恢复默认画质」人工复活（致命层「重试
+   进入」不清 gx，否则反复丢失时攒不满 2 次）。建造点以 glFxOn 为闸、
+   以 glFxMark 标记本会话已启用，丢失时 enterGlSafeMode 据 __glFxActive 归因。 */
+const GL_FX = { fails: {} };
+const GL_FX_KEYS = ['sky', 'water', 'sway', 'cloud', 'bloom'];
+function __fxCounts(o){
+    const out = {};
+    if(o && typeof o === 'object'){
+        GL_FX_KEYS.forEach(function(k){
+            const v = parseInt(o[k], 10);
+            if(isFinite(v) && v > 0) out[k] = Math.min(9, v);
+        });
+    }
+    return out;
+}
+window.__glFxActive = {};   // 本会话已启用的恢复特效（丢失归因用）
+function glFxOn(key){ return (GL_FX.fails[key] || 0) < 2; }
+function glFxMark(key){ window.__glFxActive[key] = true; }
 const SceneHub = {
     _built: false,
     _clamp(v, a, b, d){ v = parseFloat(v); return (isFinite(v)) ? Math.max(a, Math.min(b, v)) : d; },
@@ -2427,6 +2452,7 @@ const SceneHub = {
             GL_TIER.tries = __tierCounts(sv.ga);
             GL_TIER.manual = !!sv.gm;
             GL_TIER.stable = !!sv.gs;
+            GL_FX.fails = __fxCounts(sv.gx);   // #98：特效嫌疑账（同键扩字段）
             GL_TIER.trial = -1;
             let bootTier;
             if(GL_TIER.manual){
@@ -2462,6 +2488,7 @@ const SceneHub = {
             glSafe: (SCENE.glSafe === 2) ? 2 : (SCENE.glSafe ? 1 : 0),
             gt: GL_TIER.trust, gf: GL_TIER.fails, ga: GL_TIER.tries,
             gm: GL_TIER.manual ? 1 : 0, gs: GL_TIER.stable ? 1 : 0,
+            gx: GL_FX.fails,
             r: { grassDensity: SCENE.render.grassDensity, grassHeightK: SCENE.render.grassHeightK,
                  bgBrightness: SCENE.render.bgBrightness },
             c: { drift: SCENE.grass.cloud.drift, strength: SCENE.grass.cloud.strength },
@@ -2479,10 +2506,22 @@ const SceneHub = {
         GL_TIER.stable = false;
         this.save();
     },
+    /* 特效记账（#98）：上下文丢失时给本会话启用中的恢复特效各记一次
+       嫌疑；累计 ≥2 次后 glFxOn 在建造点把该特效单独关停（回落剥离态），
+       不下调档位、不连坐其他特效。 */
+    glNoteFxFailure(){
+        let hit = false;
+        for(const k in window.__glFxActive){
+            if(window.__glFxActive[k]){ GL_FX.fails[k] = Math.min(9, (GL_FX.fails[k] || 0) + 1); hit = true; }
+        }
+        if(hit) this.save();
+    },
     /* 档位记账：某档位连续稳定运行满 3 分钟——洗清该档嫌疑；若这正是
        试升档，可信档跟上（试升成功），试升计数清零。 */
     glNoteStable(tier){
         GL_TIER.stable = true;
+        /* #98：跑稳同样洗清本会话启用特效的嫌疑（与档位账同口径） */
+        for(const k in window.__glFxActive) if(window.__glFxActive[k]) GL_FX.fails[k] = 0;
         if(tier < GL_TIER.trust) GL_TIER.trust = tier;
         if(tier === 0 || tier === 1) GL_TIER.fails[tier] = 0;
         if(GL_TIER.trial === tier){ GL_TIER.trial = -1; GL_TIER.tries[tier] = 0; }
@@ -2494,6 +2533,9 @@ const SceneHub = {
         GL_TIER.fails = {};
         GL_TIER.tries = {};
         GL_TIER.trial = -1;
+        /* #98：gx 不在此清——致命层「重试进入」若把特效嫌疑也抹掉，保命档
+           反复丢失时特效永远攒不满 2 次、关不掉，用户会卡在致命层循环里。
+           特效嫌疑只由「跑稳 3 分钟」洗清、或面板「恢复默认画质」时清零。 */
         this.save();
     },
     /* 画质总档：一处切换同时驱动 grass/sky/water/model 四套 tier 与既有
@@ -2602,7 +2644,7 @@ const SceneHub = {
         if(gr && !gr.children.length){
             const gb = document.createElement('button');
             gb.type = 'button'; gb.textContent = '🛡 已进显卡安全模式（低配）· 点此恢复默认画质';
-            gb.addEventListener('click', ()=>{ SCENE.glSafe = 0; GL_TIER.manual = true; GL_TIER.trial = -1; this.save(); location.reload(); });
+            gb.addEventListener('click', ()=>{ SCENE.glSafe = 0; GL_TIER.manual = true; GL_TIER.trial = -1; GL_FX.fails = {}; this.save(); location.reload(); });   // #98：恢复默认同时清特效嫌疑账（gx），被单独关停的特效由此人工复活
             gr.appendChild(gb);
         }
         const av = document.getElementById('sceneAvatarBtn');
@@ -3048,7 +3090,8 @@ function skyTierAuto(){
 /* ==================== 天空穹顶（渐变 shader，随天气插值） ==================== */
 let skyMat;
 function createSky(){
-    if(glSafeLv() >= 2){ skyMat = null; return; }   // 保命模式：穹顶 shader 停用，背景走 scene.background 色＋雾（天气循环逐帧刷背景色）
+    if(glSafeLv() >= 2 && !glFxOn('sky')){ skyMat = null; return; }   // 保命模式：穹顶 shader 默认恢复（#98 低风险：单 program、仅 normalize＋pow）；嫌疑关停后停用，背景走 scene.background 色＋雾（天气循环逐帧刷背景色）
+    if(glSafeLv() >= 2) glFxMark('sky');
     skyMat = new THREE.ShaderMaterial({
         uniforms:{
             topColor:{value:new THREE.Color(0x3d7bd9)},
@@ -5304,7 +5347,10 @@ function createFarm(){
    ② 进页面时存档日期（lastDate）和真实今天对不上，说明跨了天，同样调 farmNewDay 结算——
       玩家把自动轮转关了（Issue #26）作物也不会卡死。
    可玩格的土贴片与各阶段作物合并成一个 mesh，状态变化时整体重建（绘制 +1）。
-   状态与收获数存本机 ct2_farm（FARM_KEY 写死，照 ct2_hunt / ct2_help 的治理先例）。 */
+   状态与收获数存本机 ct2_farm（FARM_KEY 写死，照 ct2_hunt / ct2_help 的治理先例）。
+   季节层（Issue #69）：生长速率/可种名单/田面与作物外观受季节影响，规则表
+   见下方 FarmSeason 一节与 Issue #69 评论；季节是全局推导量、不落盘，
+   存档只多两个可选字段 g（生长点）/bonus（春季双倍标记），老存档照读。 */
 const FARM_KEY='ct2_farm';
 const FARM_CROPS=['sunflower','corn','pumpkin'];
 const FARM_CROP_NAMES={sunflower:'向日葵',corn:'玉米',pumpkin:'南瓜'};
@@ -5360,19 +5406,23 @@ function renderPlayCrops(){
     farmGrid.forEach(function(cell){
         if(!cell.playable) return;
         const st=farmState?farmState.cells[cell.row+','+cell.col]:null;
-        // 土贴片压在田垄上：干土偏亮、浇过水变深，一眼能分清哪块浇过
+        // 土贴片压在田垄上：干土偏亮、浇过水变深，一眼能分清哪块浇过；
+        // 季节层（#69）：贴片再乘当季田面色，冬季换雪面口径（干=雪白、湿=冰蓝）
         const patch=new THREE.BoxGeometry(FARM_RECT.cellW*0.9,0.06,FARM_RECT.cellD*0.5);
         patch.translate(cell.lx,0.225,cell.lz);
-        geos.push(paintGeo(patch, st&&st.watered?SCENE.palette.farmWet:SCENE.palette.farmDry));
+        geos.push(paintGeo(patch, FarmSeason.patchHex(st)));
         if(!st||!st.crop) return;
         const stage= st.mature?2:(st.watered?1:0);
+        const cellGeos=[];
         if(stage===0){
             const m=new THREE.Matrix4().makeRotationY((cell.row*7+cell.col*3)%6);
             m.setPosition(cell.lx,0.24,cell.lz);
-            sproutGeos().forEach(g=>{ g.applyMatrix4(m); geos.push(g); });
+            sproutGeos().forEach(g=>{ g.applyMatrix4(m); cellGeos.push(g); });
         }else{
-            cropGeosAt(st.crop,cell,stage).forEach(g=>geos.push(g));
+            cropGeosAt(st.crop,cell,stage).forEach(g=>cellGeos.push(g));
         }
+        FarmSeason.tintParts(cellGeos);   // #69：当季作物染色（顶点色乘倍率，关季节层时恒等）
+        cellGeos.forEach(g=>geos.push(g));
     });
     if(!geos.length) return;
     const merged=mergePaintedGeos(geos);
@@ -5388,23 +5438,35 @@ function onFarmCellTap(cell){
     const key=cell.row+','+cell.col;
     const st=farmState.cells[key];
     if(!st||!st.crop){
-        const crop=FARM_CROPS[farmNextCrop%FARM_CROPS.length]; farmNextCrop++;
+        // #69：播种轮换只在当季可种名单里转；名单为空（冬季）不下种、只提示
+        const list=FarmSeason.plantable();
+        if(!list.length){
+            showHuntToast('❄️ 地冻住了，现在种什么都活不了——等开春再播种吧');
+            return;
+        }
+        const crop=list[farmNextCrop%list.length]; farmNextCrop++;
         farmState.cells[key]={crop:crop,watered:false,mature:false};
         saveFarm(); renderPlayCrops();
         showHuntToast('🌱 种下了'+FARM_CROP_NAMES[crop]+'，再点它一下浇浇水');
         return;
     }
     if(st.mature){
-        farmState.harvest++;
+        // #69：带 bonus 标记（春季双倍苗头）的作物收获翻倍，计数与入包都 ×2
+        const dbl=!!(FarmSeason.on()&&st.bonus);
+        farmState.harvest+= dbl?2:1;
         const gotCrop=st.crop;
         delete farmState.cells[key];
         saveFarm(); renderPlayCrops(); updateStatus();
         // #17：南瓜/玉米是小龙的食物，收获自动进背包（向日葵不入包，照旧只计数）
         if(gotCrop==='pumpkin'||gotCrop==='corn'){
-            bagAdd(gotCrop);
-            showHuntToast('🎉 收获了'+FARM_CROP_NAMES[gotCrop]+'！放进背包啦，点小龙可以喂给它');
+            bagAdd(gotCrop); if(dbl) bagAdd(gotCrop);
+            showHuntToast(dbl
+                ? '🌸🎉 春天的好兆头——双倍收获了'+FARM_CROP_NAMES[gotCrop]+'！放进背包啦 ×2'
+                : '🎉 收获了'+FARM_CROP_NAMES[gotCrop]+'！放进背包啦，点小龙可以喂给它');
         }else{
-            showHuntToast('🎉 收获了'+FARM_CROP_NAMES[gotCrop]+'！已收获 '+farmState.harvest+' 个');
+            showHuntToast(dbl
+                ? '🌸🎉 双倍收获了'+FARM_CROP_NAMES[gotCrop]+'！已收获 '+farmState.harvest+' 个'
+                : '🎉 收获了'+FARM_CROP_NAMES[gotCrop]+'！已收获 '+farmState.harvest+' 个');
         }
         return;
     }
@@ -5416,14 +5478,27 @@ function onFarmCellTap(cell){
     }
     showHuntToast('🌿 '+FARM_CROP_NAMES[st.crop]+'已经浇过水啦，就等它成熟');
 }
-// 游戏时钟发出「新的一天」时调用（buildFarmGame 里订阅）：浇过水的作物成熟
+// 游戏时钟发出「新的一天」时调用（buildFarmGame 里订阅）：浇过水的作物成熟。
+// #69 季节口径：不再无条件成熟——已浇水的作物按当季生长点累计 g（存档可选
+// 字段，老存档无 g 按 0），攒满 FARM_GROW_NEED 成熟；冬季生长点为 0＝冻住，
+// 不长不熟也不坏，开春续攒。FEAT.farmSeason 关时 rate=null，走原老规矩。
 function farmNewDay(){
     if(!farmState) return;
     farmState.day++;
     let ripe=0;
+    const rate=FarmSeason.growRate();      // null=老规矩（直接成熟）；0=冬季冻结
+    const seasonName=FarmSeason.season();
     Object.keys(farmState.cells).forEach(function(key){
         const st=farmState.cells[key];
-        if(st&&st.crop&&st.watered&&!st.mature){ st.mature=true; ripe++; }
+        if(!st||!st.crop||!st.watered||st.mature) return;
+        if(rate===null){ st.mature=true; ripe++; return; }
+        if(rate<=0) return;                 // 冻住了：g 不动，作物原样过冬
+        st.g=(typeof st.g==='number'?st.g:0)+rate;
+        if(st.g>=FARM_GROW_NEED){
+            st.mature=true; ripe++;
+            // 春季双倍苗头：春季成熟的作物有概率带 bonus，收获时翻倍
+            if(seasonName==='spring'&&Math.random()<FARM_SPRING_BONUS_P) st.bonus=true;
+        }
     });
     saveFarm();
     if(ripe>0){ renderPlayCrops(); showHuntToast('🌾 有 '+ripe+' 块地的作物成熟啦，点一点就能收获'); }
@@ -5497,7 +5572,141 @@ function buildFarmGame(){
     farmSettleByDate();
     renderPlayCrops();
     bindFarmTap();
+    FarmSeason.apply();   // #69：季节外观/贴士首刷（Season 尚未 init 时按默认季，首帧 update 会校正）
 }
+
+/* ==================== 季节影响农场（Issue #69） ====================
+   规则表（与 Issue #69 评论一致，实现不超此表）：
+   - 季节源只读 Season.name（#21：真实日期定季，?season= 与面板手动切换
+     同源生效），季节是推导量、不落盘；整层挂 FEAT.farmSeason，关掉＝
+     农场回到本件之前的老规矩（直接成熟、全名单可种、基线外观）。
+   - 生长：「新的一天」给已浇水未成熟的作物加当季生长点（春/夏/秋 2、
+     冬 0），攒满 FARM_GROW_NEED(2) 成熟——春夏秋仍一天成熟（维持现状），
+     冬季冻存：不长不熟也不坏，开春续攒长完，绝不清格。
+   - 春季双倍苗头：春季成熟的作物以 FARM_SPRING_BONUS_P 概率带 bonus
+     标记（存档可选字段），收获时计数与入包翻倍。
+   - 可种名单只管新播：向日葵夏季限定，玉米/南瓜春夏秋可种，冬季封播；
+     已种作物过季照常生长、成熟、收获。
+   - 外观走既有顶点色/材质色倍率，不新增美术资源：田面与作物当季染色；
+     冬季另有一层薄雪盖罩住农田，透明度跟 Season._fade.snow，开春自融。
+   - 存档：ct2_farm 只多可选字段 g/bonus，老存档无字段按缺省读、不迁移、
+     不改 crop/watered/mature 语义；季节状态不进存档（全局推导）。 */
+const FARM_GROW_NEED=2;
+const FARM_SPRING_BONUS_P=0.3;
+const FARM_SEASON_RULES={
+    spring:{ label:'春', grow:2, plant:['corn','pumpkin'],
+        soil:[1.04,1.03,0.90], crop:[0.90,1.10,0.78],
+        tip:'浇水后一天成熟，春天成熟时有机会双倍收获' },
+    summer:{ label:'夏', grow:2, plant:['sunflower','corn','pumpkin'],
+        soil:[1,1,1], crop:[1,1,1],
+        tip:'浇水后一天成熟' },
+    autumn:{ label:'秋', grow:2, plant:['corn','pumpkin'],
+        soil:[1.09,0.99,0.80], crop:[1.32,1.03,0.60],
+        tip:'浇水后一天成熟' },
+    winter:{ label:'冬', grow:0, plant:[],
+        soil:[0.94,0.99,1.10], crop:[0.90,0.97,1.12],
+        tip:'作物冻住暂停生长，也不能新播种；已种的不会坏，开春接着长' }
+};
+const FarmSeason={
+    _seen:null, _plot:null, _snow:null, _snowMat:null,
+    on(){ return (typeof FEAT==='undefined'||!FEAT.farmSeason) ? true : !!FEAT.farmSeason.on; },
+    season(){ return (typeof Season!=='undefined'&&Season&&Season.name) ? Season.name : 'summer'; },
+    rule(){ return FARM_SEASON_RULES[this.season()]||FARM_SEASON_RULES.summer; },
+    /* 生长点/天；FEAT 关时返回 null＝farmNewDay 走老规矩（直接成熟） */
+    growRate(){ return this.on() ? this.rule().grow : null; },
+    plantable(){ return this.on() ? this.rule().plant.slice() : FARM_CROPS.slice(); },
+    _mul(){ return this.on() ? this.rule() : FARM_SEASON_RULES.summer; },
+    /* 土贴片颜色：基线干/湿色乘当季田面倍率；冬季换雪面口径 */
+    patchHex(st){
+        const watered=!!(st&&st.watered);
+        if(this.on()&&this.season()==='winter') return watered?0xcfe0ee:0xe9f2f9;
+        const base=watered?SCENE.palette.farmWet:SCENE.palette.farmDry;
+        const m=this._mul().soil;
+        if(m[0]===1&&m[1]===1&&m[2]===1) return base;
+        const c=new THREE.Color(base);
+        c.r*=m[0]; c.g*=m[1]; c.b*=m[2];
+        return c.getHex();
+    },
+    /* 作物顶点色乘当季倍率（原地改传入的临时几何，调用方随后合并） */
+    tintParts(parts){
+        const m=this._mul().crop;
+        if(m[0]===1&&m[1]===1&&m[2]===1) return;
+        parts.forEach(function(g){
+            const col=g&&g.attributes&&g.attributes.color;
+            if(!col) return;
+            const a=col.array;
+            for(let i=0;i<a.length;i+=3){ a[i]*=m[0]; a[i+1]*=m[1]; a[i+2]*=m[2]; }
+            col.needsUpdate=true;
+        });
+    },
+    /* 全量刷新：静态农田材质色 + 动态作物重建 + 贴士 + 雪盖 */
+    apply(){
+        if(!this._plot) this._plot=scene.getObjectByName('farmPlot');
+        if(this._plot){
+            const m=this._mul().soil;
+            this._plot.material.color.setRGB(m[0],m[1],m[2]);
+        }
+        renderPlayCrops();
+        this.refreshTip();
+        this.syncSnow();
+    },
+    /* 每帧（模块钩子）：季节变了全量刷新；静态农田引用懒抓（建造时序兜底） */
+    update(dt,t){
+        if(!this._plot){
+            const p=scene.getObjectByName('farmPlot');
+            if(p){ this._plot=p; const m=this._mul().soil; p.material.color.setRGB(m[0],m[1],m[2]); }
+        }
+        const s=this.season();
+        if(s!==this._seen){ this._seen=s; this.apply(); }
+        else this.syncSnow();
+    },
+    buildSnow(){
+        if(this._snow) return;
+        const R=FARM_RECT;
+        const cap=new THREE.BoxGeometry(R.cols*R.cellW+0.5,0.05,R.rows*R.cellD+0.5);
+        cap.translate(R.lx0+R.cols*R.cellW/2, 0.30, R.lz0+R.rows*R.cellD/2);
+        const world=new THREE.Matrix4().makeRotationY(HOUSE_ROT);
+        world.setPosition(HOUSE_POS.x,0,HOUSE_POS.z);
+        cap.applyMatrix4(world);
+        this._snowMat=new THREE.MeshStandardMaterial({ color:C(0xf4f9ff),
+            roughness:0.95, transparent:true, opacity:0, depthWrite:false });
+        this._snow=new THREE.Mesh(cap,this._snowMat);
+        this._snow.name='farmSnow';
+        this._snow.visible=false;
+        scene.add(this._snow);
+    },
+    syncSnow(){
+        const winter=this.on()&&this.season()==='winter';
+        if(winter) this.buildSnow();
+        if(!this._snow) return;
+        // 雪盖只属于本层：非冬季或开关关掉时一律归零，不跟着 Season 的雪淡入走
+        const f=winter ? ((typeof Season!=='undefined'&&Season&&Season._fade) ? Season._fade.snow : 1) : 0;
+        this._snowMat.opacity=0.96*f;
+        this._snow.visible=f>0.02;
+    },
+    refreshTip(){
+        const el=document.getElementById('farmSeasonTip');
+        if(!el) return;
+        if(!this.on()){ el.textContent='🌾 季节影响农场已关，农田按老规矩运行。'; return; }
+        const r=this.rule();
+        if(this.season()==='winter'){ el.textContent='❄️ 农场·冬：'+r.tip+'。'; return; }
+        const names=r.plant.map(function(c){ return FARM_CROP_NAMES[c]; }).join('、');
+        el.textContent='🌾 农场·'+r.label+'：宜种 '+names+'；'+r.tip+'。';
+    },
+    /* 验收钩子：与 __npc/__glProbe 同例，暴露规则与实时状态供无头断言 */
+    snapshot(){
+        return {
+            on: this.on(), season: this.season(),
+            growRate: this.growRate(), plantable: this.plantable(),
+            tip: (document.getElementById('farmSeasonTip')||{}).textContent || '',
+            snowVisible: !!(this._snow&&this._snow.visible),
+            plotTint: this._plot ? [this._plot.material.color.r, this._plot.material.color.g, this._plot.material.color.b] : null,
+            cells: (typeof farmState!=='undefined'&&farmState) ? JSON.parse(JSON.stringify(farmState.cells)) : null,
+            harvest: (typeof farmState!=='undefined'&&farmState) ? farmState.harvest : null
+        };
+    }
+};
+window.__farmSeason=FarmSeason;
 
 /* ==================== 花带与四周丰润（Issue #14） ====================
    负责人口径：留白可以，但要饱和自然。花沿房子前侧与两侧铺成带；
@@ -5846,7 +6055,7 @@ const GrassSys = {
     },
     tick(dt, t){
         ATMO_U.uTime.value = t;
-        if(glSafeLv() >= 2) ATMO_U.uCloudStrength.value = 0;   // 保命模式：云影关停（每帧压住，防面板滑杆改回）
+        if(glSafeLv() >= 2){ if(glFxOn('cloud')) glFxMark('cloud'); else ATMO_U.uCloudStrength.value = 0; }   // 保命模式：云影默认恢复（#98 最低风险：注入块本就在地面/斑块上编译运行，仅放开被压的 uniform）；嫌疑关停后每帧压 0（防面板滑杆改回）
         ATMO_U.uWindK.value = (typeof Env !== 'undefined') ? Env.windK : 1;
         this.tier = this._tierLock || grassTierAuto();
         let snowK = 0, sname = 'summer';
@@ -5938,7 +6147,7 @@ function meadowTuftGeo(){
 function createMeadowGrass(){
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true,
         roughness: 1, side: THREE.DoubleSide });
-    if(glSafeLv() < 2) atmoPatch(mat, { swayAmp: GRASS_CFG.sway.grassAmp, bendH: 0.92 });   // 保命模式：不注入风摆/云影，草走静态朴素材质
+    if(glSafeLv() < 2 || glFxOn('sway')){ atmoPatch(mat, { swayAmp: GRASS_CFG.sway.grassAmp, bendH: 0.92 }); if(glSafeLv() >= 2) glFxMark('sway'); }   // 保命模式：风摆/云影默认恢复（#98 低风险：注入块已在地面/树冠材质编译运行）；嫌疑关停后不注入，草走静态朴素材质
     grassIM = new THREE.InstancedMesh(meadowTuftGeo(), mat, GRASS_CFG.tiers.full.tufts);
     grassIM.castShadow = false;
     grassIM.receiveShadow = true;
@@ -6049,7 +6258,7 @@ function createMeadowFlowers(){
     // 野花：六成成簇（顺草甸的团块感）、四成零散
     const fmat = new THREE.MeshStandardMaterial({ vertexColors: true,
         roughness: 0.9, side: THREE.DoubleSide });
-    if(glSafeLv() < 2) atmoPatch(fmat, { swayAmp: GRASS_CFG.sway.flowerAmp, bendH: 0.42 });   // 保命模式：同草簇，静态
+    if(glSafeLv() < 2 || glFxOn('sway')){ atmoPatch(fmat, { swayAmp: GRASS_CFG.sway.flowerAmp, bendH: 0.42 }); if(glSafeLv() >= 2) glFxMark('sway'); }   // 保命模式：同草簇，风摆默认恢复（#98，见草簇注）
     const fim = new THREE.InstancedMesh(meadowFlowerGeo(), fmat, GRASS_CFG.tiers.full.flowers);
     fim.castShadow = false; fim.receiveShadow = true; fim.frustumCulled = false;
     const fpts = [];
@@ -6079,7 +6288,7 @@ function createMeadowFlowers(){
     // 蒲公英：零散点缀，近中景为主
     const dmat = new THREE.MeshStandardMaterial({ map: dandelionPuffTexture(),
         alphaTest: 0.30, vertexColors: true, roughness: 1, side: THREE.DoubleSide });
-    if(glSafeLv() < 2) atmoPatch(dmat, { swayAmp: GRASS_CFG.sway.flowerAmp, bendH: 0.55 });   // 保命模式：同草簇，静态
+    if(glSafeLv() < 2 || glFxOn('sway')){ atmoPatch(dmat, { swayAmp: GRASS_CFG.sway.flowerAmp, bendH: 0.55 }); if(glSafeLv() >= 2) glFxMark('sway'); }   // 保命模式：同草簇，风摆默认恢复（#98，见草簇注）
     const dim = new THREE.InstancedMesh(meadowDandelionGeo(), dmat, GRASS_CFG.tiers.full.dandelions);
     dim.castShadow = false; dim.receiveShadow = true; dim.frustumCulled = false;
     const dpts = [];
@@ -10257,8 +10466,9 @@ const Env = {
    - 冰面行走：冬季 Season.frozen 为真时，WalkMap.charWalkable 放行湖冰，
      龙的落脚高度走 Season.floorY（冰面高）；散布选点口径不随季节变，
      世界布局指纹不动。
-   - 农场：成熟走 GClock「新的一天」事件结算，没有生长速率参数可乘；
-     季节不改种田结算口径（硬改会动存档语义，本件不动，接入点即此说明）。
+   - 农场：成熟走 GClock「新的一天」事件结算；季节对农场的影响已由 #69
+     在 FarmSeason 一节接入（生长点/可种名单/外观，规则表见 Issue #69
+     评论），接入点即 FarmSeason 只读 Season.name，存档语义由 #69 守住。
    - 河灯改冰灯：Issue 里标注「另议」，本件不做。 */
 const SEASON_ORDER = ['spring','summer','autumn','winter'];
 const SEASON_BY_MONTH = ['winter','winter','spring','spring','spring','summer',
@@ -10740,8 +10950,10 @@ const AtmoSys = {
             scene.add(this._bloomGroup);
         }
         this.registerWindCore();
-        this.bloomTier = (typeof SCENE !== 'undefined' && SCENE.glSafe) ? 0
-            : ((typeof IS_MOBILE !== 'undefined' && IS_MOBILE) ? 0 : 2);   // WebGL 安全模式：Bloom 默认关
+        this.bloomTier = (typeof SCENE !== 'undefined' && SCENE.glSafe)
+            ? (((typeof glFxOn === 'function') && glFxOn('bloom')) ? 1 : 0)   // #98：安全档恢复为低档（日月光晕/丁达尔/光斑全是 stock 透明片、无自定义 shader）；嫌疑关停回 0
+            : ((typeof IS_MOBILE !== 'undefined' && IS_MOBILE) ? 0 : 2);
+        if((typeof SCENE !== 'undefined' && SCENE.glSafe) && this.bloomTier) glFxMark('bloom');
         this._tierAuto = true;
     },
     /* ---------- 模块 1：分层雾 ---------- */
@@ -12507,6 +12719,7 @@ const FEAT = {
     minimap:   { on:true, label:'小地图' },
     achieve:   { on:true, label:'成就徽章' },
     npc:       { on:true, label:'👥 村民作息' },
+    farmSeason:{ on:true, label:'🌾 季节影响农场' },
     voice:     { on:true, label:'🗣️ 世界之声' },
     atmoFog:   { on:true, label:'沉浸·分层雾' },
     atmoLight: { on:true, label:'沉浸·柔和天光' },
@@ -12612,6 +12825,13 @@ const MODULE_HOOKS = {
         setup(){ NPCSys.build(); NPCSys.snap(); },
         teardown(){ NPCSys.allHome(); },
         update(dt, t){ NPCSys.update(dt, t); }
+    },
+    /* 季节影响农场（Issue #69）：实现全在种田玩法一节的 FarmSeason；
+       开关只转发，关掉时农田恢复基线外观与老规矩结算 */
+    farmSeason: {
+        setup(){ FarmSeason.apply(); },
+        teardown(){ FarmSeason.apply(); },
+        update(dt, t){ FarmSeason.update(dt, t); }
     },
     /* 世界之声（Issue #71）：旁白字幕——实现全在 VoiceSys 一节；
        关掉时字幕条立即收起、待播清零，彻底不弹 */
@@ -12969,6 +13189,14 @@ function audioEnterWorld(){
    CSP 媒体口径为它放行同源 'self'（与 blob: 并列，安全审计已同步）。 */
 const THEME_TRACK_NAME = '🎵 主题曲 · 楚门的2.0世界（原创）';
 const THEME_TRACK_SRC = 'assets/audio/chumen-theme.mp3';
+/* 双主题（2026-10-23 负责人定版）：旧主题旋律退役后，新主题有两首——
+   牧歌版（即上面的主题文件）与远望版（下面这首），同为全新旋律。
+   进世界时等概率随机选一首当本次主题（掷骰逻辑在 musicRollTheme），
+   两首同权：同享主题口径（恒第一首、不可暂停不可关、音量下限、
+   夜晚放轻、原生循环）。主题槽位仍是歌单里的同一个位置，天气池
+   与轮播（#68）对双轨无感知，随机只发生在进世界那一刻。 */
+const THEME2_TRACK_NAME = '🎵 主题曲 · 远望（原创）';
+const THEME2_TRACK_SRC = 'assets/audio/chumen-theme2.mp3';
 /* #68 内置天气变奏曲：与主题曲同源动机（F♯–A–B–D）、同和弦进行的两个
    60 秒无缝循环变奏——雨版稀疏钢琴、雪版八音盒，同出一条离线作曲管线
    （compose_chumen_wx.py）。它们是标签写死的内置曲：恒排主题曲之后、
@@ -12986,6 +13214,7 @@ const musicState = {
     night: false,    // 夜晚时段（音量自动放轻）
     wx: undefined,   // 当前天气池标签（#68）：'sun'|'rain'|'snow'|'over'；null = 不分池（夜晚）
     wxLock: false,   // 锁定歌单（#68）：true = 不随天气切池，轮播回全量顺序
+    themePick: -1,   // 双主题掷骰结果：-1 未掷 | 0 牧歌 | 1 远望（每次进世界会话只掷一次）
     themeDefault: false  // 本机没有自选歌单存档时为真（主题曲即默认歌单）
 };
 function musicCustomActive(){
@@ -13187,7 +13416,7 @@ function musicPlay(){
 }
 function musicPause(){
     const t = musicState.tracks[musicState.cur];
-    if(t && t.builtin && t.name === THEME_TRACK_NAME){   // 只有主题曲常驻不可关：暂停键对它无效，只给一句提示（render 会重写状态行，提示必须排在它后面）；#68 的天气变奏曲同为内置曲但可正常暂停，故这里只认主题曲本身
+    if(t && t.builtin && (t.name === THEME_TRACK_NAME || t.name === THEME2_TRACK_NAME)){   // 只有主题曲常驻不可关（双主题同权，两首都认）：暂停键对它无效，只给一句提示（render 会重写状态行，提示必须排在它后面）；#68 的天气变奏曲同为内置曲但可正常暂停，故这里只认两首主题本身
         musicRender();
         musicHint('主题曲是世界的常驻 BGM，只能调小音量，不能关掉');
         return;
@@ -13266,8 +13495,11 @@ function setupMusic(){
     const savedTags = (pref.tags && typeof pref.tags === 'object' && !Array.isArray(pref.tags)) ? pref.tags : {};   // #68 歌名→天气标签
     const savedNames = Array.isArray(pref.names)
         ? pref.names.filter(function(n){ return typeof n === 'string' && !!n; }) : [];
-    // 内置主题曲恒列歌单第一首：有自选存档时只作备选不抢播，没有时它就是默认歌单
-    musicState.tracks = [{ name: THEME_TRACK_NAME, url: THEME_TRACK_SRC, builtin: true, tag: 'any' }]
+    // 内置主题曲恒列歌单第一首：有自选存档时只作备选不抢播，没有时它就是默认歌单；
+    // 双主题：若进世界请求已先掷过骰（themePick），槽位直接按骰面建，未掷则先按牧歌建、进世界时再换
+    musicState.tracks = [(musicState.themePick === 1)
+        ? { name: THEME2_TRACK_NAME, url: THEME2_TRACK_SRC, builtin: true, tag: 'any' }
+        : { name: THEME_TRACK_NAME, url: THEME_TRACK_SRC, builtin: true, tag: 'any' }]
         .concat(WX_BUILTIN_TRACKS.map(function(t){ return { name: t.name, url: t.url, builtin: true, tag: t.tag }; }))
         .concat(savedNames.map(function(n){ return { name: n, url: null, tag: musicWxClean(savedTags[n]) }; }));
     musicState.themeDefault = savedNames.length === 0;
@@ -13374,14 +13606,28 @@ function setupMusic(){
    也由本请求点顺带唤起，共用同一条手势链与补启闸门。 */
 const musicGate = { want: false, ok: false };
 let soundGateArmed = false;
+/* 双主题掷骰：只在进世界时掷一次（themePick 记骰面，重入不重掷），
+   把主题槽位的文件名与曲名换成骰中那首；槽位还没建（setupMusic 未跑）
+   时只记骰面，建槽时按骰面建。播放途中绝不调用它换歌。 */
+function musicRollTheme(){
+    if(musicState.themePick >= 0) return;
+    musicState.themePick = Math.random() < 0.5 ? 0 : 1;
+    const t = musicState.tracks.find(function(x){ return !!x.builtin && (x.name === THEME_TRACK_NAME || x.name === THEME2_TRACK_NAME); });
+    if(t){
+        t.url = musicState.themePick ? THEME2_TRACK_SRC : THEME_TRACK_SRC;
+        t.name = musicState.themePick ? THEME2_TRACK_NAME : THEME_TRACK_NAME;
+    }
+}
 function musicEnterWorld(){
     musicGate.want = true;
+    musicRollTheme();   // 进世界先掷骰定下本次主题，再走统一起播
     audioEnterWorld();
     musicTryStart();
     if(!musicGate.ok) soundGateArm();
 }
 function musicTryStart(){
     if(!musicGate.want || musicGate.ok) return;
+    musicRollTheme();   // 幂等补掷：任何起播路径走到这都保证骰已掷且只掷一次
     if(!musicState.el) return;   // 元素还没建（setupMusic 未跑）：不烧账，等补推
     // 首选没出过错的内置曲（主题曲优先）；它坏了就落到任何一首没出过错的可播曲，永不死守坏源
     let ti = musicState.tracks.findIndex(function(t){ return !!t.builtin && !!t.url && !t.__err; });
@@ -17534,6 +17780,9 @@ function setupGlobal(){
             if(glLostTimer){ clearTimeout(glLostTimer); glLostTimer=null; }
             var bootLv = window.__glSafeLevel || 0;
             if(bootLv >= 2){
+                /* #98：保命档内再丢也要给启用中的恢复特效记嫌疑——攒满 2 次
+                   单独关停后，用户从致命层重试即可甩掉元凶特效进世界。 */
+                try{ if(typeof SceneHub !== 'undefined' && SceneHub.glNoteFxFailure) SceneHub.glNoteFxFailure(); }catch(e){}
                 if(typeof showFatal==='function')
                     showFatal('显卡上下文丢失（已按保命模式启动，仍无法稳定，常见于显存不足）。');
                 return;
@@ -17545,6 +17794,7 @@ function setupGlobal(){
             if(typeof SCENE !== 'undefined'){
                 SCENE.glSafe = nextLv;
                 try{ if(typeof SceneHub !== 'undefined' && SceneHub.glNoteFailure) SceneHub.glNoteFailure(bootLv); }catch(e){}
+                try{ if(typeof SceneHub !== 'undefined' && SceneHub.glNoteFxFailure) SceneHub.glNoteFxFailure(); }catch(e){}   // #98：本会话启用中的恢复特效并行记嫌疑
                 if(typeof SceneHub !== 'undefined') SceneHub.save();
             }
             DPR_LIM=Math.min(DPR_LIM, 1.25);
