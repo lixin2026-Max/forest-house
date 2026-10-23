@@ -11,7 +11,7 @@
 /* 小版本不停机更新自检（发版纪律见 README「发版清单」）：本页构建号与站点 version.json 比对。
    线上更新时：未进世界→整页换新一次（带 _v 参数绕开页面缓存，资源照常走缓存）；
    已在世界→只给角落小字提示，绝不中途重载。指针拉不到就当作无更新，静默放行。 */
-window.__BUILD__ = '2026-1023-1647';
+window.__BUILD__ = '2026-1023-1735';
 (function(){
     const UPD_TRY_KEY='ct2_upd_try';
     let hintedBuild = '';
@@ -950,7 +950,7 @@ window.__BUILD__ = '2026-1023-1647';
     #app.bars-off #fbBtn,#app.bars-off #lanternBtn,#app.bars-off #modBtn{opacity:0;pointer-events:none;transform:translateY(12px)}
     /* #96 补齐：底部操控条 / 进出屋条 / 提示条 / 回程钮 / 小龙菜单也纳入自动隐藏（只淡出，不动各自的位移动画与显隐逻辑） */
     #dragonBar,#roomBar,#appBar,#echoHomeBtn,#dragonMenu{transition:opacity .35s ease}
-    #app.bars-off #dragonBar,#app.bars-off #roomBar,#app.bars-off #appBar,#app.bars-off #echoHomeBtn,#app.bars-off #dragonMenu,#app.bars-off #voiceBar{opacity:0;pointer-events:none}
+    #app.bars-off #dragonBar,#app.bars-off #roomBar,#app.bars-off #appBar,#app.bars-off #echoHomeBtn,#app.bars-off #dragonMenu,#app.bars-off #voiceBar,#app.bars-off #stamBar{opacity:0;pointer-events:none}
     #wakeBtn{position:absolute;right:10px;top:50%;z-index:119;width:34px;height:34px;border-radius:50%;
         transform:translateY(-50%);display:flex;align-items:center;justify-content:center;
         background:var(--wake-bg);color:var(--wake-txt);border:1px solid var(--ghost-line);
@@ -1001,7 +1001,7 @@ window.__BUILD__ = '2026-1023-1647';
     #app.photo-on #fbMask,#app.photo-on #ltMask,#app.photo-on #helpMask,#app.photo-on #voteMask,
     #app.photo-on #logMask,#app.photo-on #dragonMask,#app.photo-on #avatarMask,#app.photo-on #viewMask,#app.photo-on #echoMask,#app.photo-on #codexMask,#app.photo-on #achMask,
     #app.photo-on #gbMask,#app.photo-on #chronMask,#app.photo-on #huntToast,#app.photo-on #helpTip,#app.photo-on #appBar,
-    #app.photo-on #wishBubble,#app.photo-on #sdBubble,#app.photo-on #codexToast,#app.photo-on #achToast,#app.photo-on #rotGuide,#app.photo-on #miniMap,#app.photo-on #voiceBar{display:none !important}
+    #app.photo-on #wishBubble,#app.photo-on #sdBubble,#app.photo-on #codexToast,#app.photo-on #achToast,#app.photo-on #rotGuide,#app.photo-on #miniMap,#app.photo-on #voiceBar,#app.photo-on #stamBar{display:none !important}
     #photoUI{display:none;position:absolute;inset:0;z-index:140;pointer-events:none}
     #photoGrid{position:absolute;inset:0;pointer-events:none;
         background:
@@ -1049,6 +1049,15 @@ window.__BUILD__ = '2026-1023-1647';
     #dragonBar #actBtn:hover{background:var(--warm-pri-hov)}
     #dragonBar #actBtn .cbIco{font-size:26px}
     #dragonBar #actBtn .cbCap{font-size:10px;font-weight:600}
+    /* ===== 技能期 Build 1：体力条（疾跑）——极简细条，底部居中悬在旁白条上方；
+       只在疾跑消耗/未回满时露脸（.on），满值自动隐去；不接收指针、不抢 HUD ===== */
+    #stamBar{position:absolute;left:50%;bottom:calc(168px + env(safe-area-inset-bottom, 0px));z-index:118;
+        width:148px;height:5px;border-radius:3px;transform:translateX(-50%);
+        background:rgba(8,18,10,.45);border:1px solid rgba(255,255,255,.22);
+        opacity:0;pointer-events:none;transition:opacity .3s ease}
+    #stamBar.on{opacity:.92}
+    #stamFill{height:100%;width:100%;border-radius:3px;background:#ffd98a;transition:width .12s linear}
+    #stamFill.low{background:#ff9d7a}
     /* ===== 小龙互动菜单（#16/#17）：贴在键簇上方的小面板，风格与 dragonBar 一套 ===== */
     #dragonMenu{position:absolute;right:calc(14px + env(safe-area-inset-right, 0px));
         bottom:calc(96px + env(safe-area-inset-bottom, 0px));z-index:122;
@@ -1134,8 +1143,10 @@ window.__BUILD__ = '2026-1023-1647';
 <div id="dragonBar">
     <button type="button" id="dragonBtn" title="回小屋门口"><span class="cbIco">🏠</span><span class="cbCap">回小屋门口</span></button>
     <button type="button" id="viewBtn" style="display:none" title="切换第一 / 第三人称"><span class="cbIco">👁️</span><span class="cbCap">第三人称</span></button>
+    <button type="button" id="jumpBtn" style="display:none" title="跳跃（空格）"><span class="cbIco">⬆️</span><span class="cbCap">跳跃</span></button>
     <button type="button" id="actBtn" title="互动"><span class="cbIco">🤚</span><span class="cbCap">互动</span></button>
 </div>
+<div id="stamBar"><div id="stamFill"></div></div>
 <!-- 定制小龙入口（HUD 重构）：撤出游戏画面，只保留在场景中枢面板的化身区
      （sceneAvatarBtn → openDragonCustom）；此隐藏钮仅作旧代码路径的兜底锚点 -->
 <button type="button" id="dragonCustomBtn" style="display:none" aria-hidden="true">🎨 定制小龙</button>
@@ -8497,6 +8508,61 @@ function joyHud(on){
     if(!on && JoyDyn.id !== null) joyDynEnd();
     if(!on){ const joy = document.getElementById('joy'); if(joy) joy.classList.remove('live'); }
 }
+/* ---------- 技能期 Build 1：移动基础（跳跃＋疾跑/体力） ----------
+   数值集中在此（与 JOY_CFG 同级口径，别处不许散落魔法数）：
+   walk 步行速度（沿用既有 3.6 不变）；sprintMult 疾跑倍率（3.6×1.5＝5.4，
+   即旧 Shift 直达的速度，现改为体力门控）；stamMax/stamDrain/stamRegen
+   体力上限/每秒消耗/每秒回复；stamRegenDelay 停跑后多久开始回复；
+   stamWake 耗尽锁解除所需的回复量；jumpVel 起跳初速、gravity 重力
+   （跳高 ≈ jumpVel²/(2·gravity) ≈ 0.75，幼年初速 ×1/√2 → 跳高减半）；
+   joySprint 摇杆归一化幅值达到多少算「推满外圈」疾跑（桌面走 Shift）；
+   landEaseH/landEaseK 落地缓冲：距地低于 landEaseH 且下落时重力打折，
+   触地变软（只改曲线尾段，不动顶点与总时长口径）。
+   体力与跳跃状态只放内存（SkillMove），零新增存档键。 */
+const MOVE_CFG = { walk: 3.6, sprintMult: 1.5, stamMax: 100, stamDrain: 20, stamRegen: 16,
+    stamRegenDelay: 0.9, stamWake: 30, jumpVel: 4.6, gravity: 14, joySprint: 0.95,
+    landEaseH: 0.22, landEaseK: 0.35 };
+const SkillMove = { air: false, y: 0, vy: 0, stam: MOVE_CFG.stamMax, exhausted: false,
+    sprinting: false, regenWait: 0, spacePrev: false, btnJump: false, barEl: null, fillEl: null };
+function skillMoveOn(){ return (typeof FEAT === 'undefined' || !FEAT.skillMove || FEAT.skillMove.on); }
+function skillIsJuvenile(){ const g = (typeof dragonCfg !== 'undefined' && dragonCfg.grow) || null; return !g || (g.stage || 0) < 1; }
+/* 面板/弹窗/序章在场时不触发技能（与世界之声 blocked() 同口径＋互动菜单） */
+function skillUiBlocked(){
+    if(typeof enteredWorld === 'undefined' || !enteredWorld) return true;
+    if(typeof eggMode !== 'undefined' && (eggMode === 'egg' || eggMode === 'hatching')) return true;
+    if(typeof logOpen !== 'undefined' && logOpen) return true;
+    const app = document.getElementById('app');
+    if(app && app.classList.contains('photo-on')) return true;
+    const panel = document.getElementById('modPanel');
+    if(panel && panel.classList.contains('on')) return true;
+    if(document.querySelector('[id$="Mask"].on')) return true;
+    const dm = document.getElementById('dragonMenu');
+    if(dm && dm.style.display !== 'none') return true;
+    return false;
+}
+function skillReset(){
+    SkillMove.air = false; SkillMove.vy = 0; SkillMove.stam = MOVE_CFG.stamMax;
+    SkillMove.exhausted = false; SkillMove.sprinting = false; SkillMove.regenWait = 0;
+    SkillMove.spacePrev = false; SkillMove.btnJump = false;
+}
+function skillSyncJumpBtn(){
+    const jb = document.getElementById('jumpBtn');
+    if(jb) jb.style.display = (DragonCtl.active && skillMoveOn()) ? '' : 'none';
+}
+function skillSyncStamBar(){
+    if(!SkillMove.barEl){ SkillMove.barEl = document.getElementById('stamBar'); SkillMove.fillEl = document.getElementById('stamFill'); }
+    const bar = SkillMove.barEl, fill = SkillMove.fillEl;
+    if(!bar || !fill) return;
+    const sk = SkillMove;
+    const show = skillMoveOn() && DragonCtl.active && !skillIsJuvenile()
+        && (typeof enteredWorld !== 'undefined' && enteredWorld)
+        && (sk.sprinting || sk.stam < MOVE_CFG.stamMax - 0.5);
+    bar.classList.toggle('on', !!show);
+    if(show){
+        fill.style.width = Math.max(0, Math.min(100, sk.stam / MOVE_CFG.stamMax * 100)).toFixed(1) + '%';
+        fill.classList.toggle('low', sk.exhausted);
+    }
+}
 function dragonPlayerMove(a, dt){
     const Ctl = DragonCtl, p = a.group.position;
     if(a.helpWater){ dragonHelpStep(a, dt); return; }   // #70：帮忙浇水进行中，步进接管移动（玩家一动手即收工，见 dragonHelpStep）
@@ -8506,6 +8572,11 @@ function dragonPlayerMove(a, dt){
     if(Ctl.keys.has('d') || Ctl.keys.has('arrowright')) ix += 1;
     if(Ctl.keys.has('a') || Ctl.keys.has('arrowleft')) ix -= 1;
     ix += Ctl.joy.x; iz += Ctl.joy.y;
+    /* 技能期 Build 1：疾跑意图＝Shift 或摇杆推满外圈；幼年/面板在场/开关关时不成立 */
+    const sk = SkillMove, skOn = skillMoveOn(), juv = skillIsJuvenile();
+    const wantSprint = skOn && !juv && !skillUiBlocked()
+        && (Ctl.keys.has('shift') || Math.hypot(Ctl.joy.x, Ctl.joy.y) >= MOVE_CFG.joySprint);
+    sk.sprinting = false;
     let moved = false;
     if(Math.abs(ix) > 0.08 || Math.abs(iz) > 0.08){
         stopAvatarRoam();   // #100：玩家一动手，自动漫游立刻交还控制
@@ -8514,7 +8585,9 @@ function dragonPlayerMove(a, dt){
         const rx = -fz, rz = fx;                                  // 相机右向
         const wxv = fx*iz + rx*ix, wzv = fz*iz + rz*ix;
         const wl = Math.hypot(wxv, wzv) || 1;
-        const speed = (Ctl.keys.has('shift') ? 5.4 : 3.6) * Math.min(1, Math.hypot(ix, iz));
+        let mult = 1;
+        if(wantSprint && !sk.exhausted && sk.stam > 0){ mult = MOVE_CFG.sprintMult; sk.sprinting = true; }
+        const speed = MOVE_CFG.walk * mult * Math.min(1, Math.hypot(ix, iz));
         moved = dragonWalkTo(a, p.x + wxv/wl*3, p.z + wzv/wl*3, speed, dt);
     } else if(a.moveTarget){
         const d = Math.hypot(a.moveTarget.x - p.x, a.moveTarget.z - p.z);
@@ -8522,6 +8595,36 @@ function dragonPlayerMove(a, dt){
         else moved = dragonWalkTo(a, a.moveTarget.x, a.moveTarget.z, 3.4, dt);
     }
     a.moveAmt += ((moved ? 1 : 0) - a.moveAmt) * Math.min(1, dt*7);
+    /* 技能期 Build 1：体力结算——疾跑消耗、停跑延迟回复、耗尽锁（回到 stamWake 才解锁） */
+    if(sk.sprinting){
+        sk.stam = Math.max(0, sk.stam - MOVE_CFG.stamDrain * dt);
+        sk.regenWait = MOVE_CFG.stamRegenDelay;
+        if(sk.stam <= 0) sk.exhausted = true;
+    } else if(sk.regenWait > 0){ sk.regenWait -= dt; }
+    else if(sk.stam < MOVE_CFG.stamMax){
+        sk.stam = Math.min(MOVE_CFG.stamMax, sk.stam + MOVE_CFG.stamRegen * dt);
+        if(sk.exhausted && sk.stam >= MOVE_CFG.stamWake) sk.exhausted = false;
+    }
+    /* 技能期 Build 1：跳跃——空格/跳跃钮边沿触发；重力积分走绝对高度，
+       落脚高以既有 worldFloorY/室内地板为准：上坡升地自动触地、下坡顺势
+       坠落到新地面，不穿地、不悬空；距地 landEaseH 内下落重力打折＝落地缓冲 */
+    const gy = window.__roomDragon ? Interior.floorWorldY() : worldFloorY(p.x, p.z);
+    const spaceDown = Ctl.keys.has(' ');
+    const jumpEdge = (spaceDown && !sk.spacePrev) || sk.btnJump;
+    sk.spacePrev = spaceDown; sk.btnJump = false;
+    if(!sk.air) sk.y = gy;
+    if(jumpEdge && skOn && !sk.air && dragonHatched() && !skillUiBlocked()){
+        sk.air = true;
+        sk.vy = MOVE_CFG.jumpVel * (juv ? Math.SQRT1_2 : 1);   // 幼年：初速降 → 跳高减半
+    }
+    if(sk.air){
+        const ease = (sk.vy < 0 && (sk.y - gy) < MOVE_CFG.landEaseH) ? MOVE_CFG.landEaseK : 1;
+        sk.vy -= MOVE_CFG.gravity * ease * dt;
+        sk.y += sk.vy * dt;
+        if(sk.y <= gy){ sk.y = gy; sk.air = false; sk.vy = 0; }
+        p.y = sk.y;
+    }
+    skillSyncStamBar();
     if(Ctl.fp) dragonFace(a, Ctl.yaw + Math.PI, dt);   // 第一人称：龙身跟着视线转
 }
 
@@ -8752,6 +8855,7 @@ function dragonTakeover(){
     const vb = document.getElementById('viewBtn');
     vb.style.display = '';
     setCbText(vb, DragonCtl.fp ? '👁️ 第一人称' : '👁️ 第三人称');
+    skillSyncJumpBtn();   // 技能期 Build 1：跳跃钮随接管露脸（FEAT 关时不露）
     if(IS_TOUCH) joyHud(true);
     dragonCall();   // #41：接管时叫一声（音调随性别），没开声音时静默
 }
@@ -8772,6 +8876,10 @@ function dragonRelease(){
     const b = document.getElementById('dragonBtn');
     setCbText(b, dragonBtnText(false)); b.classList.remove('on');
     document.getElementById('viewBtn').style.display = 'none';
+    const jb2 = document.getElementById('jumpBtn');
+    if(jb2) jb2.style.display = 'none';
+    skillReset();   // 技能期 Build 1：放手即清跳跃/体力瞬时态
+    skillSyncStamBar();
     joyHud(false);
 }
 function dragonToggleView(){
@@ -8979,6 +9087,13 @@ function setupDragonControls(){
         avatarGoHome();
     });
     document.getElementById('viewBtn').addEventListener('click', dragonToggleView);
+    /* 技能期 Build 1：跳跃钮——pointerdown 即排队一次起跳（下一帧玩家步进消费），
+       preventDefault 防聚焦后空格把钮再「点」一遍 */
+    const jumpBtnEl = document.getElementById('jumpBtn');
+    if(jumpBtnEl){
+        jumpBtnEl.addEventListener('pointerdown', e=>{ e.preventDefault(); SkillMove.btnJump = true; });
+        jumpBtnEl.addEventListener('click', e=>{ e.preventDefault(); });
+    }
     window.addEventListener('keydown', e=>{
         const tag = (e.target && e.target.tagName) || '';
         if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
@@ -9693,6 +9808,24 @@ function updateWaterFx(dt){
     attr.needsUpdate = true;
     if(!any) waterPts.visible = false;
 }
+/* 无头验收钩子（技能期 Build 1）：只读快照＋排队起跳/设体力入口 */
+window.__skillMove = {
+    cfg: MOVE_CFG,
+    jump: function(){ SkillMove.btnJump = true; },
+    setStam: function(v){ SkillMove.stam = Math.max(0, Math.min(MOVE_CFG.stamMax, v)); if(SkillMove.stam >= MOVE_CFG.stamWake) SkillMove.exhausted = false; },
+    snap: function(){
+        const a = dragonAgent, p = a ? a.group.position : null;
+        return { on: skillMoveOn(), juv: skillIsJuvenile(), blocked: skillUiBlocked(),
+            air: SkillMove.air, vy: Math.round(SkillMove.vy * 100) / 100,
+            y: p ? Math.round(p.y * 1000) / 1000 : 0,
+            ground: p ? Math.round((window.__roomDragon ? Interior.floorWorldY() : worldFloorY(p.x, p.z)) * 1000) / 1000 : 0,
+            stam: Math.round(SkillMove.stam * 10) / 10, sprinting: SkillMove.sprinting,
+            exhausted: SkillMove.exhausted,
+            barOn: !!(document.getElementById('stamBar') || {}).classList && document.getElementById('stamBar').classList.contains('on'),
+            jumpBtn: (document.getElementById('jumpBtn') || {}).style ? document.getElementById('jumpBtn').style.display : 'missing' };
+    }
+};
+
 /* 无头验收钩子（与 __npc / __fpsTune 同例）：只读快照＋起步/收工入口 */
 window.__dragonHelp = {
     start: dragonHelpWater,
@@ -13166,6 +13299,7 @@ const FEAT = {
     achieve:   { on:true, label:'成就徽章' },
     npc:       { on:true, label:'👥 村民作息' },
     help:      { on:true, label:'💧 小龙帮忙浇水' },
+    skillMove: { on:true, label:'🏃 技能·跳跃与疾跑' },
     farmSeason:{ on:true, label:'🌾 季节影响农场' },
     voice:     { on:true, label:'🗣️ 世界之声' },
     atmoFog:   { on:true, label:'沉浸·分层雾' },
@@ -13277,6 +13411,12 @@ const MODULE_HOOKS = {
        钩子只管收尾——关掉开关时进行中的浇水立刻收工，水花粒子池随之停用 */
     help: {
         teardown(){ cancelDragonHelp(); disposeWaterFx(); }
+    },
+    /* 技能期 Build 1（跳跃＋疾跑/体力）：实现全在操控节的 SkillMove；
+       钩子只管开关收尾——关掉时清瞬时态、收跳跃钮与体力条 */
+    skillMove: {
+        setup(){ skillSyncJumpBtn(); },
+        teardown(){ skillReset(); skillSyncJumpBtn(); skillSyncStamBar(); }
     },
     /* 季节影响农场（Issue #69）：实现全在种田玩法一节的 FarmSeason；
        开关只转发，关掉时农田恢复基线外观与老规矩结算 */
