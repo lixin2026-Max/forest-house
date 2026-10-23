@@ -208,13 +208,14 @@ test('BGM 按天气换音阶，音频文件只许站内四首内置曲（双主�
     must(/BGM_SCALE\s*=\s*\{/.test(inlineJs), '缺少按天气的音阶表');
     ['sunny','golden','mist','night','rain'].forEach(m =>
         must(new RegExp(m + '\\s*:\\s*\\[').test(inlineJs), '音阶表缺少 ' + m));
-    // 程序化 BGM 本体仍不加载文件；全页只许引用站内四首同源内置音频
-    // （双主题：牧歌＋远望，2026-10-23 定版；#68 的雨/雪天气变奏，同出一条离线作曲管线），其余音频引用一律不许
+    // 程序化 BGM 本体仍不加载文件；全页只许引用站内同源内置音频
+    // （双主题：牧歌＋远望，2026-10-23 定版；#68 的雨/雪天气变奏，同出一条离线作曲管线；
+    //  ＋页面开场短音 chumen-opening-folk＝主题 B 开头 3.2 秒、不入歌单轮播），其余音频引用一律不许
     const ALLOWED_AUDIO = ['assets/audio/chumen-theme.mp3', 'assets/audio/chumen-theme2.mp3',
-        'assets/audio/chumen-rain.mp3', 'assets/audio/chumen-snow.mp3'];
+        'assets/audio/chumen-rain.mp3', 'assets/audio/chumen-snow.mp3', 'assets/audio/chumen-opening-folk.mp3'];
     const audioRefs = html.match(/[\w./-]+\.(?:mp3|ogg|wav|m4a)/gi) || [];
     must(audioRefs.length > 0 && audioRefs.every(r => ALLOWED_AUDIO.includes(r)),
-        '引用了四首内置曲之外的音频文件：' + audioRefs.join(', '));
+        '引用了白名单之外的音频文件：' + audioRefs.join(', '));
 });
 test('音频有总静音开关，默认开启、静音偏好存档说了算', ()=>{
     must(/id="muteBtn"/.test(html), '缺少静音按钮');
@@ -535,6 +536,28 @@ test('按天气分歌单：标签映射＋锁定开关只扩 ct2_music、接歌�
     must(/musicState\.themePick = Math\.random\(\) < 0\.5 \? 0 : 1/.test(inlineJs),'掷骰应为等概率二选一');
     must(/if\(musicState\.themePick >= 0\) return/.test(inlineJs),'掷骰缺只掷一次守卫');
     must(/musicGate\.want = true;\s*\n\s*musicRollTheme\(\)/.test(inlineJs),'musicEnterWorld 未在记账后先掷骰');
+});
+
+test('页面开场层：水墨开场热更新送达（视频铺满/双开场分工/海报兜底/短音不扰主题曲）', ()=>{
+    // 结构：开场层与视频标签在位，视频走普通资源标签（全页 fetch 仍恰两处，另有专测钉死）
+    must(/<div id="opening"/.test(html), '缺少页面开场层 #opening');
+    must(/<video id="opVideo"[^>]*src="assets\/video\/opening\.mp4"/.test(html), '开场视频未指向站内 assets/video/opening.mp4');
+    must(/<div class="opTitle" id="opTitle">楚门的2.0世界<\/div>/.test(html), '开场金字标题缺失或文案被改');
+    must(fs.existsSync(path.join(root,'assets/video/opening.mp4')), '开场视频文件缺失');
+    must(fs.existsSync(path.join(root,'assets/audio/chumen-opening-folk.mp3')), '开场短音文件缺失');
+    // 铺满：object-fit:cover（运行时按真实屏幕覆盖，任何比例不露边不变形）
+    must(/#opening video\{[^}]*object-fit:cover/.test(html), '开场视频未用 object-fit:cover 铺满裁切');
+    // 海报兜底：data: 内嵌（CSP img-src 只放行 data:/blob:），失败转海报停留不卡死
+    must(/const OP_POSTER = 'data:image\/webp;base64,/.test(inlineJs), '开场海报未以 data: 形式内嵌');
+    must(/function posterHold\(\)/.test(inlineJs), '缺少海报停留回落路径 posterHold');
+    // 双开场分工：壳 ≥1.3 只补 1.5 秒标题卡（mode=card），不重播视频
+    must(/shellHasOwn/.test(inlineJs) && /mode = 'card'/.test(inlineJs), '缺少壳≥1.3 短版标题卡分工');
+    must(/finish\('card'\)/.test(inlineJs), '短版标题卡未在 1.5 秒口径收尾');
+    // 开场短音不进起播状态机：OpeningLayer 段内不许碰 musicGate
+    const seg = inlineJs.slice(inlineJs.indexOf('const OpeningLayer'), inlineJs.indexOf('const BGM_SCALE'));
+    must(seg.length > 0 && !/musicGate/.test(seg), '开场层碰了主题曲起播状态机 musicGate');
+    // 开关：FEAT.opening 在位（模块隔离专测另核钩子成对）
+    must(/opening:\s*\{ on:true, label:'🎬 开场动画' \}/.test(inlineJs), 'FEAT.opening 缺失或默认未开');
 });
 
 // ---------- 迭代维护规范：模块隔离 ----------

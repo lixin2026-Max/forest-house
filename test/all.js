@@ -20,7 +20,8 @@ const SUITES = [
     ['move-accept.js', '技能期 Build 1 专项（跳跃＋疾跑/体力）'],
     ['context-accept.js', '上下文互动键专项（技能期 Build 2）'],
     ['trio-accept.js', '技能期 Build 3 专项（滑翔/龙息/呼唤）'],
-    ['whitefix-accept.js', '白屏热修专项（保命档回退＋白屏自检自愈）']
+    ['whitefix-accept.js', '白屏热修专项（保命档回退＋白屏自检自愈）'],
+    ['opening-accept.js', '页面开场层专项（水墨开场热更新送达）']
 ];
 
 let failed = 0;
