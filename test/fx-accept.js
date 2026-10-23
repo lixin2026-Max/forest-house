@@ -1,8 +1,9 @@
 // #98 保命特效逐个放回 · 专项验收
 // 跑法：node test/fx-accept.js（已被 test/all.js 收编）
 // 无头实测（SwiftShader 软件渲染，只能验代码路径与状态，**不代表真机驱动结论**）：
-//  A. glSafe=2 无嫌疑存档：五件特效全恢复（天空穹顶/水体 lite/草风摆/云影/Bloom 低档），
-//     水体被钉死 lite（__waterTier('ultra') 无效），五件都在 __glFxActive 里登记。
+//  A. glSafe=2 无嫌疑存档：水体 lite/草风摆恢复，水体被钉死 lite
+//     （__waterTier('ultra') 无效）；天空穹顶/云影/Bloom 已由 2026-10-23
+//     白屏热修回退（保命档停用/压 0/钉 0），只有 water/sway 登记 __glFxActive。
 //  B. glSafe=2 且 gx{water:2, sky:2}：水/天单独关停回落剥离态，其余三件不受连坐。
 //  C. glSafe=2 且 gx{water:1}：页内模拟一次「水体启用中上下文丢失」→ glNoteFxFailure
 //     把水体系数攒到 2 并落盘 → 整页重载后水体回落 Phong、天空仍在。
@@ -110,15 +111,15 @@ const PROBE = `(function(){ return {
         try {
             check('A 页面进入运行中', await s.boot());
             const p = await s.ev(PROBE);
-            check('A 天空穹顶已恢复（skyMat 非空）', p.sky === true, JSON.stringify(p));
+            check('A 天空穹顶保命档停用（白屏热修回退，skyMat 空）', p.sky === false, JSON.stringify(p));
             check('A 水体已恢复且为 lite（uTier=0）', p.waterTier === 0, JSON.stringify(p));
             await s.ev("window.__waterTier && window.__waterTier('ultra')");
             const p2 = await s.ev(PROBE);
             check('A 保命档水体钉死 lite（切 ultra 无效）', p2.waterTier === 0, JSON.stringify(p2));
             check('A 草风摆已恢复（atmo 注入在位）', p.grassKey === 'atmo73', JSON.stringify(p));
-            check('A 云影已恢复（强度未被压 0）', typeof p.cloud === 'number' && p.cloud > 0, JSON.stringify(p));
-            check('A Bloom 已恢复为低档（bloomTier=1）', p.bloom === 1, JSON.stringify(p));
-            check('A 五件均登记本会话已启用', ['sky', 'water', 'sway', 'cloud', 'bloom'].every(k => p.fx[k] === true), JSON.stringify(p.fx));
+            check('A 云影保命档压 0（白屏热修回退）', p.cloud === 0, JSON.stringify(p));
+            check('A Bloom 保命档钉 0（白屏热修回退）', p.bloom === 0, JSON.stringify(p));
+            check('A 登记口径：water/sway 已登记、sky/cloud/bloom 不再登记', p.fx.water === true && p.fx.sway === true && !p.fx.sky && !p.fx.cloud && !p.fx.bloom, JSON.stringify(p.fx));
         } finally { s.cleanup(); }
     }
     /* ---------- B：gx 攒满的两件单独关停 ---------- */
@@ -130,8 +131,8 @@ const PROBE = `(function(){ return {
             check('B 天空单独关停（skyMat 空）', p.sky === false, JSON.stringify(p));
             check('B 水体单独关停（回落 Phong，WATER_U 空）', p.waterTier === null, JSON.stringify(p));
             check('B 风摆不连坐（仍注入）', p.grassKey === 'atmo73', JSON.stringify(p));
-            check('B 云影不连坐（强度 > 0）', typeof p.cloud === 'number' && p.cloud > 0, JSON.stringify(p));
-            check('B Bloom 不连坐（bloomTier=1）', p.bloom === 1, JSON.stringify(p));
+            check('B 云影保命档压 0（白屏热修回退，与嫌疑账无关）', p.cloud === 0, JSON.stringify(p));
+            check('B Bloom 保命档钉 0（白屏热修回退，与嫌疑账无关）', p.bloom === 0, JSON.stringify(p));
         } finally { s.cleanup(); }
     }
     /* ---------- C：嫌疑攒满→落盘→重载回落 ---------- */
@@ -150,7 +151,7 @@ const PROBE = `(function(){ return {
             check('C 重载后进入运行中', await s.boot());
             const p2 = await s.ev(PROBE);
             check('C 重载后水体回落 Phong（WATER_U 空）', p2.waterTier === null, JSON.stringify(p2));
-            check('C 重载后天空仍在（不连坐）', p2.sky === true, JSON.stringify(p2));
+            check('C 重载后天空保持兜底停用（白屏热修回退）', p2.sky === false, JSON.stringify(p2));
         } finally { s.cleanup(); }
     }
     /* ---------- D：钉死只认保命档（普通档口径回归） ---------- */
@@ -163,7 +164,7 @@ const PROBE = `(function(){ return {
         try {
             check('D 页面进入运行中', await s.boot());
             const p = await s.ev(PROBE);
-            check('D 天空在位', p.sky === true, JSON.stringify(p));
+            check('D 保命档天空停用（白屏热修回退）', p.sky === false, JSON.stringify(p));
             const t = await s.ev("(function(){ SCENE.glSafe = 0; window.__waterTier('ultra'); return WATER_U ? WATER_U.uTier.value : null; })()");
             check('D 档位回 0 后水体 ultra 可切（uTier=1）', t === 1, 'uTier=' + t);
         } finally { s.cleanup(); }
