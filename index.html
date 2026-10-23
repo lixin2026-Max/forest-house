@@ -17329,8 +17329,15 @@ const SkillTrio = {
            && typeof window.__house !== 'undefined' && window.__house && window.__house.userData.lamp){
             const v = new THREE.Vector3(); window.__house.userData.lamp.getWorldPosition(v);
             const d = dist(v.x, v.z);
-            if(d < TRIO_CFG.lampR) out.push({ id:'breath:lamp', cat:'task', d:d, label:'🌬 吹一吹檐灯',
-                act(){ self.breath('lamp'); } });
+            /* 檐灯就挂在门框上（与门轴水平距仅 0.04m），类别平局区里 task 会压过
+               pass 抢走门的键。让位规则：门候选在场时——门开着（当下主互动是
+               「进屋看看」）一律让位；门关着时这对候选直接比距离，门不比灯远
+               则让位，人明显更贴近灯时才登记龙息 */
+            const doorC = out.find(c => c.id === 'door');
+            const doorOpenNow = (typeof doorOpen !== 'undefined') && doorOpen;
+            if(d < TRIO_CFG.lampR && !(doorC && (doorOpenNow || doorC.d <= d)))
+                out.push({ id:'breath:lamp', cat:'task', d:d, label:'🌬 吹一吹檐灯',
+                    act(){ self.breath('lamp'); } });
         }
         if(typeof lanterns !== 'undefined' && lanterns.length){
             let bl = null, bd = TRIO_CFG.lanternR;
