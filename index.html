@@ -11,7 +11,7 @@
 /* 小版本不停机更新自检（发版纪律见 README「发版清单」）：本页构建号与站点 version.json 比对。
    线上更新时：未进世界→整页换新一次（带 _v 参数绕开页面缓存，资源照常走缓存）；
    已在世界→只给角落小字提示，绝不中途重载。指针拉不到就当作无更新，静默放行。 */
-window.__BUILD__ = '2026-1023-2156';
+window.__BUILD__ = '2026-1023-2210';
 (function(){
     const UPD_TRY_KEY='ct2_upd_try';
     let hintedBuild = '';
@@ -3764,16 +3764,17 @@ function createTerrain(){
     // 湖边＋河岸石头：沿湖岸椭圆摆一圈（河口一段留空出水），河边沿岸点缀，合并 1 个 mesh
     // #36：逐块刷不同灰调（顶点色），再压扁/拉伸去「骰子感」，不再是一批同色正十二面体
     const ROCK_TINTS=SCENE.palette.rock;   // #76：统一冷灰石族（原含暖调异色块）
-    const rockGeos=[];
     const rockRnd=mulberry32(20260303);
+    /* 房子附近高模批 1（#87 环境线）：逐块落点全量登记 __rockSpots（位姿与代码石
+       同源同表、玩法坐标不动）；距主屋 ≤35m 的核心区近景石按登记序轮转三型
+       （variant 0/1/2），由 ModelPipe 岩石条目逐型热替换为 GLB，远景石保留代码版。
+       代码侧据此拆为「远景合并 mesh＋核心三型合并 mesh」，显隐按型切换、失败回落。 */
+    const rockSpots=[];
     function pushRock(x,z,s){
-        const rg=ModelKit.rock(s);
-        paintGeo(rg,ROCK_TINTS[(rockRnd()*ROCK_TINTS.length)|0]);
-        rg.scale(0.85+rockRnd()*0.35,0.6+rockRnd()*0.3,0.85+rockRnd()*0.35);
-        rg.rotateX(rockRnd()*3); rg.rotateY(rockRnd()*3); rg.rotateZ(rockRnd()*3);
-        rg.computeVertexNormals();
-        rg.translate(x,terrainH(x,z)+s*0.38,z);
-        rockGeos.push(rg);
+        const tint=ROCK_TINTS[(rockRnd()*ROCK_TINTS.length)|0];
+        const ax=0.85+rockRnd()*0.35, ay=0.6+rockRnd()*0.3, az=0.85+rockRnd()*0.35;
+        const rx=rockRnd()*3, ry=rockRnd()*3, rz=rockRnd()*3;
+        rockSpots.push({x:x, z:z, s:s, tint:tint, ax:ax, ay:ay, az:az, rx:rx, ry:ry, rz:rz});
     }
     for(let i=0;i<13;i++){
         const a=i/13*Math.PI*2+rockRnd()*0.3;
@@ -3787,10 +3788,35 @@ function createTerrain(){
         const side=rockRnd()<0.5?-1:1, off=p.half+0.5+rockRnd()*0.3, jit=(rockRnd()-0.5)*0.8;
         pushRock(p.x-tz*side*off+tx*jit, p.z+tx*side*off+tz*jit, 0.26+rockRnd()*0.34);
     }
-    const rocks=new THREE.Mesh(mergePaintedGeos(rockGeos),
-        new THREE.MeshStandardMaterial({color:0xffffff,roughness:1,vertexColors:true}));
-    rocks.castShadow=rocks.receiveShadow=true;
-    scene.add(rocks);
+    let rockCoreSeq=0;
+    rockSpots.forEach(sp=>{
+        const dx=sp.x-HOUSE_POS.x, dz=sp.z-HOUSE_POS.z;
+        sp.core=(dx*dx+dz*dz)<=35*35;
+        sp.variant=sp.core?(rockCoreSeq++%3):-1;
+        sp.y=terrainH(sp.x,sp.z)+sp.s*0.38;
+    });
+    function rockGeoFromSpot(sp){
+        const rg=ModelKit.rock(sp.s);
+        paintGeo(rg,sp.tint);
+        rg.scale(sp.ax,sp.ay,sp.az);
+        rg.rotateX(sp.rx); rg.rotateY(sp.ry); rg.rotateZ(sp.rz);
+        rg.computeVertexNormals();
+        rg.translate(sp.x,sp.y,sp.z);
+        return rg;
+    }
+    const rockCodeMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:1,vertexColors:true});
+    function mkRockCodeMesh(geos){
+        if(!geos.length) return null;
+        const m=new THREE.Mesh(mergePaintedGeos(geos),rockCodeMat);
+        m.castShadow=m.receiveShadow=true;
+        scene.add(m);
+        return m;
+    }
+    const rockFarGeos=[], rockCoreGeos=[[],[],[]];
+    rockSpots.forEach(sp=>{ (sp.core?rockCoreGeos[sp.variant]:rockFarGeos).push(rockGeoFromSpot(sp)); });
+    const rocks=mkRockCodeMesh(rockFarGeos);
+    window.__rockSpots=rockSpots;
+    window.__rockCodeCore=rockCoreGeos.map(mkRockCodeMesh);
 }
 
 /* ==================== 树木（合并几何体，每棵树仅 2 个 mesh） ==================== */
@@ -18612,6 +18638,44 @@ const MODELS = [
             lo: { src: 'assets/models/broadleaf_b.lo.glb',
                   textures: { basecolor: null, normal: null, roughness: null, metalness: null, ao: null } }
         }
+    },
+    /* 房子附近高模批 1（2026-10-23）：岩石组——核心区近景石（距主屋 ≤35m，
+       __rockSpots 中 core 标记）按登记序轮转三型逐型替换；远景石保留代码版。
+       贴图内嵌 GLB（base/normal/ORM 打包，PBR 五槽齐备），五槽按先例填 null 登记。
+       岩石无季节/天气染色需求：代码石顶点色建场时一次成型、GLB 贴图同为静态，
+       两轨口径一致，不挂同步机制（豁免理由见批 1 报告）。 */
+    {
+        id: 'rock_core_0',                // 核心区岩石·造型 A（variant 0）
+        kind: 'rock', variant: 0,
+        fallback: 'code',
+        versions: {
+            hi: { src: 'assets/models/rock_a.hi.glb',
+                  textures: { basecolor: null, normal: null, roughness: null, metalness: null, ao: null } },
+            lo: { src: 'assets/models/rock_a.lo.glb',
+                  textures: { basecolor: null, normal: null, roughness: null, metalness: null, ao: null } }
+        }
+    },
+    {
+        id: 'rock_core_1',                // 核心区岩石·造型 B（variant 1）
+        kind: 'rock', variant: 1,
+        fallback: 'code',
+        versions: {
+            hi: { src: 'assets/models/rock_b.hi.glb',
+                  textures: { basecolor: null, normal: null, roughness: null, metalness: null, ao: null } },
+            lo: { src: 'assets/models/rock_b.lo.glb',
+                  textures: { basecolor: null, normal: null, roughness: null, metalness: null, ao: null } }
+        }
+    },
+    {
+        id: 'rock_core_2',                // 核心区岩石·造型 C（variant 2）
+        kind: 'rock', variant: 2,
+        fallback: 'code',
+        versions: {
+            hi: { src: 'assets/models/rock_c.hi.glb',
+                  textures: { basecolor: null, normal: null, roughness: null, metalness: null, ao: null } },
+            lo: { src: 'assets/models/rock_c.lo.glb',
+                  textures: { basecolor: null, normal: null, roughness: null, metalness: null, ao: null } }
+        }
     }
 ];
 
@@ -18742,6 +18806,7 @@ const ModelPipe = {
         if(en.def.kind === 'house') return this._buildHouse(en, gltf);
         if(en.def.kind === 'fence') return this._buildFence(en, gltf);
         if(en.def.kind === 'tree') return this._buildTree(en, gltf);
+        if(en.def.kind === 'rock') return this._buildRock(en, gltf);
         if(en.def.id !== 'pine_outer') return false;
         const spots = window.__outerPineSpots;
         if(!spots || !spots.length || typeof scene === 'undefined') return false;
@@ -18882,6 +18947,44 @@ const ModelPipe = {
         return true;
     },
 
+    /* 核心区岩石：单节点单几何 GLB（节点名 rock），按 __rockSpots 中 core 且
+       variant 相同的落点实例化。位姿同源同表：位置/非均匀缩放系数与代码石逐值
+       一致（GLB 包围盒归一到代码石直径 2s 再乘同系数）；纵轴旋转全量沿用、
+       横/前后翻转 ×0.3 阻尼（整石翻转会出包围盒外的怪姿，属呈现口径、落点不变）；
+       沉降与代码石同口径（石底压入地表约 0.37s）。无季节染色（见注册表注释）。 */
+    _buildRock(en, gltf){
+        const spotsAll = window.__rockSpots;
+        if(!spotsAll || typeof scene === 'undefined') return false;
+        const spots = spotsAll.filter(sp => sp.core && sp.variant === en.def.variant);
+        if(!spots.length) return false;
+        let geo = null, mat = null;
+        gltf.scene.traverse(o => { if(!geo && o.isMesh && o.geometry){ geo = o.geometry; mat = o.material; } });
+        if(!geo || !mat) return false;
+        geo.computeBoundingBox();
+        const bb = geo.boundingBox;
+        const bw = bb.max.x - bb.min.x, bh = bb.max.y - bb.min.y, bd = bb.max.z - bb.min.z;
+        if(!(bw > 0 && bh > 0 && bd > 0)) return false;
+        if(en.group){ try{ scene.remove(en.group); }catch(e){} en.group = null; }
+        const im = new THREE.InstancedMesh(geo, mat, spots.length);
+        const dummy = new THREE.Object3D();
+        spots.forEach((sp, i) => {
+            const sx = (2 * sp.s / bw) * sp.ax, sy = (2 * sp.s / bh) * sp.ay, sz = (2 * sp.s / bd) * sp.az;
+            dummy.position.set(sp.x, sp.y - 0.75 * sp.s - bb.min.y * sy, sp.z);
+            dummy.rotation.set(sp.rx * 0.3, sp.ry, sp.rz * 0.3);
+            dummy.scale.set(sx, sy, sz);
+            dummy.updateMatrix();
+            im.setMatrixAt(i, dummy.matrix);
+        });
+        im.instanceMatrix.needsUpdate = true;
+        im.castShadow = true; im.receiveShadow = true;
+        im.frustumCulled = false;
+        im.visible = false;
+        scene.add(im);
+        en.group = im;
+        this._regOutdoor(im);
+        return true;
+    },
+
     /* 四季染色同步：Season 只改代码冠材（NEEDLE_A/B、LEAF_A/B）的 color；GLB 树材质
        色按同材「当前色 ÷  palette 基线色」逐通道比例跟随（基线期比例＝1 不改原色）。 */
     _syncTreeTint(en){
@@ -18915,6 +19018,12 @@ const ModelPipe = {
         if(kind === 'fence'){
             if(en.group) en.group.visible = show;
             if(window.__fenceCode) window.__fenceCode.visible = !show;
+            return;
+        }
+        if(kind === 'rock'){
+            if(en.group) en.group.visible = show;
+            const cm = window.__rockCodeCore && window.__rockCodeCore[en.def.variant];
+            if(cm) cm.visible = !show;
             return;
         }
         if(kind === 'tree'){
