@@ -8225,11 +8225,142 @@ function buildGirlModel(cfg){
     }};
 }
 
-/* 化身分发（ModelKit.dragon 的真身）：按存档形态二选一，parts 契约一致 */
+/* 化身分发（ModelKit.dragon 的真身）：按存档形态二选一，parts 契约一致；
+   少女形态且部件组合＝酒红樱桃预设时优先走 GLB 高模（AvatarGlb），
+   模板未就绪/不合条件即原代码模型，加载完成由 align 热替换 */
 function buildAvatarModel(cfg){
-    if(cfg && cfg.avatar && cfg.avatar.form === 'girl') return buildGirlModel(cfg);
+    if(cfg && cfg.avatar && cfg.avatar.form === 'girl'){
+        if(typeof AvatarGlb !== 'undefined'){
+            const g = AvatarGlb.tryBuild(cfg);
+            if(g) return g;
+        }
+        return buildGirlModel(cfg);
+    }
     return buildDragonModel(cfg);
 }
+
+/* ---------- 少女高模轨（#87 化身线）：酒红樱桃预设的 GLB 高模 ----------
+   资产 dragongirl_style1.{hi,lo}.glb 在生产侧已按 parts 契约切成 13 件
+   （Body/Head/FinL/FinR/ArmL/ArmR/LegL/LegR/WingL/WingR/Tail1-3），每件
+   原点落在与代码少女同位的枢轴、静置姿态烘进几何（base/droop 皆 0 基准），
+   故 dragonAnimate 与状态机零分叉。加载纪律与 ModelPipe 环境批一致：异步
+   加载、失败回落代码模型、glSafe 与 file: 永不加载、档位随 ModelPipe.tier()；
+   部件组合改离樱桃预设（#80 自由搭配）即回代码模型。五官在贴图上、无独立
+   眼件，parts.eyes 为空组占位（眨眼/眯眼对高模不生效）；节日穿戴件锚点仍
+   按代码少女比例（girlFestAdapt），高模头身比略异、穿戴可能微偏。 */
+const AvatarGlb = {
+    srcs: { hi: 'assets/models/dragongirl_style1.hi.glb', lo: 'assets/models/dragongirl_style1.lo.glb' },
+    templates: {}, loading: {},
+    /* 枢轴表（K=1，three 局部坐标）：body 原点在髋；head/arm/wing/tail1 为
+       body 局部，fin 为 head 局部，leg 为 lie 局部，tail2/3 为上级节局部增量 */
+    PIV: { bodyY: 0.92, head: [0, 0.52, 0.01], finL: [-0.148, 0.135, -0.02], finR: [0.148, 0.135, -0.02],
+           armL: [-0.195, 0.425, 0.005], armR: [0.195, 0.425, 0.005],
+           legL: [-0.085, 0.92, 0.005], legR: [0.085, 0.92, 0.005],
+           wingL: [-0.09, 0.38, -0.125], wingR: [0.09, 0.38, -0.125],
+           tail1: [0, 0.02, -0.125], tail2: [0.0002, -0.226, -0.065], tail3: [-0.0003, -0.163, -0.028] },
+    /* 部件组合与樱桃预设逐项相等才用高模（造型即预设本人，改一部件即回落） */
+    match(cfg){
+        try{
+            if(!cfg || !cfg.avatar || cfg.avatar.form !== 'girl') return false;
+            const ids = girlPartsOf(cfg).ids, base = GIRL_PRESETS[0].parts;
+            for(const k in base) if(ids[k] !== base[k]) return false;
+            return true;
+        }catch(e){ return false; }
+    },
+    usable(){
+        if(typeof SCENE !== 'undefined' && SCENE.glSafe) return false;   // 安全模式永不加载（同环境批红线）
+        if(typeof location !== 'undefined' && location.protocol === 'file:') return false;   // 单文件保底轨
+        return true;
+    },
+    tier(){ return (typeof ModelPipe !== 'undefined') ? ModelPipe.tier() : 'lo'; },
+    ensure(t){
+        if(this.templates[t] || this.loading[t]) return;
+        if(typeof ModelPipe === 'undefined') return;
+        this.loading[t] = true;
+        const self = this;
+        ModelPipe.ensureLoader(ok => {
+            if(!ok){ self.loading[t] = false; return; }
+            let loader;
+            try{ loader = new THREE.GLTFLoader(); }catch(e){ self.loading[t] = false; return; }
+            loader.load(self.srcs[t],
+                g => { self.loading[t] = false; self.templates[t] = g.scene; self.align(); },
+                undefined,
+                () => { self.loading[t] = false; });   // 失败保持代码模型，下次 align 再试
+        });
+    },
+    /* 与当前存档/档位对齐（ModelPipe.apply 与加载完成时调用）：该用未用或
+       档位不符 → rebuildDragonModel 热替换；不该用而用着 → 换回代码模型 */
+    align(){
+        const a = (typeof dragonAgent !== 'undefined') ? dragonAgent : null;
+        if(!a || !a.group) return;
+        const cur = a.group.userData.glbTier || null;
+        if(!this.match(dragonCfg) || !this.usable()){
+            if(cur && typeof rebuildDragonModel === 'function') rebuildDragonModel();
+            return;
+        }
+        const t = this.tier();
+        if(!this.templates[t]){ this.ensure(t); return; }
+        if(cur !== t && typeof rebuildDragonModel === 'function') rebuildDragonModel();
+    },
+    tryBuild(cfg){
+        if(!this.match(cfg) || !this.usable()) return null;
+        const t = this.tier();
+        if(!this.templates[t]){ this.ensure(t); return null; }
+        return this.build(cfg, t);
+    },
+    build(cfg, t){
+        const tpl = this.templates[t];
+        const nodes = {};
+        tpl.traverse(o => { if(o.isMesh) nodes[o.name] = o; });
+        const need = ['Body', 'Head', 'ArmL', 'ArmR', 'LegL', 'LegR', 'WingL', 'WingR', 'Tail1', 'Tail2', 'Tail3'];
+        for(const nm of need) if(!nodes[nm]) return null;   // 节点契约不符 → 回落代码模型
+        const K = GIRL_GROWTH[Math.max(0, Math.min(2, cfg.stage || 0))];
+        const part = (nm, parent, pos) => {
+            const g = new THREE.Group();
+            g.position.set(pos[0]*K, pos[1]*K, pos[2]*K);
+            const src = nodes[nm];
+            const mesh = new THREE.Mesh(src.geometry.clone(), src.material.clone());
+            mesh.castShadow = true;
+            mesh.scale.setScalar(K);
+            g.add(mesh); parent.add(g);
+            return g;
+        };
+        const root = new THREE.Group(); root.name = 'girl';
+        root.userData.glbTier = t;
+        const lie = new THREE.Group(); root.add(lie);
+        const body = new THREE.Group(); body.position.y = this.PIV.bodyY*K; lie.add(body);
+        part('Body', body, [0, 0, 0]);
+        const head = part('Head', body, this.PIV.head);
+        const eyes = new THREE.Group(); head.add(eyes);   // 占位：五官在贴图上，眨眼缩放无实体可动
+        let finL, finR;
+        if(nodes.FinL) finL = part('FinL', head, this.PIV.finL);
+        else { finL = new THREE.Group(); head.add(finL); }
+        if(nodes.FinR) finR = part('FinR', head, this.PIV.finR);
+        else { finR = new THREE.Group(); head.add(finR); }
+        const armL = part('ArmL', body, this.PIV.armL); armL.userData.baseZ = 0;
+        const armR = part('ArmR', body, this.PIV.armR); armR.userData.baseZ = 0;
+        const legL = part('LegL', lie, this.PIV.legL);
+        const legR = part('LegR', lie, this.PIV.legR);
+        const wingL = part('WingL', body, this.PIV.wingL); wingL.userData.base = 0;
+        const wingR = part('WingR', body, this.PIV.wingR); wingR.userData.base = 0;
+        const tail1 = part('Tail1', body, this.PIV.tail1); tail1.userData.droop = 0;
+        const tail2 = part('Tail2', tail1, this.PIV.tail2); tail2.userData.droop = 0;
+        const tail3 = part('Tail3', tail2, this.PIV.tail3); tail3.userData.droop = 0;
+        return { group: root, parts: {
+            body: body, bodyBaseY: this.PIV.bodyY*K, lie: lie, head: head, eyes: eyes, finL: finL, finR: finR,
+            grow: K, armBase: {x: 0.195*K, y: 0.425*K, z: 0.005*K, inX: 0.055*K, inZ: 0.105*K},
+            lieCal: {angle: 1.42, px: -0.17, py: 0.03, sink: -0.2413},   // 高模体型截面与代码少女不同：探针 Box3 实测校准（满躺最低点 +0.010）
+            walkFreq: 3.4, legSwing: 0.52, armSwing: 0.42,
+            hornTip: {x: 0.083*K, y: 0.410*K, z: 0.022*K},
+            wingSleepK: 1,
+            armL: armL, armR: armR, legL: legL, legR: legR,
+            wingL: wingL, wingR: wingR,
+            tail: [tail1, tail2, tail3],
+            lashes: null, acc: {}
+        }};
+    }
+};
+window.AvatarGlb = AvatarGlb;
 
 /* 节日配饰的少女锚点换算（#22 的穿戴件按小龙本体局部坐标做：身体件挂
    body 组、头饰挂 head 组）：少女形态时 festWearNode 先把节点包一层
@@ -17694,6 +17825,7 @@ const ModelPipe = {
        加载失败置 'code'，下一次 apply（如切档、画质开关、手动重试）会重新尝试。 */
     apply(){
         if(!this._booted) return;
+        if(window.AvatarGlb) AvatarGlb.align();   // #87 化身线：少女高模随档位/glSafe 同步对齐
         /* 真机稳定性红线（#87）：glSafe 安全模式（1 低配 / 2 保命）的设备不加载任何 GLB，
            全部已登记资产保持代码模型——先保「能进得去」，画质让路。玩家在操作页恢复
            默认画质后 glSafe 归 0，下一次 apply 自动恢复高模替换。 */
