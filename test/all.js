@@ -11,7 +11,8 @@ const SUITES = [
     ['feedback-e2e.js', '意见接口端到端'],
     ['subpath-check.js', '子路径部署（GitHub Pages）'],
     ['perf-guard.js', '性能守卫（draw calls / 三角面）'],
-    ['npc-accept.js', 'NPC 村民作息专项（活世界一期）']
+    ['npc-accept.js', 'NPC 村民作息专项（活世界一期）'],
+    ['voice-accept.js', '世界之声专项（Issue #71）']
 ];
 
 let failed = 0;
