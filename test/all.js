@@ -15,7 +15,8 @@ const SUITES = [
     ['fx-accept.js', '#98 保命特效放回专项'],
     ['voice-accept.js', '世界之声专项（Issue #71）'],
     ['season-farm-accept.js', '季节影响农场专项（#69）'],
-    ['shellgate-accept.js', '壳版本闸门专项（页面侧退出更新）']
+    ['shellgate-accept.js', '壳版本闸门专项（页面侧退出更新）'],
+    ['whitefix-accept.js', '白屏热修专项（保命档回退＋白屏自检自愈）']
 ];
 
 let failed = 0;
