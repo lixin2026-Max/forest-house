@@ -204,17 +204,17 @@ test('模块有统一挂载/更新钩子', ()=>{
     must(/setupModules\(\);/.test(inlineJs), 'init() 未调用 setupModules()');
     must(/updateModules\(dt, ?t\);/.test(inlineJs), 'animate() 未调用 updateModules()');
 });
-test('BGM 按天气换音阶，音频文件只许站内三首内置曲（主题曲＋#68 天气变奏）', ()=>{
+test('BGM 按天气换音阶，音频文件只许站内四首内置曲（双主题＋#68 天气变奏）', ()=>{
     must(/BGM_SCALE\s*=\s*\{/.test(inlineJs), '缺少按天气的音阶表');
     ['sunny','golden','mist','night','rain'].forEach(m =>
         must(new RegExp(m + '\\s*:\\s*\\[').test(inlineJs), '音阶表缺少 ' + m));
-    // 程序化 BGM 本体仍不加载文件；全页只许引用站内三首同源内置音频
-    // （主题曲＋#68 的雨/雪天气变奏，同出一条离线作曲管线），其余音频引用一律不许
-    const ALLOWED_AUDIO = ['assets/audio/chumen-theme.mp3',
+    // 程序化 BGM 本体仍不加载文件；全页只许引用站内四首同源内置音频
+    // （双主题：牧歌＋远望，2026-10-23 定版；#68 的雨/雪天气变奏，同出一条离线作曲管线），其余音频引用一律不许
+    const ALLOWED_AUDIO = ['assets/audio/chumen-theme.mp3', 'assets/audio/chumen-theme2.mp3',
         'assets/audio/chumen-rain.mp3', 'assets/audio/chumen-snow.mp3'];
     const audioRefs = html.match(/[\w./-]+\.(?:mp3|ogg|wav|m4a)/gi) || [];
     must(audioRefs.length > 0 && audioRefs.every(r => ALLOWED_AUDIO.includes(r)),
-        '引用了三首内置曲之外的音频文件：' + audioRefs.join(', '));
+        '引用了四首内置曲之外的音频文件：' + audioRefs.join(', '));
 });
 test('音频有总静音开关，默认开启、静音偏好存档说了算', ()=>{
     must(/id="muteBtn"/.test(html), '缺少静音按钮');
@@ -522,13 +522,19 @@ test('按天气分歌单：标签映射＋锁定开关只扩 ct2_music、接歌�
     // 主题曲地位不动：恒第一首、标签写死不限、暂停保护仍在
     must(/builtin: true, tag: 'any'/.test(inlineJs),'主题曲未登记为不限标签的第一首');
     must(/主题曲是世界的常驻 BGM，只能调小音量，不能关掉/.test(inlineJs),'主题曲不可关口径被动过');
-    // 内置天气变奏曲：雨/雪各一首、标签写死、文件真实在位；暂停保护只认主题曲本身
+    // 内置天气变奏曲：雨/雪各一首、标签写死、文件真实在位；暂停保护只认两首主题本身（双主题同权，变奏曲可暂停）
     must(/WX_BUILTIN_TRACKS/.test(inlineJs),'缺少内置天气变奏曲表');
     must(/assets\/audio\/chumen-rain\.mp3', tag: 'rain'/.test(inlineJs),'雨版变奏曲未登记或标签错');
     must(/assets\/audio\/chumen-snow\.mp3', tag: 'snow'/.test(inlineJs),'雪版变奏曲未登记或标签错');
     must(fs.existsSync(path.join(root,'assets/audio/chumen-rain.mp3')),'雨版变奏曲文件缺失');
     must(fs.existsSync(path.join(root,'assets/audio/chumen-snow.mp3')),'雪版变奏曲文件缺失');
-    must(/t\.builtin && t\.name === THEME_TRACK_NAME/.test(inlineJs),'暂停保护应只认主题曲（变奏曲可暂停）');
+    must(/t\.builtin && \(t\.name === THEME_TRACK_NAME \|\| t\.name === THEME2_TRACK_NAME\)/.test(inlineJs),'暂停保护应只认两首主题（变奏曲可暂停）');
+    // 双主题掷骰：第二主题文件在位、进世界等概率只掷一次（themePick 守卫）
+    must(fs.existsSync(path.join(root,'assets/audio/chumen-theme2.mp3')),'第二主题曲文件缺失');
+    must(/function musicRollTheme\(\)/.test(inlineJs),'缺少 musicRollTheme（双主题掷骰）');
+    must(/musicState\.themePick = Math\.random\(\) < 0\.5 \? 0 : 1/.test(inlineJs),'掷骰应为等概率二选一');
+    must(/if\(musicState\.themePick >= 0\) return/.test(inlineJs),'掷骰缺只掷一次守卫');
+    must(/musicGate\.want = true;\s*\n\s*musicRollTheme\(\)/.test(inlineJs),'musicEnterWorld 未在记账后先掷骰');
 });
 
 // ---------- 迭代维护规范：模块隔离 ----------
