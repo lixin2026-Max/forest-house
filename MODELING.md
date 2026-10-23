@@ -201,3 +201,64 @@ three.min.js 一个，CSP 与安全审计口径不变。加载全程异步，渲
    一切能力探测（内存、核数等）只作档位提示，缺失即按保守档处理，不作必需依赖。
 3. 档位判定与加载逻辑不依赖桌面专属能力；WebView 下加载失败走既定回落，
    不许出现白屏或未捕获异常。
+
+## 网页版保底可玩：探针与软件渲染判定口径（#95，定版）
+
+铁律：**网页版必须保证能打开能玩**，画质与性能可让步。判定全在
+`index.html` 的 `probeGL()` 与 `init()` 入口完成，本节为唯一成文口径，
+改判定先改这里再改代码。
+
+### 裸探针阶梯（不让 THREE 自己撞参数）
+
+- 类型外层 `webgl2 → webgl → experimental-webgl`，属性内层 6 格（全配
+  `antialias+high-performance` 一路剥到裸 `{}`）；**每一格用全新 canvas**
+  走原生 `getContext`，拿到非 null 即停（同 canvas 换属性重试在部分
+  内核必失败）。安全模式起步（`glSafeBoot`）从第 3 格起，跳过激进档。
+- 硬上限 **10 次尝试**（全阶梯最坏 18 格）：防弱内核上反复折腾。
+- 探针卫生：交接失败或不采用的活 context 必须经 `glReleaseCtx()`
+  （`WEBGL_lose_context`）显式释放——WebView 对同时存活的 WebGL
+  context 有配额（约 8–16），僵尸 context 会把真正的渲染器挤死。
+  计数钩子 `window.__glProbeStats{created,released,attempts}`，
+  验收口径：成功交接后 `created-released===1`（只剩渲染器那一个）。
+- 交接：`new THREE.WebGLRenderer({canvas, context, antialias,
+  powerPreference})` 把活 context 给引擎；引擎侧再失败 → 释放探针
+  context 后回落老配置阶梯（正常 4 档／安全模式 2 档），全灭才致命。
+
+### 软件渲染与弱环境判定
+
+- 渲染器字符串经 `WEBGL_debug_renderer_info` 读
+  `UNMASKED_RENDERER_WEBGL`；读不到记 `''`、**不判软件**（不冤枉）。
+- **软件渲染**：字符串命中 `/swiftshader|llvmpipe|softpipe|software|
+  basic render/i` 或含 `angle (google`（ANGLE 的 Google 软件路径）。
+- **弱环境 weak**：`software===true`，或探针只在第 4 格（0 基）起
+  才成功（属性已被剥到很素）。
+- **弱 WebView 名单**（仅用于无存档首访）：移动端且 UA 命中
+  `MicroMessenger|MQQBrowser|QQBrowser|TBS|Qzone|UCBrowser`。
+
+### 定档动作（init 建场景前执行，先定档再建场景，保命全套自动生效）
+
+| 条件 | 动作 |
+|---|---|
+| `probe.weak` 且当前档 <2 且非试升启动 | `SCENE.glSafe=2` 保命起步，DPR 压 1.25，`SceneHub.save()` 落盘（下次直接保命进） |
+| 弱 WebView 名单命中 且 **无存档**（`__hadSceneSave===false`）且当前档 <1 | `SCENE.glSafe=1` 低配起步，DPR 压 1.25，落盘 |
+| 有存档 | 弱 UA 路径**一律不覆盖**玩家档位；探针 weak 判的是本机实时能力，与存档无关，仍按上一行升 2 |
+| 聪明自适应试升启动（`GL_TIER.trial>=0`） | 探针弱判定**让位**：先按试升档建渲染器，失败立即记失败并回落可信档以最稳参数重试，不直接进致命层 |
+
+### 致命层口径（showFatal）
+
+- 网页版：主按钮「⬇ 下载 App 玩」（相对路径 `download.html`），次按钮
+  「↻ 刷新重试」；**全站不再主推 Chrome**。
+- App 内（`chumenInApp()` 三路并查，UA 优先）：已在 App 里的人不渲染
+  下载按钮，主按钮改「↻ 重试进入」（清档位嫌疑计数后重走进入流程），
+  文案走「完全关闭 App 后重新打开（重启 App）」口径。
+- 资源类错误保留文件完整性提示，两类按钮同上。
+
+### 验收钩子与覆盖
+
+- 钩子：`window.__probeForceFail`（探针全灭）、`window.__probeFakeRenderer`
+  （覆盖渲染器字符串）、`window.__glProbe`（探针结论）。
+- 专项：`test/browsers-accept.js`（playwright-core 驱动 Chromium／
+  Firefox／WebKit 三内核，各跑新玩家进入流程、保命档路径、软件渲染
+  钩子、致命层四场景；缺浏览器包时 SKIP 不红）。覆盖现状见 Issue #95
+  关闭评论的证据表：桌面 Chrome 与主流安卓 WebView（真机）已验；
+  Firefox／WebKit 无头已验的范围与「待真机」项以该表为准。

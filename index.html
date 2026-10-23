@@ -11,7 +11,7 @@
 /* 小版本不停机更新自检（发版纪律见 README「发版清单」）：本页构建号与站点 version.json 比对。
    线上更新时：未进世界→整页换新一次（带 _v 参数绕开页面缓存，资源照常走缓存）；
    已在世界→只给角落小字提示，绝不中途重载。指针拉不到就当作无更新，静默放行。 */
-window.__BUILD__ = '2026-1023-1533';
+window.__BUILD__ = '2026-1023-1647';
 (function(){
     const UPD_TRY_KEY='ct2_upd_try';
     let hintedBuild = '';
@@ -2422,6 +2422,99 @@ function __fxCounts(o){
 window.__glFxActive = {};   // 本会话已启用的恢复特效（丢失归因用）
 function glFxOn(key){ return (GL_FX.fails[key] || 0) < 2; }
 function glFxMark(key){ window.__glFxActive[key] = true; }
+/* ---------- 白屏自检自愈（2026-10-23 热修：真机保命档进世界全白） ----------
+   进世界后约 2.5s 与 6s 各采样一次画布像素（在 animate 的 render 之后
+   同帧 drawImage 到 48×27 小图，不逐帧跑、不伤帧率）：均值亮度 >0.93、
+   标准差 <0.06、近白像素 >96% 三条同时命中且非正当全白（冬季雪原 /
+   浓雾豁免，用 Season.name 与当前天气模式判定）→ 判定画面异常：
+   复用 gx 嫌疑账给 sky 记一次失败并落盘，当场摘除天空穹顶走背景色
+   兜底，3.5s 后复检一次；仍白则升既有保命流程（致命层「重试进入」，
+   重进后 gx 记账继续累积、攒满 2 次穹顶在建造点永久关停）。 */
+function dropSkyDomeFallback(){
+    try{
+        if(typeof scene !== 'undefined' && scene){
+            const m = scene.getObjectByName('sky');
+            if(m){ scene.remove(m); if(m.geometry) m.geometry.dispose(); }
+        }
+        skyMat = null;   // 天气循环对 skyMat 有空守卫，背景由 scene.background 逐帧接管
+    }catch(e){}
+}
+const WhiteGuard = {
+    _t0: 0, _nextAt: 0, _checks: 0, tripped: false, done: false, last: null,
+    _cv: null, _cx: null,
+    exempt(){
+        try{
+            if(typeof Season !== 'undefined' && Season && Season.name === 'winter') return 'winter';
+            if(typeof weatherModes !== 'undefined' && typeof weatherIndex !== 'undefined'
+                && weatherModes[weatherIndex] === 'mist') return 'mist';
+        }catch(e){}
+        return '';
+    },
+    isWhite(st){ return !!st && st.mean > 0.93 && st.sd < 0.06 && st.whiteFrac > 0.96; },
+    sample(){
+        try{
+            const cv = (typeof renderer !== 'undefined' && renderer) ? renderer.domElement : null;
+            if(!cv || !cv.width || !cv.height) return null;
+            if(!this._cv){
+                this._cv = document.createElement('canvas');
+                this._cv.width = 48; this._cv.height = 27;
+                this._cx = this._cv.getContext('2d', { willReadFrequently: true });
+            }
+            const cx = this._cx; if(!cx) return null;
+            cx.drawImage(cv, 0, 0, 48, 27);
+            const d = cx.getImageData(0, 0, 48, 27).data;
+            let sum = 0, sum2 = 0, white = 0, n = 0;
+            for(let i = 0; i < d.length; i += 16){   // 每 4 个像素取 1 个，共 324 点，足够判全屏白
+                const lum = (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 255;
+                sum += lum; sum2 += lum * lum; n++;
+                if(d[i] >= 248 && d[i + 1] >= 248 && d[i + 2] >= 248) white++;
+            }
+            if(!n) return null;
+            const mean = sum / n;
+            return { mean: mean, sd: Math.sqrt(Math.max(0, sum2 / n - mean * mean)), whiteFrac: white / n };
+        }catch(e){ return null; }
+    },
+    judge(st){   // 采样判定（验收专项可直调）：异常则 trip，仅触发一次
+        if(this.tripped || this.done) return false;
+        if(!this.isWhite(st)) return false;
+        if(this.exempt()) return false;
+        this.trip();
+        return true;
+    },
+    trip(){
+        this.tripped = true;
+        try{
+            GL_FX.fails.sky = Math.min(9, (GL_FX.fails.sky || 0) + 1);
+            if(typeof SceneHub !== 'undefined' && SceneHub.save) SceneHub.save();
+        }catch(e){}
+        dropSkyDomeFallback();
+        this._nextAt = performance.now() + 3500;   // 摘除后 3.5s 复检
+    },
+    tick(){
+        if(this.done) return;
+        if(typeof enteredWorld === 'undefined' || !enteredWorld) return;
+        if(typeof document !== 'undefined' && document.hidden) return;
+        const now = performance.now();
+        if(!this._t0){ this._t0 = now; this._nextAt = now + 2500; return; }
+        if(now < this._nextAt) return;
+        const st = this.sample();
+        this.last = st;
+        if(this.tripped){
+            this.done = true;
+            if(this.isWhite(st) && !this.exempt()){
+                try{ if(typeof showFatal === 'function')
+                    showFatal('画面异常（白屏自检摘除天空特效后仍未恢复），请重试进入。'); }catch(e){}
+            }
+            return;
+        }
+        if(st) this.judge(st);
+        this._checks++;
+        if(this._checks >= 2){ if(!this.tripped) this.done = true; }
+        else if(!this.tripped) this._nextAt = now + 3500;   // 第二检落在进世界约 6s
+        /* trip 已在 judge→trip 内把 _nextAt 拨到 +3.5s 复检，不覆盖 */
+    }
+};
+window.__whiteGuard = WhiteGuard;
 const SceneHub = {
     _built: false,
     _clamp(v, a, b, d){ v = parseFloat(v); return (isFinite(v)) ? Math.max(a, Math.min(b, v)) : d; },
@@ -3093,8 +3186,7 @@ function skyTierAuto(){
 /* ==================== 天空穹顶（渐变 shader，随天气插值） ==================== */
 let skyMat;
 function createSky(){
-    if(glSafeLv() >= 2 && !glFxOn('sky')){ skyMat = null; return; }   // 保命模式：穹顶 shader 默认恢复（#98 低风险：单 program、仅 normalize＋pow）；嫌疑关停后停用，背景走 scene.background 色＋雾（天气循环逐帧刷背景色）
-    if(glSafeLv() >= 2) glFxMark('sky');
+    if(glSafeLv() >= 2){ skyMat = null; return; }   // 保命模式：穹顶 shader 停用（2026-10-23 白屏热修：#98 恢复后真机保命档进世界全白，穹顶是恢复项里唯一的全屏图元、头号嫌疑，先回归 #98 前兜底）——背景走 scene.background 色＋雾（天气循环逐帧刷背景色）；日后真机复验排除嫌疑再经 gx 口径单独放回
     skyMat = new THREE.ShaderMaterial({
         uniforms:{
             topColor:{value:new THREE.Color(0x3d7bd9)},
@@ -6058,7 +6150,7 @@ const GrassSys = {
     },
     tick(dt, t){
         ATMO_U.uTime.value = t;
-        if(glSafeLv() >= 2){ if(glFxOn('cloud')) glFxMark('cloud'); else ATMO_U.uCloudStrength.value = 0; }   // 保命模式：云影默认恢复（#98 最低风险：注入块本就在地面/斑块上编译运行，仅放开被压的 uniform）；嫌疑关停后每帧压 0（防面板滑杆改回）
+        if(glSafeLv() >= 2) ATMO_U.uCloudStrength.value = 0;   // 保命模式：云影关停（每帧压住，防面板滑杆改回；2026-10-23 白屏热修随穹顶一并回退 #98 前状态）
         ATMO_U.uWindK.value = (typeof Env !== 'undefined') ? Env.windK : 1;
         this.tier = this._tierLock || grassTierAuto();
         let snowK = 0, sname = 'summer';
@@ -11303,9 +11395,8 @@ const AtmoSys = {
         }
         this.registerWindCore();
         this.bloomTier = (typeof SCENE !== 'undefined' && SCENE.glSafe)
-            ? (((typeof glFxOn === 'function') && glFxOn('bloom')) ? 1 : 0)   // #98：安全档恢复为低档（日月光晕/丁达尔/光斑全是 stock 透明片、无自定义 shader）；嫌疑关停回 0
+            ? 0   // 保命档 Bloom 钉 0（2026-10-23 白屏热修：回归 #98 前；tickBloom 另有每帧钉死、setBloomTier 亦钳制，面板拨不起来）
             : ((typeof IS_MOBILE !== 'undefined' && IS_MOBILE) ? 0 : 2);
-        if((typeof SCENE !== 'undefined' && SCENE.glSafe) && this.bloomTier) glFxMark('bloom');
         this._tierAuto = true;
     },
     /* ---------- 模块 1：分层雾 ---------- */
@@ -11427,6 +11518,7 @@ const AtmoSys = {
         return this.bloomTier || 0;
     },
     setBloomTier(n){
+        if((typeof glSafeLv === 'function') && glSafeLv() >= 2) n = 0;   // 保命档钉 0（白屏热修）
         this.bloomTier = Math.max(0, Math.min(2, n | 0));
         this._tierAuto = false;
         this.refreshBloomUI();
@@ -11455,7 +11547,7 @@ const AtmoSys = {
     tickBloom(dt, t){
         if(!this._bloomGroup) return;
         this._sense(dt);
-        const tier = this.effTier();
+        const tier = ((typeof glSafeLv === 'function') && glSafeLv() >= 2) ? 0 : this.effTier();   // 保命档钉 0（白屏热修）
         if(tier <= 0){ this._bloomGroup.visible = false; this._rayOp = 0; this._rayS = 0; return; }
         this._bloomGroup.visible = true;
         const tierK = (tier === 1) ? 0.45 : 0.85;
@@ -11725,6 +11817,7 @@ function animate(){
     GrassSys.tick(dt, t);     // #73：大气 uniforms（时间/风力）＋草花季节量与双档 count
     updateStandees(t);
     renderer.render(scene,camera);
+    try{ WhiteGuard.tick(); }catch(e){}   // 白屏自检（热修）：仅在预定时刻采样画布，其余帧立即返回
     fpsTick(dt);
 }
 
