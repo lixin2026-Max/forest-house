@@ -11,7 +11,7 @@
 /* 小版本不停机更新自检（发版纪律见 README「发版清单」）：本页构建号与站点 version.json 比对。
    线上更新时：未进世界→整页换新一次（带 _v 参数绕开页面缓存，资源照常走缓存）；
    已在世界→只给角落小字提示，绝不中途重载。指针拉不到就当作无更新，静默放行。 */
-window.__BUILD__ = '2026-1023-1415';
+window.__BUILD__ = '2026-1023-1439';
 (function(){
     const UPD_TRY_KEY='ct2_upd_try';
     let hintedBuild = '';
@@ -13121,6 +13121,14 @@ function audioEnterWorld(){
    CSP 媒体口径为它放行同源 'self'（与 blob: 并列，安全审计已同步）。 */
 const THEME_TRACK_NAME = '🎵 主题曲 · 楚门的2.0世界（原创）';
 const THEME_TRACK_SRC = 'assets/audio/chumen-theme.mp3';
+/* 双主题（2026-10-23 负责人定版）：旧主题旋律退役后，新主题有两首——
+   牧歌版（即上面的主题文件）与远望版（下面这首），同为全新旋律。
+   进世界时等概率随机选一首当本次主题（掷骰逻辑在 musicRollTheme），
+   两首同权：同享主题口径（恒第一首、不可暂停不可关、音量下限、
+   夜晚放轻、原生循环）。主题槽位仍是歌单里的同一个位置，天气池
+   与轮播（#68）对双轨无感知，随机只发生在进世界那一刻。 */
+const THEME2_TRACK_NAME = '🎵 主题曲 · 远望（原创）';
+const THEME2_TRACK_SRC = 'assets/audio/chumen-theme2.mp3';
 /* #68 内置天气变奏曲：与主题曲同源动机（F♯–A–B–D）、同和弦进行的两个
    60 秒无缝循环变奏——雨版稀疏钢琴、雪版八音盒，同出一条离线作曲管线
    （compose_chumen_wx.py）。它们是标签写死的内置曲：恒排主题曲之后、
@@ -13138,6 +13146,7 @@ const musicState = {
     night: false,    // 夜晚时段（音量自动放轻）
     wx: undefined,   // 当前天气池标签（#68）：'sun'|'rain'|'snow'|'over'；null = 不分池（夜晚）
     wxLock: false,   // 锁定歌单（#68）：true = 不随天气切池，轮播回全量顺序
+    themePick: -1,   // 双主题掷骰结果：-1 未掷 | 0 牧歌 | 1 远望（每次进世界会话只掷一次）
     themeDefault: false  // 本机没有自选歌单存档时为真（主题曲即默认歌单）
 };
 function musicCustomActive(){
@@ -13339,7 +13348,7 @@ function musicPlay(){
 }
 function musicPause(){
     const t = musicState.tracks[musicState.cur];
-    if(t && t.builtin && t.name === THEME_TRACK_NAME){   // 只有主题曲常驻不可关：暂停键对它无效，只给一句提示（render 会重写状态行，提示必须排在它后面）；#68 的天气变奏曲同为内置曲但可正常暂停，故这里只认主题曲本身
+    if(t && t.builtin && (t.name === THEME_TRACK_NAME || t.name === THEME2_TRACK_NAME)){   // 只有主题曲常驻不可关（双主题同权，两首都认）：暂停键对它无效，只给一句提示（render 会重写状态行，提示必须排在它后面）；#68 的天气变奏曲同为内置曲但可正常暂停，故这里只认两首主题本身
         musicRender();
         musicHint('主题曲是世界的常驻 BGM，只能调小音量，不能关掉');
         return;
@@ -13418,8 +13427,11 @@ function setupMusic(){
     const savedTags = (pref.tags && typeof pref.tags === 'object' && !Array.isArray(pref.tags)) ? pref.tags : {};   // #68 歌名→天气标签
     const savedNames = Array.isArray(pref.names)
         ? pref.names.filter(function(n){ return typeof n === 'string' && !!n; }) : [];
-    // 内置主题曲恒列歌单第一首：有自选存档时只作备选不抢播，没有时它就是默认歌单
-    musicState.tracks = [{ name: THEME_TRACK_NAME, url: THEME_TRACK_SRC, builtin: true, tag: 'any' }]
+    // 内置主题曲恒列歌单第一首：有自选存档时只作备选不抢播，没有时它就是默认歌单；
+    // 双主题：若进世界请求已先掷过骰（themePick），槽位直接按骰面建，未掷则先按牧歌建、进世界时再换
+    musicState.tracks = [(musicState.themePick === 1)
+        ? { name: THEME2_TRACK_NAME, url: THEME2_TRACK_SRC, builtin: true, tag: 'any' }
+        : { name: THEME_TRACK_NAME, url: THEME_TRACK_SRC, builtin: true, tag: 'any' }]
         .concat(WX_BUILTIN_TRACKS.map(function(t){ return { name: t.name, url: t.url, builtin: true, tag: t.tag }; }))
         .concat(savedNames.map(function(n){ return { name: n, url: null, tag: musicWxClean(savedTags[n]) }; }));
     musicState.themeDefault = savedNames.length === 0;
@@ -13526,14 +13538,28 @@ function setupMusic(){
    也由本请求点顺带唤起，共用同一条手势链与补启闸门。 */
 const musicGate = { want: false, ok: false };
 let soundGateArmed = false;
+/* 双主题掷骰：只在进世界时掷一次（themePick 记骰面，重入不重掷），
+   把主题槽位的文件名与曲名换成骰中那首；槽位还没建（setupMusic 未跑）
+   时只记骰面，建槽时按骰面建。播放途中绝不调用它换歌。 */
+function musicRollTheme(){
+    if(musicState.themePick >= 0) return;
+    musicState.themePick = Math.random() < 0.5 ? 0 : 1;
+    const t = musicState.tracks.find(function(x){ return !!x.builtin && (x.name === THEME_TRACK_NAME || x.name === THEME2_TRACK_NAME); });
+    if(t){
+        t.url = musicState.themePick ? THEME2_TRACK_SRC : THEME_TRACK_SRC;
+        t.name = musicState.themePick ? THEME2_TRACK_NAME : THEME_TRACK_NAME;
+    }
+}
 function musicEnterWorld(){
     musicGate.want = true;
+    musicRollTheme();   // 进世界先掷骰定下本次主题，再走统一起播
     audioEnterWorld();
     musicTryStart();
     if(!musicGate.ok) soundGateArm();
 }
 function musicTryStart(){
     if(!musicGate.want || musicGate.ok) return;
+    musicRollTheme();   // 幂等补掷：任何起播路径走到这都保证骰已掷且只掷一次
     if(!musicState.el) return;   // 元素还没建（setupMusic 未跑）：不烧账，等补推
     // 首选没出过错的内置曲（主题曲优先）；它坏了就落到任何一首没出过错的可播曲，永不死守坏源
     let ti = musicState.tracks.findIndex(function(t){ return !!t.builtin && !!t.url && !t.__err; });
