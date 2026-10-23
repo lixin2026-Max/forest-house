@@ -11,7 +11,7 @@
 /* 小版本不停机更新自检（发版纪律见 README「发版清单」）：本页构建号与站点 version.json 比对。
    线上更新时：未进世界→整页换新一次（带 _v 参数绕开页面缓存，资源照常走缓存）；
    已在世界→只给角落小字提示，绝不中途重载。指针拉不到就当作无更新，静默放行。 */
-window.__BUILD__ = '2026-1023-1439';
+window.__BUILD__ = '2026-1023-1502';
 (function(){
     const UPD_TRY_KEY='ct2_upd_try';
     let hintedBuild = '';
@@ -28,12 +28,79 @@ window.__BUILD__ = '2026-1023-1439';
         (document.body || document.documentElement).appendChild(el);
         setTimeout(function(){ el.remove(); }, 6500);
     }
+    /* 壳版本闸门（大版本「退出更新」的页面侧一半）：minShell 高于当前壳版本时，
+       进世界前全屏引导去下载新版。1.3.0 壳自带检查器，1.2.2 壳没有——页面替它查，
+       复用下面同一次指针 fetch 的结果，不新增请求。判定信号与全站口径一致：
+       UA 尾标 ChumenApp/<ver> 优先、壳注入的 __CHUMEN_APP_VER__ 兜底（口径注释
+       见正文 chumenInAppUA）；取不到壳版本（浏览器玩家、无标记老壳）一律放行，
+       指针失败也放行（fail-open）；只在启动期判一次，进世界后不再打扰。 */
+    let gateChecked = false;
+    function shellVerParts(){
+        const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
+        const m = ua.match(/ChumenApp\/(\d+)\.(\d+)\.(\d+)/);
+        if(m) return [+m[1], +m[2], +m[3]];
+        const v = (typeof window !== 'undefined' && window.__CHUMEN_APP_VER__) || '';
+        const m2 = String(v).match(/^(\d+)\.(\d+)\.(\d+)$/);
+        if(m2) return [+m2[1], +m2[2], +m2[3]];
+        return null;
+    }
+    function shellGateShow(minS, curS){
+        window.__shellGateBlock = true;
+        const build = function(){
+            if(document.getElementById('shellGate')) return;
+            const el = document.createElement('div');
+            el.id = 'shellGate';
+            el.style.cssText = 'position:fixed;inset:0;z-index:1500;background:#0e2417;color:#cfe3d4;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:32px;box-sizing:border-box';
+            const t = document.createElement('div');
+            t.textContent = '有新版本啦';
+            t.style.cssText = 'color:#ffe9b8;font-size:22px;font-weight:700';
+            el.appendChild(t);
+            const b = document.createElement('div');
+            b.textContent = '你现在用的 App 版本太旧，已经跟不上楚门的世界了。请退出后下载新版，装好就能继续玩——你的存档和设置都不会丢。';
+            b.style.cssText = 'font-size:15px;line-height:1.8;margin-top:14px;max-width:420px';
+            el.appendChild(b);
+            const v = document.createElement('div');
+            v.textContent = '需要 App v' + minS + ' 或更高 · 你现在是 v' + curS;
+            v.style.cssText = 'color:#9db8a6;font-size:13px;margin-top:8px';
+            el.appendChild(v);
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.textContent = '去下载新版';
+            btn.style.cssText = 'margin-top:28px;font-size:17px;padding:14px 36px;border:0;border-radius:12px;background:#ffd97a;color:#20301c;font-weight:700;cursor:pointer';
+            btn.addEventListener('click', function(){ location.href = 'download.html'; });
+            el.appendChild(btn);
+            const u = document.createElement('div');
+            u.textContent = location.origin + location.pathname.replace(/[^/]*$/, '') + 'download.html';   // 完整地址供长按复制；运行时拼，源码不写死域名（相对路径纪律）
+            u.style.cssText = 'color:#9db8a6;font-size:12px;margin-top:16px;user-select:text;-webkit-user-select:text;word-break:break-all';
+            el.appendChild(u);
+            (document.body || document.documentElement).appendChild(el);
+        };
+        if(document.body) build();
+        else document.addEventListener('DOMContentLoaded', build);
+    }
+    function shellGate(d){
+        if(gateChecked) return false;
+        gateChecked = true;
+        if(updInWorld()) return false;
+        const minS = d && typeof d.minShell === 'string' ? d.minShell : '';
+        const mm = minS.match(/^(\d+)\.(\d+)\.(\d+)$/);
+        if(!mm) return false;
+        const cur = shellVerParts();
+        if(!cur) return false;
+        const min = [+mm[1], +mm[2], +mm[3]];
+        let less = false;
+        for(let i = 0; i < 3; i++){ if(cur[i] !== min[i]){ less = cur[i] < min[i]; break; } }
+        if(!less) return false;
+        shellGateShow(minS, cur.join('.'));
+        return true;
+    }
     function updCheck(){
         if(typeof fetch !== 'function') return;
         fetch('version.json?ts='+Date.now(),{cache:'no-store'}).then(function(r){
             if(!r.ok) throw new Error('ptr');
             return r.json();
         }).then(function(d){
+            if(shellGate(d)) return;
             const b = d && typeof d.build === 'string' ? d.build : '';
             if(!b || b <= window.__BUILD__) return;
             if(updInWorld()){
@@ -9801,6 +9868,7 @@ function setupViewCard(){
    条件没齐就等（化身卡 / 视角卡会自己按队列出场），齐了只执行一次。 */
 let enteredWorld = false;
 function enterWorldNow(){
+    if(window.__shellGateBlock) return;   // 壳版本闸门命中：先升级 App，不许进世界
     if(enteredWorld) return;
     enteredWorld = true;
     if(typeof musicEnterWorld === 'function') musicEnterWorld();   // 出生落点是殊途同归的进世界点：声音请求也从这里汇入（起播状态机自带防重，重复调用无副作用）
@@ -17502,6 +17570,7 @@ function closeLog(){
    老玩家存档里三项前置都是齐的，守卫直接放行，开页时序与从前一字不变。
    手动从面板点开日志不走守卫（玩家自己点的，不算抢层）。 */
 function logFrontBlocked(){
+    if(window.__shellGateBlock) return true;   // 壳版本闸门命中：全屏引导升级中，日志不抢层
     if(typeof avOpen !== 'undefined' && avOpen) return true;
     if(typeof viewOpen !== 'undefined' && viewOpen) return true;
     const ids = ['avatarMask', 'viewMask', 'eggMask'];
