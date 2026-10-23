@@ -1158,6 +1158,7 @@ window.__BUILD__ = '2026-1023-1833';
     <button type="button" id="dragonBtn" title="回小屋门口"><span class="cbIco">🏠</span><span class="cbCap">回小屋门口</span></button>
     <button type="button" id="viewBtn" style="display:none" title="切换第一 / 第三人称"><span class="cbIco">👁️</span><span class="cbCap">第三人称</span></button>
     <button type="button" id="jumpBtn" style="display:none" title="跳跃（空格）"><span class="cbIco">⬆️</span><span class="cbCap">跳跃</span></button>
+    <button type="button" id="callBtn" style="display:none" title="呼唤小鸟（R）"><span class="cbIco">📣</span><span class="cbCap">呼唤</span></button>
     <button type="button" id="actBtn" title="互动"><span class="cbIco">🤚</span><span class="cbCap">互动</span></button>
 </div>
 <div id="stamBar"><div id="stamFill"></div></div>
@@ -1419,6 +1420,9 @@ window.__BUILD__ = '2026-1023-1833';
         <div class="hrow"><b>进屋看看</b><span>走近门口点出现的「进屋看看」按钮、或门开着时点门洞里的暖光，就带着它一起进屋（屋里拖动环视、点地面走动）；点门或按「回到院子」出来</span></div>
         <div class="hrow"><b>留言墙</b><span>屋里墙上贴着留言墙和大事记板：你写过的意见会变成小纸条贴在墙上（点开能看全文，自己写的还能撕下来），负责人精选的留言也会贴上来；大事记板记着这个世界一路长过来的大日子，齿轮面板里也能翻全本</span></div>
         <div class="hrow"><b>小龙互动</b><span>点小龙、或点底部「🤚 互动」：可以摸头、打招呼、让它转圈。收获的南瓜和玉米会进背包，用背包里的食物喂它，它会自己走过去吃；吃饱后它会开心地跟着你玩一阵（状态栏能看背包和喂食次数）。长到少年后，在农场附近开互动菜单还能使唤它帮忙浇水——它会自己一块一块把干着的地浇过去</span></div>
+        <div class="hrow"><b>呼唤小鸟</b><span>长到少年后解锁：点底部「📣 呼唤」（或按 R 键），附近的小鸟会飞来停在角尖上陪你走一段；夜里和雨天它不出窝</span></div>
+        <div class="hrow"><b>滑翔</b><span>长成青年后解锁：跳起来在空中再按一次跳跃（空格／跳跃钮）就能张翼滑翔——缓缓落、往前飘，落地自动收翼；从高处走下去也会先坠一小段，半空按跳跃照样能展翼</span></div>
+        <div class="hrow"><b>龙息</b><span>长成青年后解锁：走近蒲公英、夜里点亮的檐灯、湖上的河灯，或者站在湖边，互动键会变成「🌬 轻吹一口」——吹散蒲公英、吹得灯火摇一摇、送河灯漂远些、惊起一圈小鱼跃出水面</span></div>
         <div class="hrow"><b>小龙定制</b><span>齿轮面板化身区的「打开定制面板」：给它改名字、性别、体色花纹、角和翅膀的样式，再配上围巾、铃铛、草帽这些小配饰，还能选性格（好奇 / 活泼 / 慵懒，散步和作息都不一样）；还能切换化身形态——小龙本体，或小龙少女的三款造型。改动立刻生效，都只存本机</span></div>
         <div class="hrow"><b>龙蛋开局</b><span>新来的朋友会先在小屋门前见到一颗龙蛋：点一点蛋、或点「🥚 孵化小龙」，就能看它破壳。想重温破壳，齿轮面板里有「🥚 再孵一颗蛋」（成长会从头计，名字和外观保留）</span></div>
         <div class="hrow"><b>篝火</b><span>点篝火堆可以点火、再点熄火</span></div>
@@ -8517,6 +8521,13 @@ function dragonAnimate(a, dt, t){
     P.wingR.rotation.z = P.wingR.userData.base - wf + pose*2.0*(P.wingSleepK || 1);   // 睡姿：上侧翅膀越过脊背垂搭下来（#80：大翅膀经 wingSleepK 收浅垂搭，免翼尖扎地；小龙不设→1）
     P.wingL.rotation.y = -pose*0.85;
     P.wingR.rotation.y = pose*0.85;
+    // 技能期 Build 3：滑翔展翼——glidePose 由 SkillTrio 每帧推进（0=常态、1=全展），
+    // 龙形与少女同走 parts.wingL/wingR 契约，GLB 化身同理
+    if(a.glidePose){
+        const gp = a.glidePose;
+        P.wingL.rotation.z += (-0.62 - P.wingL.rotation.z) * gp;
+        P.wingR.rotation.z += ( 0.62 - P.wingR.rotation.z) * gp;
+    }
     // 睡姿侧躺：lie 层整组滚倒，位置按支点反推——绕支点转而不是绕原点转，
     // 倒下侧的脚/髋不会被甩到地面以下，躯干侧面正好落到地面上
     // 支点/角度可由 parts.lieCal 覆盖（#79 少女体型不同，校准值独立一份；
@@ -8759,18 +8770,38 @@ function dragonPlayerMove(a, dt){
     const spaceDown = Ctl.keys.has(' ');
     const jumpEdge = (spaceDown && !sk.spacePrev) || sk.btnJump;
     sk.spacePrev = spaceDown; sk.btnJump = false;
-    if(!sk.air) sk.y = gy;
+    /* 技能期 Build 3：走下高处（落差超阈值）进入坠落，半空可展翼滑翔；
+       横向瞬移（回小屋/传送/进出屋）按落点直接对齐，不误判成坠落 */
+    const trioOn = (typeof SkillTrio !== 'undefined') && SkillTrio.on();
+    const teleported = (sk._lx !== undefined) && Math.hypot(p.x - sk._lx, p.z - sk._lz) > 2.5;
+    if(!sk.air){
+        if(trioOn && !teleported && gy < sk.y - TRIO_CFG.fallEnter && dragonHatched() && !skillUiBlocked()){ sk.air = true; sk.vy = 0; }
+        else sk.y = gy;
+    }
     if(jumpEdge && skOn && !sk.air && dragonHatched() && !skillUiBlocked()){
         sk.air = true;
         sk.vy = MOVE_CFG.jumpVel * (juv ? Math.SQRT1_2 : 1);   // 幼年：初速降 → 跳高减半
+    } else if(jumpEdge && sk.air && trioOn){
+        SkillTrio.glideToggle();   // 空中再按跳跃：展翼/收翼（解锁与门控在 SkillTrio 内判）
     }
     if(sk.air){
         const ease = (sk.vy < 0 && (sk.y - gy) < MOVE_CFG.landEaseH) ? MOVE_CFG.landEaseK : 1;
         sk.vy -= MOVE_CFG.gravity * ease * dt;
+        if(trioOn && SkillTrio.gliding){
+            /* 滑翔：下沉钳到 glideSink；前飘＋风向轻摆，落点先问 WalkMap，不通不飘 */
+            if(sk.vy < -TRIO_CFG.glideSink) sk.vy = -TRIO_CFG.glideSink;
+            SkillTrio.swayPh += dt * 1.6;
+            const gfx = -Math.sin(Ctl.yaw), gfz = -Math.cos(Ctl.yaw);
+            const gsway = Math.sin(SkillTrio.swayPh) * TRIO_CFG.glideSway;
+            const gnx = p.x + (gfx * TRIO_CFG.glideFwd - gfz * gsway) * dt;
+            const gnz = p.z + (gfz * TRIO_CFG.glideFwd + gfx * gsway) * dt;
+            if(WalkMap.isWalkable(gnx, gnz)){ p.x = gnx; p.z = gnz; }
+        }
         sk.y += sk.vy * dt;
-        if(sk.y <= gy){ sk.y = gy; sk.air = false; sk.vy = 0; }
+        if(sk.y <= gy){ sk.y = gy; sk.air = false; sk.vy = 0; if(trioOn) SkillTrio.glideOff(); }
         p.y = sk.y;
     }
+    sk._lx = p.x; sk._lz = p.z;
     skillSyncStamBar();
     if(Ctl.fp) dragonFace(a, Ctl.yaw + Math.PI, dt);   // 第一人称：龙身跟着视线转
 }
@@ -13450,6 +13481,7 @@ const FEAT = {
     farmSeason:{ on:true, label:'🌾 季节影响农场' },
     voice:     { on:true, label:'🗣️ 世界之声' },
     skillContext:{ on:true, label:'🎯 技能·上下文互动键' },
+    skillTrio: { on:true, label:'🪽 技能·滑翔/龙息/呼唤' },
     atmoFog:   { on:true, label:'沉浸·分层雾' },
     atmoLight: { on:true, label:'沉浸·柔和天光' },
     atmoWind:  { on:true, label:'沉浸·微风植被' },
@@ -13586,6 +13618,13 @@ const MODULE_HOOKS = {
         setup(){ CtxKey.bind(); },
         teardown(){ CtxKey.hide(); },
         update(dt){ CtxKey.update(dt); }
+    },
+    /* 技能期 Build 3（滑翔/龙息/呼唤）：实现全在 SkillTrio 一节；钩子只
+       转发——关掉时收翼、收呼唤钮、吹散的蒲公英按原样复原、角上的鸟送回 */
+    skillTrio: {
+        setup(){ SkillTrio.bind(); },
+        teardown(){ SkillTrio.off(); },
+        update(dt, t){ SkillTrio.update(dt, t); }
     },
     /* 沉浸氛围五件（Issue #81）：实现全在 AtmoSys 一节，钩子只转发开关，
        各件互不调用——关掉哪件只有哪件停摆/复原，详见 AtmoSys 头注的开关清单 */
@@ -16002,7 +16041,7 @@ function spawnLantern(wish){
     g.position.set(POND_C.x+Math.cos(a)*LAKE_RX*0.8,0.14,POND_C.z+Math.sin(a)*LAKE_RZ*0.8);
     scene.add(g);
     const L={grp:g,box:box,flame:flame,glow:glow,age:0,dur:30,
-        ang:a,k:0.8,phase:Math.random()*6.28,wish:wish};
+        ang:a,k:0.8,phase:Math.random()*6.28,wish:wish,boostT:0,boostK:0};
     lanterns.push(L);
     if(lanterns.length>4){
         const old=lanterns[0];
@@ -16050,8 +16089,10 @@ function updateLanterns(dt,t){
             if(wishLantern===L){ wishLantern=null; hideWishBubble(); }
             continue;
         }
+        /* 技能期 Build 3：龙息送灯——boostT 内转得快些、向湖心多送一截（boostK 封顶 0.35） */
+        if(L.boostT>0){ L.boostT-=dt; L.boostK=Math.min(0.35,(L.boostK||0)+dt*0.10); L.ang+=dt*0.13; }
         L.ang+=dt*0.07;
-        L.k=0.8-0.48*Math.min(1,k*1.4);   // 沿椭圆湖面从近岸慢慢漂向湖心
+        L.k=0.8-0.48*Math.min(1,k*1.4+(L.boostK||0));   // 沿椭圆湖面从近岸慢慢漂向湖心
         L.grp.position.x=POND_C.x+Math.cos(L.ang)*LAKE_RX*L.k;
         L.grp.position.z=POND_C.z+Math.sin(L.ang)*LAKE_RZ*L.k;
         L.grp.position.y=0.14+Math.sin(t*1.7+L.phase)*0.03;
@@ -16678,7 +16719,14 @@ const VOICE_LINES = {
     dragon: {
         eat:  ['吃饱了就追得上风了——它眼里的光都亮了些。'],
         sleep:['它困了。江湖再大，也大不过一个好觉。'],
-        play: ['玩兴正浓的时候，影子都追不上它。']
+        play: ['玩兴正浓的时候，影子都追不上它。'],
+        glideTip:['翅膀张开了——原来长大，就是能离地更久一点。'],
+        breathTip:['它学会了轻轻吹一口气，吹的不是火，是小欢喜。'],
+        callTip:['角尖是个好位置，它学会唤小鸟来作伴了。'],
+        call: ['一声轻唤，角尖上就落了个小邻居。'],
+        callHere:['它已经在角上歇着了，歪着头看你。'],
+        callNight:['夜里小鸟都睡了——让它睡吧，明早再唤。'],
+        callRain:['雨里它不肯出窝，缩在树冠下躲着呢。']
     }
 };
 const VoiceSys = {
@@ -17010,6 +17058,8 @@ const CtxKey = {
             if(d < 3.2) out.push({ id:'dragon', cat:'talk', d:d, label:'🐉 和小龙玩',
                 act(){ toggleDragonMenu(); } });
         }
+        // 技能期 Build 3：龙息候选（蒲公英/檐灯/河灯/鱼群）——登记全在 SkillTrio.ctxScan
+        if(typeof SkillTrio !== 'undefined') SkillTrio.ctxScan(out, dist, rp);
         return out;
     },
     pick(cands){
@@ -17082,6 +17132,436 @@ window.__ctxKey = {   // 验收钩子（与 __npc / __voice 同例）
         cands: CtxKey.lastCands }; },
     pump(){ CtxKey.pollT = 1; CtxKey.update(0.2); },
     fire(){ CtxKey.fire(); }
+};
+
+/* ==================== 技能期 Build 3：治愈技能三件（滑翔／龙息／呼唤） ====================
+   审计结论（2026-10-23，逐项核过现有系统后定的接法，不新造平行世界）：
+   - 成长阶段：ct2_dragon.grow.stage 三档（0 幼龙／1 少年·第 4 天／2 青年·
+     第 9 天，DRG_GROW_STAGE_DAYS）；既有解锁先例——少年档解锁击掌与使唤
+     浇水、青年档解锁作揖。本件同口径：呼唤＝成长期（stage≥1）、滑翔与
+     龙息＝成年（stage≥2，本世界最高档即青年龙）。解锁一律由 stage 推导，
+     零新增存档键；提示/冷却/吹散登记全放内存。
+   - 滑翔：挂 Build 1 的 SkillMove 空中态（dragonPlayerMove 内积分）——
+     空中再按跳跃键切换展翼；Build 1 原本「贴地吸附」没有坠落态，本件补
+     「落差超阈值进坠落」（瞬移不误判）；展翼姿态经 a.glidePose 在
+     dragonAnimate 的翼部叠加，龙形/少女共用 parts.wingL/wingR 契约。
+   - 龙息：挂 Build 2 的 CtxKey（scan 末尾一行委托 ctxScan），只在操控态
+     登记四类真实对象——蒲公英（GrassSys._dandeIM 实例，回读矩阵定位、
+     吹散＝实例缩没＋籽絮粒子，计时复原）、檐灯（house.userData.lamp＋
+     lampLight，lerpWeather 在本模块 update 之前跑，吹拂靠覆盖当帧强度）、
+     河灯（lanterns[] 的 boostT/boostK，updateLanterns 积分加速漂远）、
+     鱼群（FishSys.fish 的 leap 机制＋spawnRipple，错峰跃水）。节日灯笼是
+     合批静态几何、没有单体可动件，龙息不挂（如实不做）。
+   - 呼唤：同伴只有小鸟——化身在少女形态下也是龙本身（dragonAgent 同一
+     agent），不存在独立小龙同伴；小鸟居民走 BIRD_AI_DEF，本件给它加一个
+     callHorn 态（与睡龙停角的 horn 态同落点 aiHornTip、同 parts.hornTip
+     契约，龙形少女通用），经 aiBirdFly 飞来、驻留计时到自己回枝头；
+     夜里/雨天鸟不出窝（与居民 AI 的既有门控同口径），只给一句旁白。
+   - 首次解锁提示：进世界头一阵把三件各排一句世界之声（VOICE_LINES.
+     dragon 的 *Tip 键，走 VoiceSys 队列与节流），每件每会话至多一次。 */
+const TRIO_CFG = { glideStage: 2, breathStage: 2, callStage: 1,
+    fallEnter: 0.55, glideSink: 0.85, glideFwd: 2.6, glideSway: 0.5,
+    breathCd: 1.1, dandeR: 2.4, dandeBlowR: 1.6, dandeCap: 16, regrowSec: 26,
+    lampR: 3.4, lanternR: 3.6, fishBandIn: 0.78, fishBandOut: 1.5, fishR: 6.5,
+    lanternBoostSec: 6, callStaySec: 16 };
+const SkillTrio = {
+    gliding: false, glideBlend: 0, swayPh: 0,
+    breathCdT: 0, lampFlick: 0, _lampK: 1, clock: 0, _worldT: 0,
+    blown: new Map(), seedPts: null, seedData: [], breathPts: null, breathData: [],
+    calledBird: null, _bound: false, tipped: {}, _dm4: null, _dv: null, _dummy: null,
+    on(){ return (typeof FEAT === 'undefined' || !FEAT.skillTrio || FEAT.skillTrio.on); },
+    stage(){ const g = (typeof dragonCfg !== 'undefined' && dragonCfg.grow) || null; return g ? (g.stage || 0) : 0; },
+    canGlide(){ return this.stage() >= TRIO_CFG.glideStage; },
+    canBreath(){ return this.stage() >= TRIO_CFG.breathStage; },
+    canCall(){ return this.stage() >= TRIO_CFG.callStage; },
+    isGirl(){ return typeof dragonCfg !== 'undefined' && dragonCfg.avatar && dragonCfg.avatar.form === 'girl'; },
+    voice(key){
+        if(typeof VoiceSys === 'undefined' || !VoiceSys.pick) return;
+        const text = VoiceSys.pick('dragon', key);
+        if(text) VoiceSys.queue('dragon', { text: text, at: VoiceSys.clock });
+    },
+    /* ---------- 滑翔 ---------- */
+    glideToggle(){
+        if(!this.on() || !this.canGlide()) return;
+        if(typeof SkillMove === 'undefined' || !SkillMove.air) return;
+        if(skillUiBlocked()) return;
+        this.gliding = !this.gliding;
+    },
+    glideOff(){ this.gliding = false; },
+    /* ---------- 龙息：上下文登记 ---------- */
+    ctxScan(out, dist, rp){
+        if(!this.on() || !this.canBreath()) return;
+        if(typeof DragonCtl === 'undefined' || !DragonCtl.active) return;   // 仅操控态：化身亲口吹
+        if(typeof Interior !== 'undefined' && Interior.active) return;
+        const self = this;
+        const dc = this.nearestDandelions(rp);
+        if(dc) out.push({ id:'breath:dande', cat:'gather', d:dc.d, label:'🌬 轻吹一口 · 蒲公英',
+            act(){ self.breath('dande'); } });
+        if(typeof lampLight !== 'undefined' && lampLight && lampLight.intensity > 0.25
+           && typeof window.__house !== 'undefined' && window.__house && window.__house.userData.lamp){
+            const v = new THREE.Vector3(); window.__house.userData.lamp.getWorldPosition(v);
+            const d = dist(v.x, v.z);
+            if(d < TRIO_CFG.lampR) out.push({ id:'breath:lamp', cat:'task', d:d, label:'🌬 吹一吹檐灯',
+                act(){ self.breath('lamp'); } });
+        }
+        if(typeof lanterns !== 'undefined' && lanterns.length){
+            let bl = null, bd = TRIO_CFG.lanternR;
+            for(const L of lanterns){ const d = dist(L.grp.position.x, L.grp.position.z); if(d < bd){ bd = d; bl = L; } }
+            if(bl) out.push({ id:'breath:lantern', cat:'task', d:bd, label:'🌬 送一送河灯',
+                act(){ self.breath('lantern', bl); } });
+        }
+        if(typeof FishSys !== 'undefined' && FishSys.built && !FishSys.frozen()){
+            const r = FishSys.ellR(rp.x, rp.z);
+            if(r > TRIO_CFG.fishBandIn && r < TRIO_CFG.fishBandOut)
+                out.push({ id:'breath:fish', cat:'task', d:Math.abs(r - 1.05) * 6 + 0.5, label:'🌬 惊一惊鱼儿',
+                    act(){ self.breath('fish'); } });
+        }
+    },
+    nearestDandelions(rp){
+        const im = (typeof GrassSys !== 'undefined') ? GrassSys._dandeIM : null;
+        if(!im || !im.count) return null;
+        if(!this._dm4){ this._dm4 = new THREE.Matrix4(); this._dv = new THREE.Vector3(); }
+        let n = 0, bd = 1e9;
+        for(let i = 0; i < im.count; i++){
+            if(this.blown.has(i)) continue;
+            im.getMatrixAt(i, this._dm4);
+            this._dv.setFromMatrixPosition(this._dm4);
+            const d = Math.hypot(this._dv.x - rp.x, this._dv.z - rp.z);
+            if(d < TRIO_CFG.dandeR){ n++; if(d < bd) bd = d; }
+        }
+        return n ? { n: n, d: bd } : null;
+    },
+    /* ---------- 龙息：施放与四种效果 ---------- */
+    breath(kind, target){
+        if(!this.on() || !this.canBreath() || this.breathCdT > 0 || skillUiBlocked()) return false;
+        const a = (typeof dragonAgent !== 'undefined') ? dragonAgent : null;
+        if(!a || !a.group) return false;
+        const p = a.group.position;
+        let tp = null, ok = false;
+        if(kind === 'dande'){
+            const n = this.blowDandelions(p);
+            if(n > 0){ ok = true; tp = { x: p.x, y: p.y + 0.5, z: p.z }; }
+        } else if(kind === 'lamp'){
+            const lamp = (typeof window.__house !== 'undefined' && window.__house) ? window.__house.userData.lamp : null;
+            if(!lamp) return false;
+            const v = new THREE.Vector3(); lamp.getWorldPosition(v);
+            this.lampFlick = 1; ok = true; tp = { x: v.x, y: v.y, z: v.z };
+        } else if(kind === 'lantern'){
+            const L = target || this.nearestLantern(p);
+            if(!L) return false;
+            L.boostT = TRIO_CFG.lanternBoostSec; ok = true;
+            tp = { x: L.grp.position.x, y: 0.55, z: L.grp.position.z };
+        } else if(kind === 'fish'){
+            const n = this.startleFish(p);
+            if(n > 0){ ok = true; tp = this.waterPointNear(p); }
+        }
+        if(!ok) return false;
+        this.breathCdT = TRIO_CFG.breathCd;
+        this.spawnBreathFx(p, tp);
+        return true;
+    },
+    blowDandelions(p){
+        const im = (typeof GrassSys !== 'undefined') ? GrassSys._dandeIM : null;
+        if(!im || !im.count) return 0;
+        if(!this._dm4){ this._dm4 = new THREE.Matrix4(); this._dv = new THREE.Vector3(); }
+        if(!this._dummy) this._dummy = new THREE.Object3D();
+        const hits = [];
+        for(let i = 0; i < im.count; i++){
+            if(this.blown.has(i)) continue;
+            im.getMatrixAt(i, this._dm4);
+            this._dv.setFromMatrixPosition(this._dm4);
+            const d = Math.hypot(this._dv.x - p.x, this._dv.z - p.z);
+            if(d < TRIO_CFG.dandeBlowR) hits.push({ i: i, d: d, x: this._dv.x, y: this._dv.y, z: this._dv.z });
+        }
+        hits.sort((m, n) => m.d - n.d);
+        let n = 0;
+        for(const h of hits){
+            if(n >= TRIO_CFG.dandeCap) break;
+            im.getMatrixAt(h.i, this._dm4);
+            this.blown.set(h.i, { m: this._dm4.elements.slice(), until: this.clock + TRIO_CFG.regrowSec });
+            this._dummy.position.set(h.x, h.y, h.z);
+            this._dummy.rotation.set(0, 0, 0);
+            this._dummy.scale.setScalar(0.001);
+            this._dummy.updateMatrix();
+            im.setMatrixAt(h.i, this._dummy.matrix);
+            this.spawnSeeds(h.x, h.y + 0.52, h.z, 5);
+            n++;
+        }
+        if(n) im.instanceMatrix.needsUpdate = true;
+        return n;
+    },
+    restoreDande(idx){
+        const im = (typeof GrassSys !== 'undefined') ? GrassSys._dandeIM : null;
+        const rec = this.blown.get(idx);
+        if(!im || !rec) return;
+        if(idx < im.instanceMatrix.count)
+            im.setMatrixAt(idx, new THREE.Matrix4().fromArray(rec.m));
+        im.instanceMatrix.needsUpdate = true;
+    },
+    nearestLantern(p){
+        if(typeof lanterns === 'undefined') return null;
+        let bl = null, bd = 1e9;
+        for(const L of lanterns){ const d = Math.hypot(L.grp.position.x - p.x, L.grp.position.z - p.z); if(d < bd){ bd = d; bl = L; } }
+        return bl;
+    },
+    waterPointNear(p){
+        if(typeof LAKE_C === 'undefined') return null;
+        const dx = p.x - LAKE_C.x, dz = p.z - LAKE_C.z;
+        const m = Math.hypot(dx / LAKE_RX, dz / LAKE_RZ) || 1;
+        return { x: LAKE_C.x + dx / m * 0.8, z: LAKE_C.z + dz / m * 0.8 };
+    },
+    startleFish(p){
+        if(typeof FishSys === 'undefined' || !FishSys.built || FishSys.frozen()) return 0;
+        const wp = this.waterPointNear(p); if(!wp) return 0;
+        let n = 0;
+        for(const f of FishSys.fish){
+            if(f.leap) continue;
+            if(Math.hypot(f.x - wp.x, f.z - wp.z) < TRIO_CFG.fishR){
+                f.leap = { t: -n * 0.09, dur: 0.62 };   // 负 t 错峰：逐条晚一拍跃起（update 内 t 累加过 0 才起跳）
+                f.h += (Math.random() - 0.5) * 1.4;      // 受惊散向
+                FishSys.spawnRipple(f.x, f.z, 1.0);
+                n++; if(n >= 5) break;
+            }
+        }
+        return n;
+    },
+    /* ---------- 粒子：龙息气流＋蒲公英籽絮（两个小 Points 池，闲置隐藏不占绘制） ---------- */
+    buildFx(){
+        if(this.seedPts) return;
+        const mk = (n, size, color, opacity) => {
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3).fill(-999), 3));
+            const mat = new THREE.PointsMaterial({ size: size, color: color, transparent: true, opacity: opacity,
+                map: glowTexture('rgba(255,255,255,1)', 'rgba(255,255,255,0.35)'), depthWrite: false, sizeAttenuation: true });
+            const pts = new THREE.Points(geo, mat);
+            pts.frustumCulled = false; pts.visible = false;
+            scene.add(pts);
+            return pts;
+        };
+        this.seedPts = mk(110, 0.085, 0xffffff, 0.95);
+        for(let i = 0; i < 110; i++) this.seedData.push({ age: 9, life: 0, x: 0, y: -999, z: 0, vx: 0, vy: 0, vz: 0 });
+        this.breathPts = mk(42, 0.09, 0xeafff3, 0.8);
+        for(let i = 0; i < 42; i++) this.breathData.push({ age: 9, life: 0, x: 0, y: -999, z: 0, vx: 0, vy: 0, vz: 0 });
+    },
+    spawnSeeds(x, y, z, n){
+        this.buildFx();
+        let put = 0;
+        for(const d of this.seedData){
+            if(put >= n) break;
+            if(d.age < d.life) continue;
+            d.age = 0; d.life = 2.2 + Math.random() * 1.3;
+            d.x = x; d.y = y; d.z = z;
+            const an = Math.random() * 6.28, sp = 0.35 + Math.random() * 0.75;
+            d.vx = Math.cos(an) * sp; d.vz = Math.sin(an) * sp; d.vy = 0.3 + Math.random() * 0.45;
+            put++;
+        }
+    },
+    spawnBreathFx(p, tp){
+        this.buildFx();
+        const girl = this.isGirl();
+        this.breathPts.material.color.setHex(girl ? 0xffe3f1 : 0xeafff3);
+        this.breathPts.material.size = girl ? 0.07 : 0.095;
+        const oy = girl ? 1.32 : 0.66;
+        let dx = 0, dz = 1;
+        if(tp){ dx = tp.x - p.x; dz = tp.z - p.z; const m = Math.hypot(dx, dz) || 1; dx /= m; dz /= m; }
+        else if(typeof DragonCtl !== 'undefined'){ dx = -Math.sin(DragonCtl.yaw); dz = -Math.cos(DragonCtl.yaw); }
+        let put = 0;
+        for(const d of this.breathData){
+            if(put >= 16) break;
+            if(d.age < d.life) continue;
+            d.age = 0; d.life = 0.5 + Math.random() * 0.3;
+            d.x = p.x + dx * 0.35; d.y = p.y + oy; d.z = p.z + dz * 0.35;
+            d.vx = dx * 2.3 + (Math.random() - 0.5) * 0.7;
+            d.vz = dz * 2.3 + (Math.random() - 0.5) * 0.7;
+            d.vy = 0.25 + (Math.random() - 0.5) * 0.3;
+            put++;
+        }
+    },
+    stepFx(dt){
+        const step = (pts, data, buoy) => {
+            if(!pts) return;
+            const arr = pts.geometry.attributes.position.array;
+            let alive = 0;
+            for(let i = 0; i < data.length; i++){
+                const d = data[i];
+                if(d.age < d.life){
+                    alive++;
+                    d.age += dt;
+                    d.vx *= 0.985; d.vz *= 0.985;
+                    d.vy += ((buoy ? -0.04 : 0) - d.vy) * Math.min(1, dt * 1.6);
+                    d.x += d.vx * dt; d.y += d.vy * dt; d.z += d.vz * dt;
+                    arr[i * 3] = d.x; arr[i * 3 + 1] = d.y; arr[i * 3 + 2] = d.z;
+                } else arr[i * 3 + 1] = -999;
+            }
+            pts.visible = alive > 0;
+            pts.geometry.attributes.position.needsUpdate = true;
+        };
+        step(this.seedPts, this.seedData, true);
+        step(this.breathPts, this.breathData, false);
+    },
+    aliveCount(data){ let n = 0; for(const d of data) if(d.age < d.life) n++; return n; },
+    /* ---------- 呼唤 ---------- */
+    call(){
+        if(!this.on() || !this.canCall() || skillUiBlocked()) return false;
+        if(typeof DragonCtl !== 'undefined' && !DragonCtl.active) return false;
+        if(typeof dragonHatched === 'function' && !dragonHatched()) return false;
+        if(this.calledBird && this.calledBird.state === 'callHorn'){ this.voice('callHere'); return false; }
+        if(typeof aiNight === 'function' && aiNight()){ this.voice('callNight'); return false; }
+        if(typeof aiRaining === 'function' && aiRaining()){ this.voice('callRain'); return false; }
+        const tip = (typeof aiHornTip === 'function') ? aiHornTip() : null;
+        const a = (typeof dragonAgent !== 'undefined') ? dragonAgent : null;
+        if(!tip || !a || !a.group) return false;
+        let best = null, bd = 1e9;
+        if(typeof birds !== 'undefined'){
+            for(const b of birds){
+                if(!b.def || b.def.name !== 'birdAI') continue;
+                if(b.state === 'callHorn' || b.state === 'horn') continue;
+                const d = Math.hypot(b.group.position.x - a.group.position.x, b.group.position.z - a.group.position.z);
+                if(d < bd){ bd = d; best = b; }
+            }
+        }
+        if(!best) return false;
+        this.calledBird = best;
+        aiBirdFly(best, { x: tip.x, y: tip.y + 0.14, z: tip.z }, 'callHorn');
+        return true;
+    },
+    syncBtn(){
+        const b = document.getElementById('callBtn');
+        if(!b) return;
+        const show = this.on() && this.canCall()
+            && typeof DragonCtl !== 'undefined' && DragonCtl.active
+            && typeof enteredWorld !== 'undefined' && enteredWorld;
+        const d = show ? '' : 'none';
+        if(b.style.display !== d) b.style.display = d;
+    },
+    bind(){
+        if(this._bound) return; this._bound = true;
+        const b = document.getElementById('callBtn');
+        if(b) b.addEventListener('click', () => this.call());
+        window.addEventListener('keydown', e => {
+            if(e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+            if(e.key !== 'r' && e.key !== 'R') return;
+            const tag = (e.target && e.target.tagName) || '';
+            if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+            this.call();
+        });
+    },
+    off(){
+        this.gliding = false; this.glideBlend = 0;
+        if(typeof dragonAgent !== 'undefined' && dragonAgent) dragonAgent.glidePose = 0;
+        for(const idx of Array.from(this.blown.keys())){ this.restoreDande(idx); }
+        this.blown.clear();
+        if(this.calledBird && this.calledBird.state === 'callHorn' && this.calledBird.perch)
+            aiBirdFly(this.calledBird, this.calledBird.perch, 'perch');
+        this.calledBird = null;
+        this.syncBtn();
+    },
+    /* ---------- 每帧（MODULE_HOOKS 转发；顺序在 lerpWeather 之后、AgentKit 之前） ---------- */
+    update(dt, t){
+        this.clock += dt;
+        if(this.breathCdT > 0) this.breathCdT -= dt;
+        if(this.gliding && (typeof SkillMove === 'undefined' || !SkillMove.air)) this.gliding = false;
+        const target = this.gliding ? 1 : 0;
+        this.glideBlend += (target - this.glideBlend) * Math.min(1, dt * 7);
+        if(Math.abs(this.glideBlend - target) < 0.01) this.glideBlend = target;
+        if(typeof dragonAgent !== 'undefined' && dragonAgent)
+            dragonAgent.glidePose = this.on() ? this.glideBlend : 0;
+        /* 首次解锁提示：进世界头一阵，三件各排一句世界之声（每件每会话一次） */
+        if(typeof enteredWorld !== 'undefined' && enteredWorld){
+            this._worldT += dt;
+            if(this._worldT > 2.5 && this._worldT < 45){
+                if(this.canCall() && !this.tipped.call){ this.tipped.call = 1; this.voice('callTip'); }
+                if(this.canGlide() && !this.tipped.glide){ this.tipped.glide = 1; this.voice('glideTip'); }
+                if(this.canBreath() && !this.tipped.breath){ this.tipped.breath = 1; this.voice('breathTip'); }
+            }
+        }
+        /* 檐灯吹拂：lerpWeather 已把当帧强度写好，这里按摇曳系数覆盖（收尾复原） */
+        if(this.lampFlick > 0){
+            this.lampFlick = Math.max(0, this.lampFlick - dt / 1.3);
+            const w = Math.sin(this.clock * 43) * 0.5 + Math.sin(this.clock * 71 + 1.7) * 0.3;
+            this._lampK = 1 - 0.5 * this.lampFlick * (0.65 + 0.35 * w);
+            if(typeof lampLight !== 'undefined' && lampLight) lampLight.intensity *= this._lampK;
+            const lamp = (typeof window.__house !== 'undefined' && window.__house) ? window.__house.userData.lamp : null;
+            if(lamp && lamp.material) lamp.material.emissiveIntensity = this._lampK;
+            if(this.lampFlick <= 0 && lamp && lamp.material) lamp.material.emissiveIntensity = 1;
+        }
+        /* 蒲公英复原（吹散计时到点按原矩阵长回） */
+        if(this.blown.size){
+            for(const pair of Array.from(this.blown)){
+                if(this.clock >= pair[1].until){ this.restoreDande(pair[0]); this.blown.delete(pair[0]); }
+            }
+        }
+        this.stepFx(dt);
+        this.syncBtn();
+    }
+};
+/* 小鸟居民新态 callHorn：被呼唤后停角——与睡龙停角的 horn 态同落点/同折翼，
+   区别只在门控：不要求龙睡着，驻留计时到点（或龙睡下/进屋）自己回枝头 */
+if(typeof BIRD_AI_DEF !== 'undefined' && !BIRD_AI_DEF.states.callHorn){
+    BIRD_AI_DEF.states.callHorn = {
+        enter(a){ a.stateT = TRIO_CFG.callStaySec; SkillTrio.voice('call'); },
+        update(a, dt, t){
+            const tip = (typeof aiHornTip === 'function') ? aiHornTip() : null;
+            if(tip) a.group.position.set(tip.x, tip.y + 0.13, tip.z);
+            if(typeof dragonAgent !== 'undefined' && dragonAgent) a.group.rotation.y = dragonAgent.group.rotation.y;
+            a.group.rotation.z = Math.sin(t * 0.8 + a.phase) * 0.07;
+            aiBirdFold(a, Math.min(1, dt * 8));
+            a.stateT -= dt;
+            const asleep = typeof dragonAgent !== 'undefined' && dragonAgent && dragonAgent.state === 'sleep';
+            const inRoom = typeof Interior !== 'undefined' && Interior.active;
+            if(a.stateT <= 0 || asleep || inRoom || !tip){
+                if(SkillTrio.calledBird === a) SkillTrio.calledBird = null;
+                a.hornCd = t + 30;
+                a.group.rotation.z = 0;
+                aiBirdFly(a, a.perch, 'perch');
+            }
+        }
+    };
+}
+/* 无头验收钩子（技能期 Build 3）：只读快照＋三件技能的触发入口 */
+window.__skillTrio = {
+    cfg: TRIO_CFG,
+    snap(){
+        const a = (typeof dragonAgent !== 'undefined') ? dragonAgent : null;
+        const p = a && a.group ? a.group.position : null;
+        let bird = null;
+        if(SkillTrio.calledBird){
+            const b = SkillTrio.calledBird;
+            bird = { state: b.state, d: p ? Math.round(Math.hypot(b.group.position.x - p.x, b.group.position.z - p.z) * 100) / 100 : -1 };
+        }
+        let leaps = 0;
+        if(typeof FishSys !== 'undefined' && FishSys.fish) for(const f of FishSys.fish) if(f.leap) leaps++;
+        let lt = null;
+        if(typeof lanterns !== 'undefined' && lanterns.length){
+            const L = lanterns[lanterns.length - 1];
+            lt = { boostT: Math.round((L.boostT || 0) * 10) / 10, boostK: Math.round((L.boostK || 0) * 1000) / 1000,
+                   ang: Math.round(L.ang * 100) / 100, k: Math.round(L.k * 1000) / 1000 };
+        }
+        const lamp = (typeof window.__house !== 'undefined' && window.__house) ? window.__house.userData.lamp : null;
+        return { on: SkillTrio.on(), stage: SkillTrio.stage(),
+            canGlide: SkillTrio.canGlide(), canBreath: SkillTrio.canBreath(), canCall: SkillTrio.canCall(),
+            gliding: SkillTrio.gliding,
+            glidePose: a ? Math.round((a.glidePose || 0) * 100) / 100 : 0,
+            air: (typeof SkillMove !== 'undefined') ? SkillMove.air : null,
+            vy: (typeof SkillMove !== 'undefined') ? Math.round(SkillMove.vy * 100) / 100 : null,
+            y: p ? Math.round(p.y * 1000) / 1000 : 0,
+            ground: p ? Math.round((window.__roomDragon ? Interior.floorWorldY() : worldFloorY(p.x, p.z)) * 1000) / 1000 : 0,
+            breathCd: Math.round(SkillTrio.breathCdT * 100) / 100,
+            lampFlick: Math.round(SkillTrio.lampFlick * 100) / 100,
+            lampI: (typeof lampLight !== 'undefined' && lampLight) ? Math.round(lampLight.intensity * 100) / 100 : -1,
+            lampEI: lamp && lamp.material ? Math.round((lamp.material.emissiveIntensity || 1) * 100) / 100 : -1,
+            blown: SkillTrio.blown.size, seedsAlive: SkillTrio.aliveCount(SkillTrio.seedData),
+            callBtn: (document.getElementById('callBtn') || {}).style ? document.getElementById('callBtn').style.display : 'missing',
+            bird: bird, fishLeaps: leaps, lantern: lt,
+            tipped: Object.keys(SkillTrio.tipped) };
+    },
+    pump(dt){ SkillTrio.update(dt || 0.05, SkillTrio.clock); },
+    glideToggle(){ SkillTrio.glideToggle(); },
+    breath(kind, target){ return SkillTrio.breath(kind, target); },
+    call(){ return SkillTrio.call(); },
+    dandeNear(){ const a = (typeof dragonAgent !== 'undefined') ? dragonAgent : null;
+        return a && a.group ? SkillTrio.nearestDandelions(a.group.position) : null; },
+    setStage(n){ if(typeof dragonCfg !== 'undefined' && dragonCfg.grow){ dragonCfg.grow.stage = n; dragonCfg.stage = n; } }
 };
 
 /* ---------------- 村舍小屋（合并进静态件） ---------------- */
