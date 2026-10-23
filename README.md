@@ -83,7 +83,7 @@ cp test/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
 1. 改功能；
 2. 同步 bump 两处同值：根目录 `version.json` 的 `build`（格式 `YYYY-MMDD-HHMM`，同时把 `note` 改成本次内容一句话）＋ `index.html` 里 `window.__BUILD__`；
 3. 跑 `node test/all.js`——verify 有一致性断言守着第 2 步，两处不一致不许提交。
-4. 壳兼容红线：`version.json` 的 `minShell` 是老 App 壳的最低兼容版本——只有当新版网页与老壳不兼容时才抬高它；老壳冷启动读到 `minShell` 高于自身版本，会在开场后、进游戏前引导玩家「退出更新」。无壳侧大改时不要动它。
+4. 壳兼容红线：`version.json` 的 `minShell` 是老 App 壳的最低兼容版本——只有当新版网页与老壳不兼容时才抬高它；老壳冷启动读到 `minShell` 高于自身版本，会在开场后、进游戏前引导玩家「退出更新」。无壳侧大改时不要动它。补充：带 `ChumenApp/<ver>` 版本标记但没有自检的老壳（如 1.2.2）由页面侧闸门兜底——`index.html` 头部版本指针脚本复用同一次 fetch 在启动期比对 `minShell`，低了同样全屏引导升级（取不到版本信号或指针失败一律放行，绝不误拦浏览器玩家）。
 
 ## 目录
 
