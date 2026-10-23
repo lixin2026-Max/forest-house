@@ -11,7 +11,7 @@
 /* 小版本不停机更新自检（发版纪律见 README「发版清单」）：本页构建号与站点 version.json 比对。
    线上更新时：未进世界→整页换新一次（带 _v 参数绕开页面缓存，资源照常走缓存）；
    已在世界→只给角落小字提示，绝不中途重载。指针拉不到就当作无更新，静默放行。 */
-window.__BUILD__ = '2026-1022-2052';
+window.__BUILD__ = '2026-1023-1314';
 (function(){
     const UPD_TRY_KEY='ct2_upd_try';
     let hintedBuild = '';
@@ -1189,6 +1189,7 @@ window.__BUILD__ = '2026-1022-2052';
     <div class="mpSub">季节（按真实日期自动定季）</div>
     <div class="mpViews" id="seasonBtns"></div>
     <div class="mpTip" id="seasonTip">手动切换只预览本机本次，不保存；刷新后回到真实日期的季节。</div>
+    <div class="mpTip" id="farmSeasonTip"></div>
     <div class="mpSep"></div>
     <div class="mpSub">小龙</div>
     <button type="button" id="reEggBtn" class="mpVerBtn">🥚 再孵一颗蛋</button>
@@ -5225,7 +5226,10 @@ function createFarm(){
    ② 进页面时存档日期（lastDate）和真实今天对不上，说明跨了天，同样调 farmNewDay 结算——
       玩家把自动轮转关了（Issue #26）作物也不会卡死。
    可玩格的土贴片与各阶段作物合并成一个 mesh，状态变化时整体重建（绘制 +1）。
-   状态与收获数存本机 ct2_farm（FARM_KEY 写死，照 ct2_hunt / ct2_help 的治理先例）。 */
+   状态与收获数存本机 ct2_farm（FARM_KEY 写死，照 ct2_hunt / ct2_help 的治理先例）。
+   季节层（Issue #69）：生长速率/可种名单/田面与作物外观受季节影响，规则表
+   见下方 FarmSeason 一节与 Issue #69 评论；季节是全局推导量、不落盘，
+   存档只多两个可选字段 g（生长点）/bonus（春季双倍标记），老存档照读。 */
 const FARM_KEY='ct2_farm';
 const FARM_CROPS=['sunflower','corn','pumpkin'];
 const FARM_CROP_NAMES={sunflower:'向日葵',corn:'玉米',pumpkin:'南瓜'};
@@ -5281,19 +5285,23 @@ function renderPlayCrops(){
     farmGrid.forEach(function(cell){
         if(!cell.playable) return;
         const st=farmState?farmState.cells[cell.row+','+cell.col]:null;
-        // 土贴片压在田垄上：干土偏亮、浇过水变深，一眼能分清哪块浇过
+        // 土贴片压在田垄上：干土偏亮、浇过水变深，一眼能分清哪块浇过；
+        // 季节层（#69）：贴片再乘当季田面色，冬季换雪面口径（干=雪白、湿=冰蓝）
         const patch=new THREE.BoxGeometry(FARM_RECT.cellW*0.9,0.06,FARM_RECT.cellD*0.5);
         patch.translate(cell.lx,0.225,cell.lz);
-        geos.push(paintGeo(patch, st&&st.watered?SCENE.palette.farmWet:SCENE.palette.farmDry));
+        geos.push(paintGeo(patch, FarmSeason.patchHex(st)));
         if(!st||!st.crop) return;
         const stage= st.mature?2:(st.watered?1:0);
+        const cellGeos=[];
         if(stage===0){
             const m=new THREE.Matrix4().makeRotationY((cell.row*7+cell.col*3)%6);
             m.setPosition(cell.lx,0.24,cell.lz);
-            sproutGeos().forEach(g=>{ g.applyMatrix4(m); geos.push(g); });
+            sproutGeos().forEach(g=>{ g.applyMatrix4(m); cellGeos.push(g); });
         }else{
-            cropGeosAt(st.crop,cell,stage).forEach(g=>geos.push(g));
+            cropGeosAt(st.crop,cell,stage).forEach(g=>cellGeos.push(g));
         }
+        FarmSeason.tintParts(cellGeos);   // #69：当季作物染色（顶点色乘倍率，关季节层时恒等）
+        cellGeos.forEach(g=>geos.push(g));
     });
     if(!geos.length) return;
     const merged=mergePaintedGeos(geos);
@@ -5309,23 +5317,35 @@ function onFarmCellTap(cell){
     const key=cell.row+','+cell.col;
     const st=farmState.cells[key];
     if(!st||!st.crop){
-        const crop=FARM_CROPS[farmNextCrop%FARM_CROPS.length]; farmNextCrop++;
+        // #69：播种轮换只在当季可种名单里转；名单为空（冬季）不下种、只提示
+        const list=FarmSeason.plantable();
+        if(!list.length){
+            showHuntToast('❄️ 地冻住了，现在种什么都活不了——等开春再播种吧');
+            return;
+        }
+        const crop=list[farmNextCrop%list.length]; farmNextCrop++;
         farmState.cells[key]={crop:crop,watered:false,mature:false};
         saveFarm(); renderPlayCrops();
         showHuntToast('🌱 种下了'+FARM_CROP_NAMES[crop]+'，再点它一下浇浇水');
         return;
     }
     if(st.mature){
-        farmState.harvest++;
+        // #69：带 bonus 标记（春季双倍苗头）的作物收获翻倍，计数与入包都 ×2
+        const dbl=!!(FarmSeason.on()&&st.bonus);
+        farmState.harvest+= dbl?2:1;
         const gotCrop=st.crop;
         delete farmState.cells[key];
         saveFarm(); renderPlayCrops(); updateStatus();
         // #17：南瓜/玉米是小龙的食物，收获自动进背包（向日葵不入包，照旧只计数）
         if(gotCrop==='pumpkin'||gotCrop==='corn'){
-            bagAdd(gotCrop);
-            showHuntToast('🎉 收获了'+FARM_CROP_NAMES[gotCrop]+'！放进背包啦，点小龙可以喂给它');
+            bagAdd(gotCrop); if(dbl) bagAdd(gotCrop);
+            showHuntToast(dbl
+                ? '🌸🎉 春天的好兆头——双倍收获了'+FARM_CROP_NAMES[gotCrop]+'！放进背包啦 ×2'
+                : '🎉 收获了'+FARM_CROP_NAMES[gotCrop]+'！放进背包啦，点小龙可以喂给它');
         }else{
-            showHuntToast('🎉 收获了'+FARM_CROP_NAMES[gotCrop]+'！已收获 '+farmState.harvest+' 个');
+            showHuntToast(dbl
+                ? '🌸🎉 双倍收获了'+FARM_CROP_NAMES[gotCrop]+'！已收获 '+farmState.harvest+' 个'
+                : '🎉 收获了'+FARM_CROP_NAMES[gotCrop]+'！已收获 '+farmState.harvest+' 个');
         }
         return;
     }
@@ -5337,14 +5357,27 @@ function onFarmCellTap(cell){
     }
     showHuntToast('🌿 '+FARM_CROP_NAMES[st.crop]+'已经浇过水啦，就等它成熟');
 }
-// 游戏时钟发出「新的一天」时调用（buildFarmGame 里订阅）：浇过水的作物成熟
+// 游戏时钟发出「新的一天」时调用（buildFarmGame 里订阅）：浇过水的作物成熟。
+// #69 季节口径：不再无条件成熟——已浇水的作物按当季生长点累计 g（存档可选
+// 字段，老存档无 g 按 0），攒满 FARM_GROW_NEED 成熟；冬季生长点为 0＝冻住，
+// 不长不熟也不坏，开春续攒。FEAT.farmSeason 关时 rate=null，走原老规矩。
 function farmNewDay(){
     if(!farmState) return;
     farmState.day++;
     let ripe=0;
+    const rate=FarmSeason.growRate();      // null=老规矩（直接成熟）；0=冬季冻结
+    const seasonName=FarmSeason.season();
     Object.keys(farmState.cells).forEach(function(key){
         const st=farmState.cells[key];
-        if(st&&st.crop&&st.watered&&!st.mature){ st.mature=true; ripe++; }
+        if(!st||!st.crop||!st.watered||st.mature) return;
+        if(rate===null){ st.mature=true; ripe++; return; }
+        if(rate<=0) return;                 // 冻住了：g 不动，作物原样过冬
+        st.g=(typeof st.g==='number'?st.g:0)+rate;
+        if(st.g>=FARM_GROW_NEED){
+            st.mature=true; ripe++;
+            // 春季双倍苗头：春季成熟的作物有概率带 bonus，收获时翻倍
+            if(seasonName==='spring'&&Math.random()<FARM_SPRING_BONUS_P) st.bonus=true;
+        }
     });
     saveFarm();
     if(ripe>0){ renderPlayCrops(); showHuntToast('🌾 有 '+ripe+' 块地的作物成熟啦，点一点就能收获'); }
@@ -5418,7 +5451,141 @@ function buildFarmGame(){
     farmSettleByDate();
     renderPlayCrops();
     bindFarmTap();
+    FarmSeason.apply();   // #69：季节外观/贴士首刷（Season 尚未 init 时按默认季，首帧 update 会校正）
 }
+
+/* ==================== 季节影响农场（Issue #69） ====================
+   规则表（与 Issue #69 评论一致，实现不超此表）：
+   - 季节源只读 Season.name（#21：真实日期定季，?season= 与面板手动切换
+     同源生效），季节是推导量、不落盘；整层挂 FEAT.farmSeason，关掉＝
+     农场回到本件之前的老规矩（直接成熟、全名单可种、基线外观）。
+   - 生长：「新的一天」给已浇水未成熟的作物加当季生长点（春/夏/秋 2、
+     冬 0），攒满 FARM_GROW_NEED(2) 成熟——春夏秋仍一天成熟（维持现状），
+     冬季冻存：不长不熟也不坏，开春续攒长完，绝不清格。
+   - 春季双倍苗头：春季成熟的作物以 FARM_SPRING_BONUS_P 概率带 bonus
+     标记（存档可选字段），收获时计数与入包翻倍。
+   - 可种名单只管新播：向日葵夏季限定，玉米/南瓜春夏秋可种，冬季封播；
+     已种作物过季照常生长、成熟、收获。
+   - 外观走既有顶点色/材质色倍率，不新增美术资源：田面与作物当季染色；
+     冬季另有一层薄雪盖罩住农田，透明度跟 Season._fade.snow，开春自融。
+   - 存档：ct2_farm 只多可选字段 g/bonus，老存档无字段按缺省读、不迁移、
+     不改 crop/watered/mature 语义；季节状态不进存档（全局推导）。 */
+const FARM_GROW_NEED=2;
+const FARM_SPRING_BONUS_P=0.3;
+const FARM_SEASON_RULES={
+    spring:{ label:'春', grow:2, plant:['corn','pumpkin'],
+        soil:[1.04,1.03,0.90], crop:[0.90,1.10,0.78],
+        tip:'浇水后一天成熟，春天成熟时有机会双倍收获' },
+    summer:{ label:'夏', grow:2, plant:['sunflower','corn','pumpkin'],
+        soil:[1,1,1], crop:[1,1,1],
+        tip:'浇水后一天成熟' },
+    autumn:{ label:'秋', grow:2, plant:['corn','pumpkin'],
+        soil:[1.09,0.99,0.80], crop:[1.32,1.03,0.60],
+        tip:'浇水后一天成熟' },
+    winter:{ label:'冬', grow:0, plant:[],
+        soil:[0.94,0.99,1.10], crop:[0.90,0.97,1.12],
+        tip:'作物冻住暂停生长，也不能新播种；已种的不会坏，开春接着长' }
+};
+const FarmSeason={
+    _seen:null, _plot:null, _snow:null, _snowMat:null,
+    on(){ return (typeof FEAT==='undefined'||!FEAT.farmSeason) ? true : !!FEAT.farmSeason.on; },
+    season(){ return (typeof Season!=='undefined'&&Season&&Season.name) ? Season.name : 'summer'; },
+    rule(){ return FARM_SEASON_RULES[this.season()]||FARM_SEASON_RULES.summer; },
+    /* 生长点/天；FEAT 关时返回 null＝farmNewDay 走老规矩（直接成熟） */
+    growRate(){ return this.on() ? this.rule().grow : null; },
+    plantable(){ return this.on() ? this.rule().plant.slice() : FARM_CROPS.slice(); },
+    _mul(){ return this.on() ? this.rule() : FARM_SEASON_RULES.summer; },
+    /* 土贴片颜色：基线干/湿色乘当季田面倍率；冬季换雪面口径 */
+    patchHex(st){
+        const watered=!!(st&&st.watered);
+        if(this.on()&&this.season()==='winter') return watered?0xcfe0ee:0xe9f2f9;
+        const base=watered?SCENE.palette.farmWet:SCENE.palette.farmDry;
+        const m=this._mul().soil;
+        if(m[0]===1&&m[1]===1&&m[2]===1) return base;
+        const c=new THREE.Color(base);
+        c.r*=m[0]; c.g*=m[1]; c.b*=m[2];
+        return c.getHex();
+    },
+    /* 作物顶点色乘当季倍率（原地改传入的临时几何，调用方随后合并） */
+    tintParts(parts){
+        const m=this._mul().crop;
+        if(m[0]===1&&m[1]===1&&m[2]===1) return;
+        parts.forEach(function(g){
+            const col=g&&g.attributes&&g.attributes.color;
+            if(!col) return;
+            const a=col.array;
+            for(let i=0;i<a.length;i+=3){ a[i]*=m[0]; a[i+1]*=m[1]; a[i+2]*=m[2]; }
+            col.needsUpdate=true;
+        });
+    },
+    /* 全量刷新：静态农田材质色 + 动态作物重建 + 贴士 + 雪盖 */
+    apply(){
+        if(!this._plot) this._plot=scene.getObjectByName('farmPlot');
+        if(this._plot){
+            const m=this._mul().soil;
+            this._plot.material.color.setRGB(m[0],m[1],m[2]);
+        }
+        renderPlayCrops();
+        this.refreshTip();
+        this.syncSnow();
+    },
+    /* 每帧（模块钩子）：季节变了全量刷新；静态农田引用懒抓（建造时序兜底） */
+    update(dt,t){
+        if(!this._plot){
+            const p=scene.getObjectByName('farmPlot');
+            if(p){ this._plot=p; const m=this._mul().soil; p.material.color.setRGB(m[0],m[1],m[2]); }
+        }
+        const s=this.season();
+        if(s!==this._seen){ this._seen=s; this.apply(); }
+        else this.syncSnow();
+    },
+    buildSnow(){
+        if(this._snow) return;
+        const R=FARM_RECT;
+        const cap=new THREE.BoxGeometry(R.cols*R.cellW+0.5,0.05,R.rows*R.cellD+0.5);
+        cap.translate(R.lx0+R.cols*R.cellW/2, 0.30, R.lz0+R.rows*R.cellD/2);
+        const world=new THREE.Matrix4().makeRotationY(HOUSE_ROT);
+        world.setPosition(HOUSE_POS.x,0,HOUSE_POS.z);
+        cap.applyMatrix4(world);
+        this._snowMat=new THREE.MeshStandardMaterial({ color:C(0xf4f9ff),
+            roughness:0.95, transparent:true, opacity:0, depthWrite:false });
+        this._snow=new THREE.Mesh(cap,this._snowMat);
+        this._snow.name='farmSnow';
+        this._snow.visible=false;
+        scene.add(this._snow);
+    },
+    syncSnow(){
+        const winter=this.on()&&this.season()==='winter';
+        if(winter) this.buildSnow();
+        if(!this._snow) return;
+        // 雪盖只属于本层：非冬季或开关关掉时一律归零，不跟着 Season 的雪淡入走
+        const f=winter ? ((typeof Season!=='undefined'&&Season&&Season._fade) ? Season._fade.snow : 1) : 0;
+        this._snowMat.opacity=0.96*f;
+        this._snow.visible=f>0.02;
+    },
+    refreshTip(){
+        const el=document.getElementById('farmSeasonTip');
+        if(!el) return;
+        if(!this.on()){ el.textContent='🌾 季节影响农场已关，农田按老规矩运行。'; return; }
+        const r=this.rule();
+        if(this.season()==='winter'){ el.textContent='❄️ 农场·冬：'+r.tip+'。'; return; }
+        const names=r.plant.map(function(c){ return FARM_CROP_NAMES[c]; }).join('、');
+        el.textContent='🌾 农场·'+r.label+'：宜种 '+names+'；'+r.tip+'。';
+    },
+    /* 验收钩子：与 __npc/__glProbe 同例，暴露规则与实时状态供无头断言 */
+    snapshot(){
+        return {
+            on: this.on(), season: this.season(),
+            growRate: this.growRate(), plantable: this.plantable(),
+            tip: (document.getElementById('farmSeasonTip')||{}).textContent || '',
+            snowVisible: !!(this._snow&&this._snow.visible),
+            plotTint: this._plot ? [this._plot.material.color.r, this._plot.material.color.g, this._plot.material.color.b] : null,
+            cells: (typeof farmState!=='undefined'&&farmState) ? JSON.parse(JSON.stringify(farmState.cells)) : null,
+            harvest: (typeof farmState!=='undefined'&&farmState) ? farmState.harvest : null
+        };
+    }
+};
+window.__farmSeason=FarmSeason;
 
 /* ==================== 花带与四周丰润（Issue #14） ====================
    负责人口径：留白可以，但要饱和自然。花沿房子前侧与两侧铺成带；
@@ -10177,8 +10344,9 @@ const Env = {
    - 冰面行走：冬季 Season.frozen 为真时，WalkMap.charWalkable 放行湖冰，
      龙的落脚高度走 Season.floorY（冰面高）；散布选点口径不随季节变，
      世界布局指纹不动。
-   - 农场：成熟走 GClock「新的一天」事件结算，没有生长速率参数可乘；
-     季节不改种田结算口径（硬改会动存档语义，本件不动，接入点即此说明）。
+   - 农场：成熟走 GClock「新的一天」事件结算；季节对农场的影响已由 #69
+     在 FarmSeason 一节接入（生长点/可种名单/外观，规则表见 Issue #69
+     评论），接入点即 FarmSeason 只读 Season.name，存档语义由 #69 守住。
    - 河灯改冰灯：Issue 里标注「另议」，本件不做。 */
 const SEASON_ORDER = ['spring','summer','autumn','winter'];
 const SEASON_BY_MONTH = ['winter','winter','spring','spring','spring','summer',
@@ -12427,6 +12595,7 @@ const FEAT = {
     minimap:   { on:true, label:'小地图' },
     achieve:   { on:true, label:'成就徽章' },
     npc:       { on:true, label:'👥 村民作息' },
+    farmSeason:{ on:true, label:'🌾 季节影响农场' },
     atmoFog:   { on:true, label:'沉浸·分层雾' },
     atmoLight: { on:true, label:'沉浸·柔和天光' },
     atmoWind:  { on:true, label:'沉浸·微风植被' },
@@ -12531,6 +12700,13 @@ const MODULE_HOOKS = {
         setup(){ NPCSys.build(); NPCSys.snap(); },
         teardown(){ NPCSys.allHome(); },
         update(dt, t){ NPCSys.update(dt, t); }
+    },
+    /* 季节影响农场（Issue #69）：实现全在种田玩法一节的 FarmSeason；
+       开关只转发，关掉时农田恢复基线外观与老规矩结算 */
+    farmSeason: {
+        setup(){ FarmSeason.apply(); },
+        teardown(){ FarmSeason.apply(); },
+        update(dt, t){ FarmSeason.update(dt, t); }
     },
     /* 沉浸氛围五件（Issue #81）：实现全在 AtmoSys 一节，钩子只转发开关，
        各件互不调用——关掉哪件只有哪件停摆/复原，详见 AtmoSys 头注的开关清单 */
