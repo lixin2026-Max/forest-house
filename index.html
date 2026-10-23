@@ -1077,6 +1077,9 @@ window.__BUILD__ = '2026-1022-2052';
         <button type="button" id="dmFeedC">🌽 喂玉米</button>
         <button type="button" id="dmClose">✖ 收起</button>
     </div>
+    <div class="dmRow">
+        <button type="button" id="dmWater">💧 叫小龙浇水</button>
+    </div>
     <div class="dmHint" id="dmHint"></div>
 </div>
 <div id="joy"><div id="joyKnob"></div></div>
@@ -1309,7 +1312,7 @@ window.__BUILD__ = '2026-1022-2052';
         <div class="hrow"><b>敲门</b><span>点小屋的门：先轻敲两下，门会朝外打开透出暖光</span></div>
         <div class="hrow"><b>进屋看看</b><span>走近门口点出现的「进屋看看」按钮、或门开着时点门洞里的暖光，就带着它一起进屋（屋里拖动环视、点地面走动）；点门或按「回到院子」出来</span></div>
         <div class="hrow"><b>留言墙</b><span>屋里墙上贴着留言墙和大事记板：你写过的意见会变成小纸条贴在墙上（点开能看全文，自己写的还能撕下来），负责人精选的留言也会贴上来；大事记板记着这个世界一路长过来的大日子，齿轮面板里也能翻全本</span></div>
-        <div class="hrow"><b>小龙互动</b><span>点小龙、或点底部「🤚 互动」：可以摸头、打招呼、让它转圈。收获的南瓜和玉米会进背包，用背包里的食物喂它，它会自己走过去吃；吃饱后它会开心地跟着你玩一阵（状态栏能看背包和喂食次数）</span></div>
+        <div class="hrow"><b>小龙互动</b><span>点小龙、或点底部「🤚 互动」：可以摸头、打招呼、让它转圈。收获的南瓜和玉米会进背包，用背包里的食物喂它，它会自己走过去吃；吃饱后它会开心地跟着你玩一阵（状态栏能看背包和喂食次数）。长到少年后，在农场附近开互动菜单还能使唤它帮忙浇水——它会自己一块一块把干着的地浇过去</span></div>
         <div class="hrow"><b>小龙定制</b><span>齿轮面板化身区的「打开定制面板」：给它改名字、性别、体色花纹、角和翅膀的样式，再配上围巾、铃铛、草帽这些小配饰，还能选性格（好奇 / 活泼 / 慵懒，散步和作息都不一样）；还能切换化身形态——小龙本体，或小龙少女的三款造型。改动立刻生效，都只存本机</span></div>
         <div class="hrow"><b>龙蛋开局</b><span>新来的朋友会先在小屋门前见到一颗龙蛋：点一点蛋、或点「🥚 孵化小龙」，就能看它破壳。想重温破壳，齿轮面板里有「🥚 再孵一颗蛋」（成长会从头计，名字和外观保留）</span></div>
         <div class="hrow"><b>篝火</b><span>点篝火堆可以点火、再点熄火</span></div>
@@ -8039,6 +8042,22 @@ function dragonAnimate(a, dt, t){
                 updateStatus();
                 showHuntToast('😋 吃饱啦！（喂食 ' + bb.fed + ' 次）');
             }
+        } else if(g.kind === 'water'){
+            /* #70 浇水：本体探头喷水（垂头 0.26＋上身微倾，颈量程内）；
+               少女双臂前伸持壶倾倒（走 bow 已验的双臂前伸量程、收一档）。
+               水花粒子由浇水小节同节拍喷洒（spawnWaterSpray） */
+            if(dragonIsGirl()){
+                P.head.rotation.x += 0.18*genv;
+                P.body.rotation.x += 0.16*genv;
+                P.armL.rotation.x += -0.70*genv;
+                P.armR.rotation.x += -0.70*genv;
+            } else {
+                P.head.rotation.x += 0.26*genv;
+                P.body.rotation.x += 0.08*genv;
+            }
+        } else if(g.kind === 'no'){
+            /* #70：没有活儿时摇头——头部偏航走待机张望已验量程（±0.55） */
+            P.head.rotation.y += Math.sin(gp*Math.PI*3)*0.30*genv;
         }
         if(gp >= 1){
             a.gesture = null;
@@ -8100,6 +8119,7 @@ function joyHud(on){
 }
 function dragonPlayerMove(a, dt){
     const Ctl = DragonCtl, p = a.group.position;
+    if(a.helpWater){ dragonHelpStep(a, dt); return; }   // #70：帮忙浇水进行中，步进接管移动（玩家一动手即收工，见 dragonHelpStep）
     let ix = 0, iz = 0;
     if(Ctl.keys.has('w') || Ctl.keys.has('arrowup')) iz += 1;
     if(Ctl.keys.has('s') || Ctl.keys.has('arrowdown')) iz -= 1;
@@ -8847,6 +8867,7 @@ function drgGestureDur(kind){
 }
 function dragonGesture(kind){
     const a=dragonAgent; if(!a) return;
+    if(a.helpWater){ showHuntToast('💧 浇水呢，等它浇完这一轮再玩'); return; }   // #70：干活时不插手势
     // #52：成长解锁校验——击掌要少年档、作揖要青年档（菜单里未解锁时按钮
     // 本就禁用，这里是第二道闸：庆祝自动触发只会用已解锁的新动作）
     const gw = dragonCfg.grow || {days:1, stage:0};
@@ -8875,6 +8896,7 @@ function dragonGesture(kind){
 }
 function dragonFeed(kind){
     const a=dragonAgent, b=bagEnsure(); if(!a) return;
+    if(a.helpWater){ showHuntToast('💧 浇水呢，等它浇完这一轮再吃'); return; }   // #70：干活时不插喂食
     if(a.mode==='player'){
         /* #100 探索者口径：进世界后你就是它本尊，没有「放手」这回事了——
            喂食＝自己吃：食物摆到面前低头啃完（手势叠加层驱动，见 pose 的
@@ -8918,6 +8940,18 @@ function refreshDragonMenu(){
     const hf=document.getElementById('dmHighfive'), bw=document.getElementById('dmBow');
     if(hf){ hf.disabled=gw.stage<1; hf.textContent=gw.stage<1 ? '🔒 击掌' : '🤝 击掌'; }
     if(bw){ bw.disabled=gw.stage<2; bw.textContent=gw.stage<2 ? '🔒 作揖' : '🙇 作揖'; }
+    // #70：浇水钮——FEAT 关掉整行藏起；幼龙上锁；干活中禁用防连点；
+    // 文案随形态走（本体＝使唤小龙，少女＝她自己浇，与 #100 喂食同口径）
+    const wm=document.getElementById('dmWater');
+    if(wm){
+        const helpOn = (typeof FEAT === 'undefined' || !FEAT.help || FEAT.help.on);
+        wm.style.display = helpOn ? '' : 'none';
+        if(helpOn){
+            if(dragonAgent && dragonAgent.helpWater){ wm.textContent='💧 浇水中…'; wm.disabled=true; }
+            else if(gw.stage<1){ wm.textContent='🔒 还太小，浇不动水'; wm.disabled=false; }
+            else { wm.textContent = dragonIsGirl() ? '💧 她来浇水' : '💧 叫小龙浇水'; wm.disabled=false; }
+        }
+    }
     const hint=document.getElementById('dmHint');
     if(hint){
         let h='已喂 '+b.fed+' 次 · 选一样它就当场吃掉，越吃越亲近';
@@ -8971,9 +9005,327 @@ function setupDragonInteract(){
     document.getElementById('dmBow').addEventListener('click', ()=>dragonGesture('bow'));
     document.getElementById('dmFeedP').addEventListener('click', ()=>dragonFeed('pumpkin'));
     document.getElementById('dmFeedC').addEventListener('click', ()=>dragonFeed('corn'));
+    document.getElementById('dmWater').addEventListener('click', dragonHelpWater);
     document.getElementById('dmClose').addEventListener('click', hideDragonMenu);
     bindDragonTap();
 }
+
+/* ==================== 小龙帮忙干活 · 一期浇水（Issue #70） ====================
+   口径（负责人收窄定版）：只做浇水。玩家在农场附近开互动菜单使唤——
+   本体形态是小龙自己去浇，少女形态是化身自己浇（与 #100 喂食的探索者
+   口径一致）。流程：逐块走到干涸作物地块旁 → 探头/持壶浇下（'water'
+   手势＋水花粒子）→ 湿度走农场既有口（cells[key].watered=true +
+   saveFarm + renderPlayCrops），**零新增存档键**。站位不进田：农田在
+   WalkMap 禁区里，落点取离地块最近的角色可行走点（田边约 2 单位），
+   水花弧线补齐距离。一次指令浇完当前全部干地块即止，不常驻巡逻；
+   玩家一动手（按键/摇杆）立刻收工交还控制（与自动漫游同一接管规矩）。
+   幼龙（成长 stage 0）提不动水壶、使唤不了，只给萌系提示；没有干
+   地块时摇头（'no' 手势）＋一句提示。播种/收获/除草留二期。 */
+const HELP_POUR_SEC = 1.6;      // 每块地浇水时长（与 'water' 手势同拍）
+const HELP_WALK_SPEED = 3.2;    // 帮忙步速：比奔跑慢一点，像在干活
+const HELP_FARM_NEAR = 20;      // 使唤半径：离农场中心太远先喊回农场
+function dragonIsGirl(){ return !!(dragonCfg && dragonCfg.avatar && dragonCfg.avatar.form === 'girl'); }
+function farmCenterWorld(){
+    const c = houseLocal(FARM_RECT.lx0 + FARM_RECT.cols*FARM_RECT.cellW/2,
+                         FARM_RECT.lz0 + FARM_RECT.rows*FARM_RECT.cellD/2);
+    return {x:c[0], z:c[1]};
+}
+/* 当前干涸的作物地块：可玩格里有苗、没浇、没熟（空地不算「干」） */
+function farmDryCells(){
+    const out = [];
+    if(!farmState) return out;
+    farmGrid.forEach(function(cell){
+        if(!cell.playable) return;
+        const st = farmState.cells[cell.row+','+cell.col];
+        if(st && st.crop && !st.watered && !st.mature) out.push({key:cell.row+','+cell.col, cell:cell});
+    });
+    return out;
+}
+/* 站位：绕地块中心由近及远探圈，取第一个角色能落脚的点（自然落在田边） */
+function helpStandFor(cell){
+    // 半径要探到 5.0：田西列地块离禁区外缘最近也有 3.5 单位（田本身
+    // 在 WalkMap 禁区里、边缘还外扩了 1.2），近圈全落在禁区内是正常的
+    const radii = [1.2, 1.7, 2.2, 2.7, 3.2, 3.8, 4.4, 5.0];
+    for(const r of radii){
+        for(let k = 0; k < 12; k++){
+            const a = k/12*Math.PI*2 + r;   // 每圈错开一点角度，免得总挤同一侧
+            const x = cell.x + Math.cos(a)*r, z = cell.z + Math.sin(a)*r;
+            if(WalkMap.charWalkable(x, z)) return {x:x, z:z};
+        }
+    }
+    return null;
+}
+function dragonHelpWater(){
+    const a = dragonAgent; if(!a) return;
+    if(typeof FEAT !== 'undefined' && FEAT.help && !FEAT.help.on) return;
+    if(a.helpWater){ showHuntToast('💧 正在浇呢，一块一块来'); return; }
+    if(a.mode !== 'player'){ showHuntToast('🐉 进了世界再使唤它干活吧'); return; }
+    if(a.gesture) return;
+    const girl = dragonIsGirl();
+    const gw = dragonCfg.grow || {stage:0};
+    if(gw.stage < 1){
+        showHuntToast(girl ? '🐣 她还是幼龙的样子，提不动水壶——等长到少年再使唤吧'
+                           : '🐣 它还是幼龙，抱着水壶都费劲——等长到少年再使唤吧');
+        return;
+    }
+    const dry = farmDryCells();
+    if(!dry.length){
+        a.gesture = {kind:'no', t:0}; a.gestureDur = 1.1;   // 没有干地块：摇头给提示
+        hideDragonMenu();
+        showHuntToast('🌱 地都浇透啦，没有干着的作物');
+        return;
+    }
+    const fc = farmCenterWorld(), p = a.group.position;
+    if(Math.hypot(p.x-fc.x, p.z-fc.z) > HELP_FARM_NEAR){
+        showHuntToast('🌾 先去农场那边，再叫它浇水吧');
+        return;
+    }
+    // 队列按「就近串起来」排序少走回头路；落不了脚的地块先剔除并计数
+    const queue = [];
+    let rx = p.x, rz = p.z, dropped = 0;
+    const pool = dry.slice();
+    while(pool.length){
+        let bi = 0, bd = Infinity;
+        pool.forEach(function(d, i){
+            const dd = Math.hypot(d.cell.x-rx, d.cell.z-rz);
+            if(dd < bd){ bd = dd; bi = i; }
+        });
+        const d = pool.splice(bi, 1)[0];
+        const stand = helpStandFor(d.cell);
+        if(!stand){ dropped++; continue; }
+        queue.push({key:d.key, cx:d.cell.x, cz:d.cell.z, sx:stand.x, sz:stand.z});
+        rx = stand.x; rz = stand.z;
+    }
+    if(!queue.length){ showHuntToast('🚧 它挤不到地边上，这活儿先算了'); return; }
+    stopAvatarRoam();            // 使唤＝接管：自动漫游让路（同玩家接管口径）
+    a.moveTarget = null;
+    hideDragonMenu();
+    a.helpWater = {queue:queue, i:0, phase:'go', stuck:0, lastX:p.x, lastZ:p.z, pourT:0, done:0, skipped:dropped};
+    showHuntToast(girl ? '💧 她挽起袖子去浇水啦' : '💧 交给它！一块一块浇过去');
+}
+/* 每条腿算一次路线：在主屋本地坐标的粗网格上跑 BFS（0.5 一格、八向、
+   斜向防穿角），全程只认 WalkMap.charWalkable 一个真源。
+   为什么不用逐帧贪心/手工外点环（都实测栽过）：采样判定在禁区边缘会
+   翻面、目标一帧东一帧西原地踱步；外点环则被看不见的禁区几何（篝火、
+   池塘、房屋圆）静默断链。网格搜出来的路不需要猜地形。 */
+function helpRoute(a, tx, tz){
+    const p = a.group.position;
+    const LX0 = -20.5, LZ0 = -4, STEP = 0.5, NX = 37, NZ = 37;
+    function toLocal(x, z){
+        const rx = x-HOUSE_POS.x, rz = z-HOUSE_POS.z;
+        return [rx*HOUSE_R.x + rz*HOUSE_R.z, rx*HOUSE_F.x + rz*HOUSE_F.z];
+    }
+    const walk = new Map();
+    function nodeOk(i, j){
+        const k = i + ',' + j;
+        if(!walk.has(k)){
+            const w = houseLocal(LX0 + i*STEP, LZ0 + j*STEP);
+            walk.set(k, WalkMap.charWalkable(w[0], w[1]));
+        }
+        return walk.get(k);
+    }
+    function nearest(x, z){
+        const l = toLocal(x, z);
+        const ci = Math.round((l[0]-LX0)/STEP), cj = Math.round((l[1]-LZ0)/STEP);
+        for(let r = 0; r <= 4; r++)
+            for(let i = ci-r; i <= ci+r; i++)
+                for(let j = cj-r; j <= cj+r; j++){
+                    if(i < 0 || j < 0 || i >= NX || j >= NZ) continue;
+                    if(Math.max(Math.abs(i-ci), Math.abs(j-cj)) !== r) continue;
+                    if(nodeOk(i, j)) return [i, j];
+                }
+        return null;
+    }
+    const s = nearest(p.x, p.z), g = nearest(tx, tz);
+    if(!s || !g) return [{x:tx, z:tz}];
+    const prev = new Map([[s.join(','), null]]), q = [s];
+    const DIRS = [[1,0], [-1,0], [0,1], [0,-1], [1,1], [1,-1], [-1,1], [-1,-1]];
+    while(q.length){
+        const cur = q.shift();
+        if(cur[0] === g[0] && cur[1] === g[1]) break;
+        for(const d of DIRS){
+            const ni = cur[0]+d[0], nj = cur[1]+d[1];
+            if(ni < 0 || nj < 0 || ni >= NX || nj >= NZ) continue;
+            const k = ni + ',' + nj;
+            if(prev.has(k) || !nodeOk(ni, nj)) continue;
+            if(d[0] && d[1] && (!nodeOk(cur[0]+d[0], cur[1]) || !nodeOk(cur[0], cur[1]+d[1]))) continue;
+            prev.set(k, cur); q.push([ni, nj]);
+        }
+    }
+    if(!prev.has(g.join(','))) return [{x:tx, z:tz}];      // 网格无路：直奔，靠卡住跳过兜底
+    const cells = [];
+    for(let c = g; c; c = prev.get(c.join(','))) cells.unshift(c);
+    const path = cells.slice(1).map(function(c){
+        const w = houseLocal(LX0 + c[0]*STEP, LZ0 + c[1]*STEP);
+        return {x:w[0], z:w[1]};
+    });
+    path.push({x:tx, z:tz});                                // 末点落回精确站位
+    return path;
+}
+function cancelDragonHelp(){
+    const a = dragonAgent; if(!a || !a.helpWater) return;
+    a.helpWater = null;
+    a.moveTarget = null;
+    if(a.gesture && a.gesture.kind === 'water') a.gesture = null;
+}
+function finishDragonHelp(){
+    const a = dragonAgent; if(!a || !a.helpWater) return;
+    const h = a.helpWater;
+    a.helpWater = null;
+    a.moveTarget = null;
+    if(h.done > 0)
+        showHuntToast('💧 浇完啦！' + h.done + ' 块地都喝上水了' + (h.skipped ? '（' + h.skipped + ' 块挤不过去，留着你来）' : ''));
+    else if(h.skipped > 0)
+        showHuntToast('🚧 它挤不到地边上，这活儿没干成');
+}
+/* 浇水步进（dragonPlayerMove 在帮忙中整段交给它）：走 → 浇 → 下一块 */
+function dragonHelpStep(a, dt){
+    const Ctl = DragonCtl, p = a.group.position;
+    // 玩家接管：按键/摇杆一动就收工（与自动漫游同一规矩）
+    if(Ctl.keys.size > 0 || Math.abs(Ctl.joy.x) > 0.2 || Math.abs(Ctl.joy.y) > 0.2){
+        const h = a.helpWater;
+        const left = h.queue.length - h.i - (h.phase === 'pour' ? 1 : 0);
+        cancelDragonHelp();
+        if(left > 0) showHuntToast('✋ 先浇到这儿，还有 ' + left + ' 块地干着');
+        return;
+    }
+    if(window.__roomDragon){ cancelDragonHelp(); return; }   // 进了屋：活儿先放下
+    const h = a.helpWater;
+    if(h.i >= h.queue.length){ finishDragonHelp(); return; }
+    const cur = h.queue[h.i];
+    // 这块可能被玩家顺手浇了/收了：状态变了直接跳过
+    const st = farmState ? farmState.cells[cur.key] : null;
+    if(!st || !st.crop || st.watered || st.mature){ h.i++; h.phase = 'go'; h.stuck = 0; h.path = null; return; }
+    if(h.phase === 'go'){
+        const d = Math.hypot(cur.sx-p.x, cur.sz-p.z);
+        if(d < 0.45){
+            h.phase = 'pour'; h.pourT = 0;
+            a.gesture = {kind:'water', t:0}; a.gestureDur = HELP_POUR_SEC;
+            a.moveAmt = Math.max(0, a.moveAmt - dt*5);
+            return;
+        }
+        if(d > 30){ cancelDragonHelp(); return; }   // 人已被传送/走远：不追了
+        if(!h.path) h.path = helpRoute(a, cur.sx, cur.sz);         // 一条腿只算一次路线，逐点走完
+        // 换点半径必须远小于网格间距（0.5）：等于间距时会瞄着前方两三个
+        // 节点抄近道，恰好切进禁区角点的步进阴影里（三个候选落点全灭）
+        if(h.path.length > 1 && Math.hypot(h.path[0].x-p.x, h.path[0].z-p.z) < 0.22) h.path.shift();
+        const tgt = h.path[0];
+        // 子步切片：田东岸道最窄处不到半个身位，大步幅（高帧率 dt 或
+        // 卡顿大 dt）三个候选落点会全探进禁区——NPC 穿窄道靠的就是小步，
+        // 这里把每步切到 ≤0.03 秒当量（约 0.1 单位）同理穿过去
+        let moved = false, rem = dt;
+        while(rem > 0){
+            const sdt = Math.min(rem, 0.03);
+            moved = dragonWalkTo(a, tgt.x, tgt.z, HELP_WALK_SPEED, sdt);
+            rem -= sdt;
+            if(!moved) break;
+        }
+        a.moveAmt += ((moved ? 1 : 0) - a.moveAmt)*Math.min(1, dt*6);
+        if(Math.hypot(p.x-h.lastX, p.z-h.lastZ) < 0.02) h.stuck += dt; else h.stuck = 0;
+        h.lastX = p.x; h.lastZ = p.z;
+        if(h.stuck > 3.5){ h.skipped++; h.i++; h.phase = 'go'; h.stuck = 0; h.path = null; }   // 卡住就跳过，不死磕
+    } else {
+        a.moveAmt = Math.max(0, a.moveAmt - dt*5);
+        dragonFace(a, Math.atan2(cur.cx-p.x, cur.cz-p.z), dt);
+        h.pourT += dt;
+        spawnWaterSpray(a, cur.cx, cur.cz, dt);
+        if(h.pourT >= HELP_POUR_SEC){
+            st.watered = true;               // 湿度只走农场既有口：置位→落盘→重绘土色/长势
+            saveFarm(); renderPlayCrops();
+            h.done++; h.i++; h.phase = 'go'; h.stuck = 0; h.path = null;
+        }
+    }
+}
+
+/* ---------- 浇水水花（一池 Points 反复用，共 1 次绘制，与爱心同套路） ---------- */
+const WATER_N = 40;
+let waterPts = null, waterData = null, waterAcc = 0;
+function buildWaterFx(){
+    if(waterPts) return;
+    const cv = document.createElement('canvas'); cv.width = cv.height = 32;
+    const cx = cv.getContext('2d');
+    const gr = cx.createRadialGradient(16, 16, 2, 16, 16, 15);
+    gr.addColorStop(0, 'rgba(190,230,255,0.95)');
+    gr.addColorStop(0.6, 'rgba(120,195,255,0.75)');
+    gr.addColorStop(1, 'rgba(120,195,255,0)');
+    cx.fillStyle = gr; cx.fillRect(0, 0, 32, 32);
+    const geo = new THREE.BufferGeometry();
+    const pos = new Float32Array(WATER_N*3);
+    waterData = [];
+    for(let i = 0; i < WATER_N; i++){ pos[i*3+1] = -999; waterData.push({life:0, x:0, y:-999, z:0, vx:0, vy:0, vz:0}); }
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const mat = new THREE.PointsMaterial({size:0.17, map:new THREE.CanvasTexture(cv),
+        transparent:true, depthWrite:false, opacity:0.95});
+    waterPts = new THREE.Points(geo, mat);
+    waterPts.frustumCulled = false;
+    waterPts.visible = false;
+    scene.add(waterPts);
+}
+function disposeWaterFx(){
+    if(!waterPts) return;
+    scene.remove(waterPts);
+    waterPts.geometry.dispose();
+    waterPts.material.dispose();
+    waterPts = null; waterData = null;
+}
+const _waterV = new THREE.Vector3();
+/* 喷水：起点＝本体嘴边（头部世界坐标）/ 少女手边（右臂世界坐标），
+   朝目标地块抛一条小弧线（飞行 0.45 秒，重力与 update 同一 g） */
+function spawnWaterSpray(a, tx, tz, dt){
+    buildWaterFx();
+    if(!waterPts) return;
+    if(dragonIsGirl() && a.parts.armR) a.parts.armR.getWorldPosition(_waterV);
+    else if(a.parts.head) a.parts.head.getWorldPosition(_waterV);
+    else _waterV.copy(a.group.position);
+    waterAcc += dt*80;
+    let n = Math.floor(waterAcc); waterAcc -= n;
+    const T = 0.45, ty = 0.3;
+    for(let i = 0; i < WATER_N && n > 0; i++){
+        const d = waterData[i];
+        if(d.life > 0) continue;
+        d.life = T;
+        d.x = _waterV.x; d.y = _waterV.y; d.z = _waterV.z;
+        d.vx = (tx - d.x)/T + (Math.random()-0.5)*0.5;
+        d.vz = (tz - d.z)/T + (Math.random()-0.5)*0.5;
+        d.vy = (ty - d.y)/T + 0.5*9.3*T;
+        n--;
+    }
+    waterPts.visible = true;
+}
+function updateWaterFx(dt){
+    if(!waterPts || !waterPts.visible) return;
+    const attr = waterPts.geometry.getAttribute('position');
+    let any = false;
+    for(let i = 0; i < WATER_N; i++){
+        const d = waterData[i];
+        if(d.life > 0){
+            any = true;
+            d.life -= dt;
+            if(d.life <= 0){ d.y = -999; }
+            else {
+                d.vy -= 9.3*dt;
+                d.x += d.vx*dt; d.y += d.vy*dt; d.z += d.vz*dt;
+                if(d.y < 0.05){ d.y = -999; d.life = 0; }
+            }
+        }
+        attr.setXYZ(i, d.x, d.y, d.z);
+    }
+    attr.needsUpdate = true;
+    if(!any) waterPts.visible = false;
+}
+/* 无头验收钩子（与 __npc / __fpsTune 同例）：只读快照＋起步/收工入口 */
+window.__dragonHelp = {
+    start: dragonHelpWater,
+    cancel: cancelDragonHelp,
+    dry: function(){ return farmDryCells().map(function(d){ return d.key; }); },
+    snap: function(){
+        const a = dragonAgent;
+        if(!a || !a.helpWater) return null;
+        const h = a.helpWater;
+        return {phase:h.phase, i:h.i, n:h.queue.length, done:h.done, skipped:h.skipped,
+                key:(h.queue[h.i] || {}).key || null};
+    }
+};
 
 /* ==================== 湖里水生生物（Issue #51 · v4.1 生态萌芽） ====================
    湖里养一群程序小鱼：成群巡游、涟漪、跃水、投食聚抢、雨天更活跃。
@@ -10963,6 +11315,7 @@ function animate(){
     updateModules(dt, t);
     farmRainCheck();
     updateDragonFx(dt, t);
+    updateWaterFx(dt);   // #70：浇水水花粒子池
     updateEgg(dt, t);   // #67：蛋的呼吸晃动、孵化演出、孵化钮显隐
 
     // 风吹摆动：统一走环境风场（树/花/草共用一阵风，见 Env）
@@ -12427,6 +12780,7 @@ const FEAT = {
     minimap:   { on:true, label:'小地图' },
     achieve:   { on:true, label:'成就徽章' },
     npc:       { on:true, label:'👥 村民作息' },
+    help:      { on:true, label:'💧 小龙帮忙浇水' },
     atmoFog:   { on:true, label:'沉浸·分层雾' },
     atmoLight: { on:true, label:'沉浸·柔和天光' },
     atmoWind:  { on:true, label:'沉浸·微风植被' },
@@ -12531,6 +12885,11 @@ const MODULE_HOOKS = {
         setup(){ NPCSys.build(); NPCSys.snap(); },
         teardown(){ NPCSys.allHome(); },
         update(dt, t){ NPCSys.update(dt, t); }
+    },
+    /* #70 小龙帮忙浇水：步进挂在 dragonPlayerMove 里（玩家态驱动），
+       钩子只管收尾——关掉开关时进行中的浇水立刻收工，水花粒子池随之停用 */
+    help: {
+        teardown(){ cancelDragonHelp(); disposeWaterFx(); }
     },
     /* 沉浸氛围五件（Issue #81）：实现全在 AtmoSys 一节，钩子只转发开关，
        各件互不调用——关掉哪件只有哪件停摆/复原，详见 AtmoSys 头注的开关清单 */
