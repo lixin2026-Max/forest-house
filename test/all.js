@@ -17,6 +17,7 @@ const SUITES = [
     ['season-farm-accept.js', '季节影响农场专项（#69）'],
     ['shellgate-accept.js', '壳版本闸门专项（页面侧退出更新）'],
     ['help-accept.js', '小龙帮忙浇水专项（#70 一期）'],
+    ['context-accept.js', '上下文互动键专项（技能期 Build 2）'],
     ['whitefix-accept.js', '白屏热修专项（保命档回退＋白屏自检自愈）']
 ];
 
