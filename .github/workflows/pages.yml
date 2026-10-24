@@ -10,8 +10,15 @@ name: Deploy to GitHub Pages
 # 时好时坏（见 CHANGELOG.md v5.1 维护侧）。整树同步后新增任何文件自动带上，
 # 此类事故不再复发。
 
+# 测试卡点（Issue #12）：push 到 main 与 PR 都先跑 test job，全绿 deploy 才放行；
+# PR 只跑测试不发布（deploy job 限定非 PR 事件）。test 跑 node test/all.js 全套，
+# 浏览器套件认 PERF_CHROME（见 test job），子路径套件在无 Edge 的 Linux 上跳过
+# （test/subpath-check.js 内分流），不因此拦部署。
+
 on:
   push:
+    branches: [main]
+  pull_request:
     branches: [main]
   workflow_dispatch:
 
@@ -25,7 +32,31 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出
+        uses: actions/checkout@v4
+
+      - name: 装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: 装 Chrome（供浏览器套件）
+        id: chrome
+        uses: browser-actions/setup-chrome@v2
+        with:
+          chrome-version: stable
+
+      - name: 全套回归
+        run: node test/all.js
+        env:
+          PERF_CHROME: ${{ steps.chrome.outputs.chrome-path }}
+
   deploy:
+    needs: test
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

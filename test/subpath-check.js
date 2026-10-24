@@ -11,6 +11,9 @@ const { spawn } = require('child_process');
 
 const ROOT = path.resolve(__dirname, '..');
 const PREFIX = '/forest-house';
+// 本套件依赖 Windows 版 Edge 截图；CI（Linux）上没有 Edge 时跳过、不拦部署。
+// Windows 本机仍跑全量。注意：spawn 不存在的程序只触发 'error' 而非 'exit'，
+// 不先判存在会直接崩溃/挂起，故在 spawn 前显式分流（Issue #12）。
 const EDGE = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 
 const TYPES = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; charset=utf-8' };
@@ -45,6 +48,15 @@ server.listen(0, '127.0.0.1', () => {
     const url = `http://127.0.0.1:${port}${PREFIX}/index.html`;
     const shot = path.join(ROOT, 'test', 'subpath.png');
     try { fs.unlinkSync(shot); } catch {}
+
+    if (!fs.existsSync(EDGE)) {
+        console.log('  SKIP: 未找到 Edge（非 Windows 环境），子路径截图项跳过');
+        server.close();
+        fs.rmSync(tmp, { recursive: true, force: true });
+        console.log('\n====================');
+        console.log('Results: 0 passed, 0 failed (skipped)');
+        process.exit(0);
+    }
 
     const child = spawn(EDGE, [
         '--headless=new', '--disable-gpu', '--enable-unsafe-swiftshader',
